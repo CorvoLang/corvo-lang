@@ -1,5 +1,5 @@
-use std::process::Command;
 use std::fs;
+use std::process::Command;
 use tempfile::tempdir;
 
 #[test]
@@ -41,7 +41,14 @@ fn test_transpile_and_run_fizzbuzz() {
 
     // Run corvo --transpile
     let status = Command::new("cargo")
-        .args(["run", "--", "--transpile", script_path.to_str().unwrap(), "-o", output_dir.to_str().unwrap()])
+        .args([
+            "run",
+            "--",
+            "--transpile",
+            script_path.to_str().unwrap(),
+            "-o",
+            output_dir.to_str().unwrap(),
+        ])
         .status()
         .expect("failed to run corvo --transpile");
 
@@ -62,5 +69,6 @@ fn test_transpile_and_run_fizzbuzz() {
     }
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz\n"));
+    assert!(stdout
+        .contains("1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz\n"));
 }

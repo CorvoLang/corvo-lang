@@ -14,16 +14,16 @@ use thiserror::Error;
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Error, Diagnostic)]
-#[error("{message}")]
+#[error("{_message}")]
 struct CorvoReport {
-    message: String,
+    _message: String,
     #[source_code]
-    src: NamedSource,
-    #[label("{label}")]
-    span: Option<SourceSpan>,
-    label: String,
+    _src: NamedSource,
+    #[label("{_label}")]
+    _span: Option<SourceSpan>,
+    _label: String,
     #[help]
-    help: Option<String>,
+    _help: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -41,6 +41,7 @@ struct CorvoReport {
 /// * `error`    – The error to display.
 /// * `source`   – The full source text of the file being analysed.
 /// * `filename` – The file name shown in the diagnostic header.
+#[allow(unused_assignments)]
 pub fn print_error(error: &CorvoError, source: &str, filename: &str) {
     let message = format!("{}", error);
     let help = get_help(error);
@@ -49,11 +50,11 @@ pub fn print_error(error: &CorvoError, source: &str, filename: &str) {
     let miette_span = error.span().map(|s| span_to_miette(&s, source));
 
     let report = CorvoReport {
-        message,
-        src: NamedSource::new(filename, source.to_string()),
-        span: miette_span,
-        label,
-        help,
+        _message: message,
+        _src: NamedSource::new(filename, source.to_string()),
+        _span: miette_span,
+        _label: label,
+        _help: help,
     };
 
     let mut output = String::new();
@@ -64,8 +65,8 @@ pub fn print_error(error: &CorvoError, source: &str, filename: &str) {
         eprint!("{}", output);
     } else {
         // Fallback to plain text if rendering fails
-        eprintln!("error: {}", report.message);
-        if let Some(h) = &report.help {
+        eprintln!("error: {}", report._message);
+        if let Some(h) = &report._help {
             eprintln!("  help: {}", h);
         }
     }

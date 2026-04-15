@@ -247,7 +247,11 @@ fn transpile_file(file: &std::path::Path, output: Option<&std::path::Path>) {
         }
     }
 
-    eprintln!("Transpiling {} to Rust project in {}...", file.display(), output_dir.display());
+    eprintln!(
+        "Transpiling {} to Rust project in {}...",
+        file.display(),
+        output_dir.display()
+    );
 
     match compiler.transpile(&output_dir) {
         Ok(_) => {

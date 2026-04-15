@@ -234,7 +234,7 @@ pub fn boot_time(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoR
             .and_then(|s| s.trim().parse::<f64>().ok())
             .ok_or_else(|| CorvoError::runtime("failed to parse sysctl boot time"))?;
 
-        return Ok(Value::Number(sec));
+        Ok(Value::Number(sec))
     }
 
     #[cfg(target_os = "windows")]

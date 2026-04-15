@@ -1,7 +1,7 @@
 use crate::ast::{AssertKind, BinaryOp, Expr, MatchPattern, Program, Stmt, UnaryOp};
 use crate::runtime::RuntimeState;
 use crate::standard_lib;
-use crate::type_system::{ProcedureValue, Value};
+use crate::type_system::{NativeCallback, ProcedureValue, Value};
 use crate::{CorvoError, CorvoResult};
 use std::sync::{Arc, Mutex};
 
@@ -161,10 +161,7 @@ impl Evaluator {
                         if let Value::Procedure(proc) = target_val {
                             return self.exec_procedure_call(&proc, args, state);
                         }
-                        if let Value::NativeProcedure {
-                            callback: proc, ..
-                        } = target_val
-                        {
+                        if let Value::NativeProcedure { callback: proc, .. } = target_val {
                             let evaluated_args = args
                                 .iter()
                                 .map(|a| self.eval_expr(a, state))
@@ -407,25 +404,24 @@ impl Evaluator {
                         proc_name, expected_params, shared_vars.len(), p.params.len()
                     )));
                 }
-                self.exec_async_browse_ast(items, p, item_param, shared_vars, state)
+                self.exec_async_browse_ast(items, *p, item_param, shared_vars, state)
             }
-            Value::NativeProcedure { callback: p, .. } => {
-                self.exec_async_browse_native(items, p, item_param, shared_vars, state)
-            }
-            other => {
-                Err(CorvoError::r#type(format!(
-                    "async_browse: '{}' is not a procedure (got {})",
-                    proc_name,
-                    other.r#type()
-                )))
-            }
+            Value::NativeProcedure {
+                params: p,
+                callback: cb,
+            } => self.exec_async_browse_native(items, p, cb, item_param, shared_vars, state),
+            other => Err(CorvoError::r#type(format!(
+                "async_browse: '{}' is not a procedure (got {})",
+                proc_name,
+                other.r#type()
+            ))),
         }
     }
 
     fn exec_async_browse_ast(
         &mut self,
         items: Vec<Value>,
-        proc: Box<ProcedureValue>,
+        proc: ProcedureValue,
         item_param: &str,
         shared_vars: &[String],
         state: &mut RuntimeState,
@@ -440,7 +436,7 @@ impl Evaluator {
 
         let mut handles = Vec::with_capacity(items.len());
         for item in items {
-            let proc_clone: ProcedureValue = (*proc).clone();
+            let proc_clone: ProcedureValue = proc.clone();
             let item_clone = item.clone();
             let item_param_name = item_param.to_string();
             let arcs: Vec<Arc<Mutex<Value>>> = shared_arcs.iter().map(Arc::clone).collect();
@@ -510,7 +506,8 @@ impl Evaluator {
     pub fn exec_async_browse_native(
         &mut self,
         items: Vec<Value>,
-        proc: std::sync::Arc<dyn Fn(&[Value], &mut RuntimeState) -> CorvoResult<Value> + Send + Sync>,
+        params: Vec<String>,
+        proc: NativeCallback,
         _item_param: &str,
         shared_vars: &[String],
         state: &mut RuntimeState,
@@ -529,7 +526,7 @@ impl Evaluator {
             let item_clone = item.clone();
             let arcs: Vec<Arc<Mutex<Value>>> = shared_arcs.iter().map(Arc::clone).collect();
             let state_clone = state.clone();
-            let shared_vars_clone: Vec<String> = shared_vars.iter().cloned().collect();
+            let params_clone = params.clone();
 
             let handle = std::thread::spawn(move || -> CorvoResult<()> {
                 let mut thread_state = state_clone;
@@ -545,8 +542,8 @@ impl Evaluator {
                 let thread_result = (proc_clone)(&call_args, &mut thread_state);
 
                 for (i, arc) in arcs.iter().enumerate() {
-                    let name = &shared_vars_clone[i];
-                    let thread_final = thread_state.var_get(name).unwrap_or(Value::Null);
+                    let param_name = &params_clone[i + 1];
+                    let thread_final = thread_state.var_get(param_name).unwrap_or(Value::Null);
                     let mut guard = arc.lock().unwrap();
                     let current = guard.clone();
                     *guard = merge_shared_writeback(&snapshots[i], &thread_final, &current);
@@ -960,13 +957,21 @@ pub fn merge_shared_writeback(snapshot: &Value, thread_final: &Value, current: &
     match (snapshot, thread_final, current) {
         (Value::List(snap), Value::List(fin), Value::List(cur)) if fin.len() >= snap.len() => {
             // Append only the items the thread added beyond its snapshot.
-            // This assumes the items at indices 0..snap.len() in `fin` are the
-            // same as the original snapshot elements (i.e. the thread only
-            // appended, never replaced or removed earlier items).
             let new_items = &fin[snap.len()..];
             let mut result = cur.clone();
             result.extend_from_slice(new_items);
             Value::List(result)
+        }
+        (Value::Number(snap), Value::Number(fin), Value::Number(cur)) => {
+            // Add the delta that the thread contributed.
+            Value::Number(cur + (fin - snap))
+        }
+        (Value::String(snap), Value::String(fin), Value::String(cur)) if fin.starts_with(snap) => {
+            // Append only the suffix the thread added.
+            let suffix = &fin[snap.len()..];
+            let mut result = cur.clone();
+            result.push_str(suffix);
+            Value::String(result)
         }
         _ => thread_final.clone(),
     }

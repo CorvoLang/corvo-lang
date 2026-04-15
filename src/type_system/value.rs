@@ -61,7 +61,11 @@ impl<'de> Deserialize<'de> for SharedValue {
     }
 }
 
-#[derive(Clone)]
+pub type NativeCallback = Arc<
+    dyn Fn(&[Value], &mut crate::runtime::RuntimeState) -> crate::CorvoResult<Value> + Send + Sync,
+>;
+
+#[derive(Clone, Default)]
 pub enum Value {
     String(String),
     Number(f64),
@@ -69,27 +73,18 @@ pub enum Value {
     List(Vec<Value>),
     Map(HashMap<String, Value>),
     Regex(String, String), // pattern, flags
+    #[default]
     Null,
     Procedure(Box<ProcedureValue>),
     /// A native Rust procedure used in transpiled code.
     NativeProcedure {
         params: Vec<String>,
-        callback: Arc<
-            dyn Fn(&[Value], &mut crate::runtime::RuntimeState) -> crate::CorvoResult<Value>
-                + Send
-                + Sync,
-        >,
+        callback: NativeCallback,
     },
     /// A mutex-protected value created during `async_browse` to allow threads to
     /// share a single accumulator variable safely.  This variant is internal-only
     /// and is never produced by ordinary Corvo code.
     Shared(Box<SharedValue>),
-}
-
-impl Default for Value {
-    fn default() -> Self {
-        Self::Null
-    }
 }
 
 impl fmt::Debug for Value {
@@ -144,20 +139,22 @@ impl Serialize for Value {
             Self::Boolean(b) => serializer.serialize_newtype_variant("Value", 2, "Boolean", b),
             Self::List(l) => serializer.serialize_newtype_variant("Value", 3, "List", l),
             Self::Map(m) => serializer.serialize_newtype_variant("Value", 4, "Map", m),
-            Self::Regex(p, f) => {
-                serializer.serialize_tuple_variant("Value", 5, "Regex", 2).and_then(|mut tv| {
+            Self::Regex(p, f) => serializer
+                .serialize_tuple_variant("Value", 5, "Regex", 2)
+                .and_then(|mut tv| {
                     use serde::ser::SerializeTupleVariant;
                     tv.serialize_field(p)?;
                     tv.serialize_field(f)?;
                     tv.end()
-                })
-            }
+                }),
             Self::Null => serializer.serialize_unit_variant("Value", 6, "Null"),
             Self::Procedure(_) => Err(serde::ser::Error::custom("procedures cannot be serialized")),
-            Self::NativeProcedure { .. } => {
-                Err(serde::ser::Error::custom("native procedures cannot be serialized"))
-            }
-            Self::Shared(_) => Err(serde::ser::Error::custom("shared values cannot be serialized")),
+            Self::NativeProcedure { .. } => Err(serde::ser::Error::custom(
+                "native procedures cannot be serialized",
+            )),
+            Self::Shared(_) => Err(serde::ser::Error::custom(
+                "shared values cannot be serialized",
+            )),
         }
     }
 }
@@ -166,7 +163,15 @@ impl<'de> Deserialize<'de> for Value {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         #[derive(Deserialize)]
         #[serde(variant_identifier)]
-        enum Field { String, Number, Boolean, List, Map, Regex, Null }
+        enum Field {
+            String,
+            Number,
+            Boolean,
+            List,
+            Map,
+            Regex,
+            Null,
+        }
 
         struct ValueVisitor;
         impl<'de> serde::de::Visitor<'de> for ValueVisitor {
@@ -176,7 +181,10 @@ impl<'de> Deserialize<'de> for Value {
                 formatter.write_str("enum Value")
             }
 
-            fn visit_enum<A: serde::de::EnumAccess<'de>>(self, data: A) -> Result<Self::Value, A::Error> {
+            fn visit_enum<A: serde::de::EnumAccess<'de>>(
+                self,
+                data: A,
+            ) -> Result<Self::Value, A::Error> {
                 use serde::de::VariantAccess;
                 let (field, variant) = data.variant::<Field>()?;
                 match field {
@@ -192,9 +200,16 @@ impl<'de> Deserialize<'de> for Value {
                             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
                                 f.write_str("tuple (String, String)")
                             }
-                            fn visit_seq<V: serde::de::SeqAccess<'de>>(self, mut seq: V) -> Result<Self::Value, V::Error> {
-                                let p = seq.next_element()?.ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
-                                let f = seq.next_element()?.ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                            fn visit_seq<V: serde::de::SeqAccess<'de>>(
+                                self,
+                                mut seq: V,
+                            ) -> Result<Self::Value, V::Error> {
+                                let p = seq
+                                    .next_element()?
+                                    .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+                                let f = seq
+                                    .next_element()?
+                                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
                                 Ok((p, f))
                             }
                         }
@@ -208,7 +223,13 @@ impl<'de> Deserialize<'de> for Value {
                 }
             }
         }
-        deserializer.deserialize_enum("Value", &["String", "Number", "Boolean", "List", "Map", "Regex", "Null"], ValueVisitor)
+        deserializer.deserialize_enum(
+            "Value",
+            &[
+                "String", "Number", "Boolean", "List", "Map", "Regex", "Null",
+            ],
+            ValueVisitor,
+        )
     }
 }
 
@@ -222,7 +243,7 @@ impl Value {
             Self::Map(_) => Type::Map,
             Self::Regex(_, _) => Type::Regex,
             Self::Null => Type::Null,
-            Self::Procedure(_) | Self::NativeProcedure(_) => Type::Procedure,
+            Self::Procedure(_) | Self::NativeProcedure { .. } => Type::Procedure,
             Self::Shared(sv) => sv.0.lock().unwrap().r#type(),
         }
     }
@@ -278,7 +299,7 @@ impl Value {
             Self::List(l) => !l.is_empty(),
             Self::Map(m) => !m.is_empty(),
             Self::Regex(pattern, _) => !pattern.is_empty(),
-            Self::Procedure(_) | Self::NativeProcedure(_) => true,
+            Self::Procedure(_) | Self::NativeProcedure { .. } => true,
             Self::Shared(sv) => sv.0.lock().unwrap().is_truthy(),
         }
     }
@@ -307,7 +328,7 @@ impl fmt::Display for Value {
             }
             Self::Regex(pattern, flags) => write!(f, "/{}/{}", pattern, flags),
             Self::Null => write!(f, "null"),
-            Self::Procedure(_) | Self::NativeProcedure(_) => write!(f, "<procedure>"),
+            Self::Procedure(_) | Self::NativeProcedure { .. } => write!(f, "<procedure>"),
             Self::Shared(sv) => write!(f, "{}", sv.0.lock().unwrap()),
         }
     }

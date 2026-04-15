@@ -90,7 +90,7 @@ fn value_to_yaml_value(value: &Value) -> CorvoResult<serde_yaml::Value> {
         Value::Regex(pattern, flags) => {
             Ok(serde_yaml::Value::String(format!("/{}/{}", pattern, flags)))
         }
-        Value::Procedure(_) | Value::NativeProcedure(_) => Err(CorvoError::r#type(
+        Value::Procedure(_) | Value::NativeProcedure { .. } => Err(CorvoError::r#type(
             "procedures cannot be serialized to YAML",
         )),
         Value::Shared(_) => Err(CorvoError::r#type(

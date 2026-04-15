@@ -1,4 +1,4 @@
-use crate::ast::{AssertKind, BinaryOp, Expr, MatchPattern, Program, Stmt, UnaryOp};
+use crate::ast::{BinaryOp, Expr, MatchPattern, Program, Stmt, UnaryOp};
 use crate::type_system::Value;
 use std::collections::HashMap;
 
@@ -9,12 +9,20 @@ pub struct Transpiler {
 
 impl Transpiler {
     pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for Transpiler {
+    fn default() -> Self {
         Self {
             indent_level: 1,
             captured_statics: HashMap::new(),
         }
     }
+}
 
+impl Transpiler {
     pub fn with_statics(mut self, statics: HashMap<String, Value>) -> Self {
         self.captured_statics = statics;
         self
@@ -54,7 +62,7 @@ impl Transpiler {
                     self.value_to_rust_literal(v)
                 ));
             }
-            rust_code.push_str("\n");
+            rust_code.push('\n');
         }
 
         for stmt in &program.statements {
@@ -93,11 +101,7 @@ impl Transpiler {
                     val_expr
                 ));
             }
-            Stmt::VarIndexSet {
-                name,
-                index,
-                value,
-            } => {
+            Stmt::VarIndexSet { name, index, value } => {
                 let idx_expr = self.transpile_expr(index, state_var);
                 let val_expr = self.transpile_expr(value, state_var);
                 code.push_str(&format!("{}{{\n", self.indent()));
@@ -108,7 +112,11 @@ impl Transpiler {
                     name
                 ));
                 code.push_str(&format!("{}    let index = {};\n", self.indent(), idx_expr));
-                code.push_str(&format!("{}    let new_val = {};\n", self.indent(), val_expr));
+                code.push_str(&format!(
+                    "{}    let new_val = {};\n",
+                    self.indent(),
+                    val_expr
+                ));
                 code.push_str(&format!(
                     "{}    let updated = match (&current, &index) {{\n",
                     self.indent()
@@ -125,7 +133,10 @@ impl Transpiler {
                     "{}            new_map.insert(key.clone(), new_val);\n",
                     self.indent()
                 ));
-                code.push_str(&format!("{}            Value::Map(new_map)\n", self.indent()));
+                code.push_str(&format!(
+                    "{}            Value::Map(new_map)\n",
+                    self.indent()
+                ));
                 code.push_str(&format!("{}        }}\n", self.indent()));
                 code.push_str(&format!(
                     "{}        (Value::List(list), Value::Number(idx)) => {{\n",
@@ -147,7 +158,10 @@ impl Transpiler {
                     "{}            new_list[i] = new_val;\n",
                     self.indent()
                 ));
-                code.push_str(&format!("{}            Value::List(new_list)\n", self.indent()));
+                code.push_str(&format!(
+                    "{}            Value::List(new_list)\n",
+                    self.indent()
+                ));
                 code.push_str(&format!("{}        }}\n", self.indent()));
                 code.push_str(&format!(
                     "{}        _ => return Err(CorvoError::r#type(\"Invalid index set\")),\n",
@@ -176,7 +190,10 @@ impl Transpiler {
                     "{}    let updated = match (current, rhs) {{\n",
                     self.indent()
                 ));
-                code.push_str(&format!("{}        (Value::Number(a), Value::Number(b)) => Value::Number(a + b),\n", self.indent()));
+                code.push_str(&format!(
+                    "{}        (Value::Number(a), Value::Number(b)) => Value::Number(a + b),\n",
+                    self.indent()
+                ));
                 code.push_str(&format!("{}        (Value::String(a), Value::String(b)) => Value::String(format!(\"{{}}{{}}\", a, b)),\n", self.indent()));
                 code.push_str(&format!(
                     "{}        _ => return Err(CorvoError::r#type(\"+= fails\")),\n",
@@ -205,7 +222,10 @@ impl Transpiler {
                     "{}    let updated = match (current, rhs) {{\n",
                     self.indent()
                 ));
-                code.push_str(&format!("{}        (Value::Number(a), Value::Number(b)) => Value::Number(a - b),\n", self.indent()));
+                code.push_str(&format!(
+                    "{}        (Value::Number(a), Value::Number(b)) => Value::Number(a - b),\n",
+                    self.indent()
+                ));
                 code.push_str(&format!(
                     "{}        _ => return Err(CorvoError::r#type(\"-= fails\")),\n",
                     self.indent()
@@ -227,7 +247,10 @@ impl Transpiler {
                     state_var,
                     name
                 ));
-                code.push_str(&format!("{}    if !current.is_truthy() {{\n", self.indent()));
+                code.push_str(&format!(
+                    "{}    if !current.is_truthy() {{\n",
+                    self.indent()
+                ));
                 self.indent_level += 2;
                 for cand in candidates {
                     let cand_expr = self.transpile_expr(cand, state_var);
@@ -268,9 +291,16 @@ impl Transpiler {
             } => {
                 let iter_expr = self.transpile_expr(iterable, state_var);
                 code.push_str(&format!("{}{{\n", self.indent()));
-                code.push_str(&format!("{}    let iter_val = {};\n", self.indent(), iter_expr));
+                code.push_str(&format!(
+                    "{}    let iter_val = {};\n",
+                    self.indent(),
+                    iter_expr
+                ));
                 code.push_str(&format!("{}    match iter_val {{\n", self.indent()));
-                code.push_str(&format!("{}        Value::List(list) => {{\n", self.indent()));
+                code.push_str(&format!(
+                    "{}        Value::List(list) => {{\n",
+                    self.indent()
+                ));
                 code.push_str(&format!(
                     "{}            for (i, item) in list.iter().enumerate() {{\n",
                     self.indent()
@@ -380,7 +410,11 @@ impl Transpiler {
                     self.indent(),
                     arg_list.join(", ")
                 ));
-                code.push_str(&format!("{}    match AssertKind::{:?} {{\n", self.indent(), kind));
+                code.push_str(&format!(
+                    "{}    match AssertKind::{:?} {{\n",
+                    self.indent(),
+                    kind
+                ));
                 code.push_str(&format!("{}        AssertKind::Eq => {{\n", self.indent()));
                 code.push_str(&format!("{}            if values.len() != 2 || values[0] != values[1] {{ return Err(CorvoError::assertion(format!(\"{{}} != {{}}\", values[0], values[1]))); }}\n", self.indent()));
                 code.push_str(&format!("{}        }}\n", self.indent()));
@@ -393,12 +427,21 @@ impl Transpiler {
                 code.push_str(&format!("{}        AssertKind::Lt => {{\n", self.indent()));
                 code.push_str(&format!("{}            if values.len() != 2 || values[0].as_number().unwrap_or(0.0) >= values[1].as_number().unwrap_or(0.0) {{ return Err(CorvoError::assertion(format!(\"{{}} >= {{}}\", values[0], values[1]))); }}\n", self.indent()));
                 code.push_str(&format!("{}        }}\n", self.indent()));
-                code.push_str(&format!("{}        AssertKind::Match => {{\n", self.indent()));
-                code.push_str(&format!("{}            if values.len() != 2 || !{{\n", self.indent()));
+                code.push_str(&format!(
+                    "{}        AssertKind::Match => {{\n",
+                    self.indent()
+                ));
+                code.push_str(&format!(
+                    "{}            if values.len() != 2 || !{{\n",
+                    self.indent()
+                ));
                 code.push_str(&format!("{}                let pattern = values[0].as_string().ok_or_else(|| CorvoError::r#type(\"assert_match requires strings\"))?;\n", self.indent()));
                 code.push_str(&format!("{}                let target = values[1].as_string().ok_or_else(|| CorvoError::r#type(\"assert_match requires strings\"))?;\n", self.indent()));
                 code.push_str(&format!("{}                let re = regex::Regex::new(pattern).map_err(|e| CorvoError::runtime(e.to_string()))?;\n", self.indent()));
-                code.push_str(&format!("{}                re.is_match(target)\n", self.indent()));
+                code.push_str(&format!(
+                    "{}                re.is_match(target)\n",
+                    self.indent()
+                ));
                 code.push_str(&format!("{}            }} {{ return Err(CorvoError::assertion(format!(\"{{}} does not match {{}}\", values[0], values[1]))); }}\n", self.indent()));
                 code.push_str(&format!("{}        }}\n", self.indent()));
                 code.push_str(&format!("{}    }}\n", self.indent()));
@@ -437,14 +480,18 @@ impl Transpiler {
                 code.push_str(&format!(
                     "{}corvo_lang::compiler::Evaluator::new().exec_async_browse_native(\n\
                      {}    match {} {{ Value::List(l) => l, _ => return Err(CorvoError::r#type(\"async_browse requires a list\")) }},\n\
-                     {}    match {}.var_get({:?})? {{ Value::NativeProcedure {{ callback: p, .. }} => p, _ => return Err(CorvoError::r#type(\"async_browse expects a procedure\")) }},\n\
+                     {}    match {}.var_get({:?})? {{ Value::NativeProcedure {{ params: ref p, .. }} => p.clone(), _ => return Err(CorvoError::r#type(\"async_browse expects a procedure\")) }},\n\
+                     {}    match {}.var_get({:?})? {{ Value::NativeProcedure {{ callback: ref p, .. }} => p.clone(), _ => return Err(CorvoError::r#type(\"async_browse expects a procedure\")) }},\n\
                      {}    {:?},\n\
                      {}    &[{}],\n\
-                     {}    {}\n\
+                     {}    &mut {}\n\
                      {})?;\n",
                     self.indent(),
                     self.indent(),
                     list_expr,
+                    self.indent(),
+                    state_var,
+                    proc_name,
                     self.indent(),
                     state_var,
                     proc_name,
@@ -455,13 +502,6 @@ impl Transpiler {
                     self.indent(),
                     state_var,
                     self.indent()
-                ));
-            }
-            _ => {
-                code.push_str(&format!(
-                    "{}// TODO: Statement type {:?}\n",
-                    self.indent(),
-                    stmt
                 ));
             }
         }
@@ -523,13 +563,19 @@ impl Transpiler {
                 } else {
                     format!("HashMap::from([{}])", named_map_items.join(", "))
                 };
-                format!(
-                    "corvo_lang::standard_lib::call(\"{}\", &[{}], &{}, &{})?",
-                    name,
-                    args_list.join(", "),
-                    named_map_code,
-                    state_var
-                )
+                if name == "__list__" {
+                    format!("Value::List(vec![{}])", args_list.join(", "))
+                } else if name == "__map__" {
+                    format!("Value::Map({})", named_map_code)
+                } else {
+                    format!(
+                        "corvo_lang::standard_lib::call(\"{}\", &[{}], &{}, &{})?",
+                        name,
+                        args_list.join(", "),
+                        named_map_code,
+                        state_var
+                    )
+                }
             }
             Expr::MethodCall {
                 target,
@@ -606,7 +652,6 @@ impl Transpiler {
                     outer_names_list,
                     state_var,
                     state_var,
-                    args_list.join(", "),
                     state_var,
                     state_var,
                     state_var,
@@ -648,11 +693,17 @@ impl Transpiler {
             Expr::SliceAccess { target, start, end } => {
                 let t = self.transpile_expr(target, state_var);
                 let s = match start {
-                    Some(e) => format!("Some({}.as_number().unwrap_or(0.0) as usize)", self.transpile_expr(e, state_var)),
+                    Some(e) => format!(
+                        "Some({}.as_number().unwrap_or(0.0) as usize)",
+                        self.transpile_expr(e, state_var)
+                    ),
                     None => "None".to_string(),
                 };
                 let e = match end {
-                    Some(e) => format!("Some({}.as_number().unwrap_or(0.0) as usize)", self.transpile_expr(e, state_var)),
+                    Some(e) => format!(
+                        "Some({}.as_number().unwrap_or(0.0) as usize)",
+                        self.transpile_expr(e, state_var)
+                    ),
                     None => "None".to_string(),
                 };
                 format!("{{\n    let t = {};\n    match t {{\n        Value::List(l) => {{\n            let start = {}.unwrap_or(0);\n            let end = {}.unwrap_or(l.len());\n            Value::List(l[start.min(l.len())..end.min(l.len())].to_vec())\n        }}\n        Value::String(s) => {{\n            let start = {}.unwrap_or(0);\n            let end = {}.unwrap_or(s.len());\n            Value::String(s[start.min(s.len())..end.min(s.len())].to_string())\n        }}\n        _ => return Err(CorvoError::r#type(\"slice access error\"))\n    }}\n}}", t, s, e, s, e)

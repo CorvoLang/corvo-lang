@@ -108,21 +108,21 @@ impl Compiler {
             .map_err(|e| CorvoError::io(format!("Failed to create output directory: {}", e)))?;
 
         self.generate_cargo_toml(output_dir, &crate_root)?;
-        
+
         // Use Transpiler to generate main.rs
         let mut lexer = crate::lexer::Lexer::new(&self.source_without_prep);
         let tokens = lexer.tokenize()?;
         let mut parser = crate::parser::Parser::new(tokens);
         let program = parser.parse()?;
 
-        let transpiler = crate::compiler::transpiler::Transpiler::new()
-            .with_statics(self.statics.clone());
+        let transpiler =
+            crate::compiler::transpiler::Transpiler::new().with_statics(self.statics.clone());
         let rust_code = transpiler.transpile(&program);
 
         let src_dir = output_dir.join("src");
         std::fs::create_dir_all(&src_dir)
             .map_err(|e| CorvoError::io(format!("Failed to create src dir: {}", e)))?;
-        
+
         std::fs::write(src_dir.join("main.rs"), rust_code)
             .map_err(|e| CorvoError::io(format!("Failed to write main.rs: {}", e)))?;
 
@@ -513,7 +513,7 @@ fn value_to_json_value(v: &Value) -> serde_json::Value {
         Value::Regex(pattern, flags) => {
             serde_json::json!({"__corvo_regex": {"pattern": pattern, "flags": flags}})
         }
-        Value::Procedure(_) | Value::NativeProcedure(_) => {
+        Value::Procedure(_) | Value::NativeProcedure { .. } => {
             panic!("procedures cannot be serialized as statics")
         }
         Value::Shared(_) => {
@@ -726,7 +726,7 @@ fn value_to_rust_code(value: &Value) -> String {
             escape_for_rust(pattern),
             flags
         ),
-        Value::Procedure(_) | Value::NativeProcedure(_) => {
+        Value::Procedure(_) | Value::NativeProcedure { .. } => {
             panic!("procedures cannot be compiled to Rust source literals")
         }
         Value::Shared(_) => {

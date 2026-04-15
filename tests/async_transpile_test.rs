@@ -1,5 +1,5 @@
 use corvo_lang::compiler::Compiler;
-use corvo_lang::type_system::Value;
+
 use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
@@ -26,10 +26,10 @@ fn test_transpile_async_browse() {
     fs::write(&script_path, source).expect("Failed to write script");
 
     let compiler = Compiler::new(source.to_string(), script_path.clone());
-    // No need to call pre_execute if we don't have prep blocks, 
+    // No need to call pre_execute if we don't have prep blocks,
     // but building without it might fail if expectations are there.
     // Actually, transpiler needs the pre_execute results (statics).
-    
+
     compiler
         .transpile(&project_path)
         .expect("Transpilation failed");
@@ -41,6 +41,10 @@ fn test_transpile_async_browse() {
         .expect("Failed to run transpiled project");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(output.status.success(), "Project execution failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "Project execution failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert_eq!(stdout.trim(), "15");
 }

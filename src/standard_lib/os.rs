@@ -153,7 +153,7 @@ pub fn uptime(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResu
             .map_err(|e| CorvoError::runtime(e.to_string()))?
             .as_secs_f64();
 
-        return Ok(Value::Number(now - boot_sec));
+        Ok(Value::Number(now - boot_sec))
     }
 
     #[cfg(target_os = "windows")]
@@ -247,7 +247,7 @@ pub fn load_average(args: &[Value], _named_args: &HashMap<String, Value>) -> Cor
             Value::Number(*nums.get(2).unwrap_or(&0.0)),
         );
 
-        return Ok(Value::Map(result));
+        Ok(Value::Map(result))
     }
 
     #[cfg(target_os = "windows")]

@@ -74,7 +74,7 @@ pub fn value_to_json(value: &Value) -> CorvoResult<serde_json::Value> {
         Value::Regex(pattern, flags) => {
             Ok(serde_json::Value::String(format!("/{}/{}", pattern, flags)))
         }
-        Value::Procedure(_) | Value::NativeProcedure(_) => Err(CorvoError::r#type(
+        Value::Procedure(_) | Value::NativeProcedure { .. } => Err(CorvoError::r#type(
             "procedures cannot be serialized to JSON",
         )),
         Value::Shared(_) => Err(CorvoError::r#type(

@@ -2761,13 +2761,18 @@ fn test_fs_read_meta_tmp() {
 #[cfg(unix)]
 #[test]
 fn test_os_user_id_and_group_id() {
-    let group_name = if cfg!(target_os = "macos") { "wheel" } else { "root" };
-    let state = run_with_state(
-        &format!(r#"
+    let group_name = if cfg!(target_os = "macos") {
+        "wheel"
+    } else {
+        "root"
+    };
+    let state = run_with_state(&format!(
+        r#"
         var.set("root_uid", os.user_id("root"))
         var.set("root_gid", os.group_id("{}"))
-        "#, group_name),
-    )
+        "#,
+        group_name
+    ))
     .unwrap();
     assert_eq!(
         state.var_get("root_uid").unwrap(),
