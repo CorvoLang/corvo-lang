@@ -172,7 +172,8 @@ corvo -e 'sys.echo("Hello, World!")'   # one-liner
 corvo script.corvo                      # run a file
 corvo --repl                            # interactive REPL
 corvo --lint script.corvo               # lint without running
-corvo --compile script.corvo -o out     # compile to binary
+corvo --compile script.corvo -o out     # compile to standalone binary
+corvo --transpile script.corvo -o out   # transpile to Rust project directory
 ```
 
 ---
@@ -384,7 +385,8 @@ sys.echo("${list.len(@errors)} error lines found")
 | `corvo -e '<expr>'` | Evaluate an inline expression |
 | `corvo --repl` | Interactive REPL |
 | `corvo --lint <file>` | Lint without executing |
-| `corvo --compile <file> -o <out>` | Compile to a standalone binary |
+| `corvo --compile <file> -o <out>` | Compile to a standalone binary (interpreter embedded) |
+| `corvo --transpile <file> -o <out>` | Transpile to a native Rust project directory |
 | `corvo --debug` | Use a debug build (faster compile time) |
 | `corvo --version` | Print version |
 

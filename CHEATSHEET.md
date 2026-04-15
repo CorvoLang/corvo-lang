@@ -398,8 +398,11 @@ async_browse(@list, @proc, @item_binding [, shared @var1, shared @var2, ...])
 
 * Each list element is dispatched to its own OS thread.
 * The procedure body runs **without any lock held**, so I/O-bound work (HTTP requests, file operations, etc.) executes in parallel.
-* For **shared list variables** the write-back step is a **delta-merge**: items appended during the procedure are atomically added to whatever the shared list currently contains.  All items from all threads are preserved regardless of execution order.
-* For **shared variables of other types** the last thread to finish wins (the procedure's final value replaces the current value).
+* For **shared list variables** the write-back step is a **delta-merge**: items appended during the procedure are atomically added to whatever the shared list currently contains.
+* For **shared variables of other types** (Number, String), a **delta-merge** is also applied:
+    * **Number**: The numeric difference (delta) contributed by the thread is added to the shared value.
+    * **String**: The suffix appended by the thread is added to the end of the shared string.
+* For all other types, the last thread to finish wins (overwrite semantics).
 
 ### Example
 

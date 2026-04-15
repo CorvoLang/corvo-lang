@@ -467,10 +467,21 @@ corvo-lang/
 
 ## Phase 13: Documentation
 
-- [ ] Update `corvo.md` with language spec
-- [ ] Update `IMPLEMENTATION.md` with AI directives
-- [ ] Add inline code documentation
-- [ ] Create CONTRIBUTING.md
+- [x] Update `corvo.md` with language spec
+- [x] Update `IMPLEMENTATION.md` with AI directives and Transpiler details
+- [x] Add inline code documentation
+- [x] Create CONTRIBUTING.md
+
+---
+
+## Phase 14: Transpiler
+
+- [x] Implement Corvo-to-Rust code generation (`src/compiler/transpiler.rs`)
+- [x] Support procedure-to-closure mapping
+- [x] Support `async_browse` with mutex-protected shared variables
+- [x] Implement complex write-back logic (delta-merge for List, Number, String)
+- [x] Project scaffolding (Cargo.toml, main.rs templates)
+- [x] Verify parity with interpreted mode via integration tests
 
 ---
 

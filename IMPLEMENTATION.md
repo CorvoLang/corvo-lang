@@ -199,8 +199,10 @@ async_browse(@list, @proc, @item_binding [, shared @var1, shared @var2, ...])
 
 | Shared var type | Semantics |
 |---|---|
-| `list` | Delta-merge: items appended during the procedure body are atomically added to the mutex-protected list, so contributions from all threads are preserved. |
-| All other types | Last-writer-wins: the thread's final value replaces the current value. |
+| `list` | Delta-merge: items appended during the procedure body are atomically added to the mutex-protected list. |
+| `number` | Delta-merge: the numeric difference added by the thread is summed into the shared total. |
+| `string` | Delta-merge: the string suffix appended by the thread is concatenated to the shared value. |
+| Other types | Last-writer-wins: the thread's final value replaces the current value. |
 
 The procedure body runs **without holding any lock**, so I/O-bound operations execute in true parallel.  The delta-merge step is protected by a per-variable mutex.
 
@@ -401,3 +403,34 @@ sys.echo(@total)   # 31
 ```
 
 See [`examples/procedure.corvo`](examples/procedure.corvo) for more examples.
+
+## 6. Transpiler (Corvo to Rust)
+
+Corvo features a transpiler that converts `.corvo` source code directly into a standalone Rust project. Unlike the default compiler (which embeds the source and runs it via an internal interpreter), the transpiler generates native Rust code that maps Corvo constructs to Rust standard library and Corvo-runtime calls.
+
+### 6.1 Transpilation Process
+1. **Source Loading**: The transpiler reads the `.corvo` source.
+2. **Pre-execution**: `prep { }` blocks are executed using the internal interpreter to resolve `static.set()` values.
+3. **Rust Generation**:
+    - **Variables**: State is managed via a `RuntimeState` object passed between functions.
+    - **Procedures**: Transpiled into Rust closures (`NativeProcedure`).
+    - **Control Flow**:
+        - `loop`: Transpiled into Rust `loop { ... }`.
+        - `try/fallback`: Transpiled into `Result`-based pattern matching (using `ifLet` or `match`).
+        - `async_browse`: Transpiled into multi-threaded Rust code that uses `Arc<Mutex<Value>>` for shared variables and handles concurrent write-backs via `merge_shared_writeback`.
+4. **Project Scaffolding**: A temporary or permanent Cargo project is created, with a generated `main.rs`, `Cargo.toml`, and appropriate dependencies.
+5. **Compilation**: The resulting Rust code is compiled using `cargo build`.
+
+### 6.2 Key Transpilation Mappings
+- **List Literals**: Converted to `Value::List(vec![...])`.
+- **Map Literals**: Converted to `Value::Map(HashMap::from([...]))`.
+- **String Interpolation**: Converted to `format!()` calls within the Rust code.
+- **Shared Variables**: Wrapped in `Arc<Mutex<Value>>` before spawning threads in `async_browse`.
+
+### 6.3 Usage
+```bash
+corvo --transpile script.corvo -o my_rust_project
+cd my_rust_project
+cargo run
+```
+
