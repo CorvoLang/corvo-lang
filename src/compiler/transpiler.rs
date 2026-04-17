@@ -35,7 +35,6 @@ impl Transpiler {
         rust_code.push_str("use corvo_lang::type_system::Value;\n");
         rust_code.push_str("use corvo_lang::RuntimeState;\n");
         rust_code.push_str("use corvo_lang::CorvoError;\n");
-        rust_code.push_str("use corvo_lang::ast::AssertKind;\n");
         rust_code.push_str("use std::collections::HashMap;\n\n");
 
         rust_code.push_str("fn main() {\n");
@@ -411,24 +410,36 @@ impl Transpiler {
                     arg_list.join(", ")
                 ));
                 code.push_str(&format!(
-                    "{}    match AssertKind::{:?} {{\n",
+                    "{}    match corvo_lang::ast::AssertKind::{:?} {{\n",
                     self.indent(),
                     kind
                 ));
-                code.push_str(&format!("{}        AssertKind::Eq => {{\n", self.indent()));
+                code.push_str(&format!(
+                    "{}        corvo_lang::ast::AssertKind::Eq => {{\n",
+                    self.indent()
+                ));
                 code.push_str(&format!("{}            if values.len() != 2 || values[0] != values[1] {{ return Err(CorvoError::assertion(format!(\"{{}} != {{}}\", values[0], values[1]))); }}\n", self.indent()));
                 code.push_str(&format!("{}        }}\n", self.indent()));
-                code.push_str(&format!("{}        AssertKind::Neq => {{\n", self.indent()));
+                code.push_str(&format!(
+                    "{}        corvo_lang::ast::AssertKind::Neq => {{\n",
+                    self.indent()
+                ));
                 code.push_str(&format!("{}            if values.len() != 2 || values[0] == values[1] {{ return Err(CorvoError::assertion(format!(\"{{}} == {{}}\", values[0], values[1]))); }}\n", self.indent()));
                 code.push_str(&format!("{}        }}\n", self.indent()));
-                code.push_str(&format!("{}        AssertKind::Gt => {{\n", self.indent()));
+                code.push_str(&format!(
+                    "{}        corvo_lang::ast::AssertKind::Gt => {{\n",
+                    self.indent()
+                ));
                 code.push_str(&format!("{}            if values.len() != 2 || values[0].as_number().unwrap_or(0.0) <= values[1].as_number().unwrap_or(0.0) {{ return Err(CorvoError::assertion(format!(\"{{}} <= {{}}\", values[0], values[1]))); }}\n", self.indent()));
                 code.push_str(&format!("{}        }}\n", self.indent()));
-                code.push_str(&format!("{}        AssertKind::Lt => {{\n", self.indent()));
+                code.push_str(&format!(
+                    "{}        corvo_lang::ast::AssertKind::Lt => {{\n",
+                    self.indent()
+                ));
                 code.push_str(&format!("{}            if values.len() != 2 || values[0].as_number().unwrap_or(0.0) >= values[1].as_number().unwrap_or(0.0) {{ return Err(CorvoError::assertion(format!(\"{{}} >= {{}}\", values[0], values[1]))); }}\n", self.indent()));
                 code.push_str(&format!("{}        }}\n", self.indent()));
                 code.push_str(&format!(
-                    "{}        AssertKind::Match => {{\n",
+                    "{}        corvo_lang::ast::AssertKind::Match => {{\n",
                     self.indent()
                 ));
                 code.push_str(&format!(
@@ -620,7 +631,7 @@ impl Transpiler {
                             let arg_vals = vec![{}];\n            \
                             let outer_names: Vec<Option<String>> = vec![{}];\n            \
                             let saved: Vec<Option<Value>> = p_names.iter().map(|p| {}.var_remove(p)).collect();\n            \
-                            let res = (p)(&arg_vals, {})?;\n            \
+                            let res = (p)(&arg_vals, &mut {})?;\n            \
                             for (i, param) in p_names.iter().enumerate() {{\n                \
                                 if let Some(Some(outer_name)) = outer_names.get(i) {{\n                    \
                                     let updated = {}.var_get(param.as_str()).unwrap_or(Value::Null);\n                    \
