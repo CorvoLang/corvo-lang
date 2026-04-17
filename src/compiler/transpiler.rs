@@ -5,6 +5,10 @@ use std::collections::HashMap;
 pub struct Transpiler {
     pub indent_level: usize,
     pub captured_statics: HashMap<String, Value>,
+    /// When `true` the state variable is already a `&mut RuntimeState`
+    /// (e.g. inside a procedure callback closure) and must be passed
+    /// directly to native procedure calls rather than as `&mut state`.
+    pub state_is_ref: bool,
 }
 
 impl Transpiler {
@@ -18,6 +22,7 @@ impl Default for Transpiler {
         Self {
             indent_level: 1,
             captured_statics: HashMap::new(),
+            state_is_ref: false,
         }
     }
 }
@@ -35,7 +40,6 @@ impl Transpiler {
         rust_code.push_str("use corvo_lang::type_system::Value;\n");
         rust_code.push_str("use corvo_lang::RuntimeState;\n");
         rust_code.push_str("use corvo_lang::CorvoError;\n");
-        rust_code.push_str("use corvo_lang::ast::AssertKind;\n");
         rust_code.push_str("use std::collections::HashMap;\n\n");
 
         rust_code.push_str("fn main() {\n");
@@ -83,23 +87,38 @@ impl Transpiler {
         match stmt {
             Stmt::VarSet { name, value } => {
                 let val_expr = self.transpile_expr(value, state_var);
+                // Compute RHS into a temp first so that the borrow of `state`
+                // inside `val_expr` ends before `var_set` mutably borrows it.
+                code.push_str(&format!("{}{{\n", self.indent()));
                 code.push_str(&format!(
-                    "{}{}.var_set(\"{}\".to_string(), {});\n",
+                    "{}    let __corvo_rhs = {};\n",
                     self.indent(),
-                    state_var,
-                    name,
                     val_expr
                 ));
+                code.push_str(&format!(
+                    "{}    {}.var_set(\"{}\".to_string(), __corvo_rhs);\n",
+                    self.indent(),
+                    state_var,
+                    name
+                ));
+                code.push_str(&format!("{}}}\n", self.indent()));
             }
             Stmt::StaticSet { name, value } => {
                 let val_expr = self.transpile_expr(value, state_var);
+                // Same temp-variable pattern as VarSet to avoid double borrow.
+                code.push_str(&format!("{}{{\n", self.indent()));
                 code.push_str(&format!(
-                    "{}{}.static_set(\"{}\".to_string(), {});\n",
+                    "{}    let __corvo_rhs = {};\n",
                     self.indent(),
-                    state_var,
-                    name,
                     val_expr
                 ));
+                code.push_str(&format!(
+                    "{}    {}.static_set(\"{}\".to_string(), __corvo_rhs);\n",
+                    self.indent(),
+                    state_var,
+                    name
+                ));
+                code.push_str(&format!("{}}}\n", self.indent()));
             }
             Stmt::VarIndexSet { name, index, value } => {
                 let idx_expr = self.transpile_expr(index, state_var);
@@ -242,31 +261,34 @@ impl Transpiler {
             Stmt::VarOrAssign { name, candidates } => {
                 code.push_str(&format!("{}{{\n", self.indent()));
                 code.push_str(&format!(
-                    "{}    let mut current = {}.var_get(\"{}\").unwrap_or(Value::Null);\n",
+                    "{}    if !{}.var_get(\"{}\").unwrap_or(Value::Null).is_truthy() {{\n",
                     self.indent(),
                     state_var,
                     name
                 ));
-                code.push_str(&format!(
-                    "{}    if !current.is_truthy() {{\n",
-                    self.indent()
-                ));
-                self.indent_level += 2;
+                // Use a labeled block so that we can `break '__corvo_or` to stop
+                // trying further candidates once one is truthy.  A plain `break`
+                // is not valid outside a loop, and a loop-based approach cannot
+                // be broken from inside closures (e.g. inside TryBlock fallbacks).
+                // `break 'label` for a label defined inside the same closure IS
+                // always valid in Rust.
+                code.push_str(&format!("{}        '__corvo_or: {{\n", self.indent()));
+                self.indent_level += 3;
                 for cand in candidates {
                     let cand_expr = self.transpile_expr(cand, state_var);
-                    code.push_str(&format!("{}let val = {};\n", self.indent(), cand_expr));
-                    code.push_str(&format!("{}if val.is_truthy() {{\n", self.indent()));
+                    code.push_str(&format!("{}let __val = {};\n", self.indent(), cand_expr));
+                    code.push_str(&format!("{}if __val.is_truthy() {{\n", self.indent()));
                     code.push_str(&format!(
-                        "{}    {}.var_set(\"{}\".to_string(), val);\n",
+                        "{}    {}.var_set(\"{}\".to_string(), __val);\n",
                         self.indent(),
                         state_var,
                         name
                     ));
-                    code.push_str(&format!("{}    current = val;\n", self.indent()));
-                    code.push_str(&format!("{}    break;\n", self.indent()));
+                    code.push_str(&format!("{}    break '__corvo_or;\n", self.indent()));
                     code.push_str(&format!("{}}}\n", self.indent()));
                 }
-                self.indent_level -= 2;
+                self.indent_level -= 3;
+                code.push_str(&format!("{}        }}\n", self.indent()));
                 code.push_str(&format!("{}    }}\n", self.indent()));
                 code.push_str(&format!("{}}}\n", self.indent()));
             }
@@ -411,24 +433,36 @@ impl Transpiler {
                     arg_list.join(", ")
                 ));
                 code.push_str(&format!(
-                    "{}    match AssertKind::{:?} {{\n",
+                    "{}    match corvo_lang::ast::AssertKind::{:?} {{\n",
                     self.indent(),
                     kind
                 ));
-                code.push_str(&format!("{}        AssertKind::Eq => {{\n", self.indent()));
+                code.push_str(&format!(
+                    "{}        corvo_lang::ast::AssertKind::Eq => {{\n",
+                    self.indent()
+                ));
                 code.push_str(&format!("{}            if values.len() != 2 || values[0] != values[1] {{ return Err(CorvoError::assertion(format!(\"{{}} != {{}}\", values[0], values[1]))); }}\n", self.indent()));
                 code.push_str(&format!("{}        }}\n", self.indent()));
-                code.push_str(&format!("{}        AssertKind::Neq => {{\n", self.indent()));
+                code.push_str(&format!(
+                    "{}        corvo_lang::ast::AssertKind::Neq => {{\n",
+                    self.indent()
+                ));
                 code.push_str(&format!("{}            if values.len() != 2 || values[0] == values[1] {{ return Err(CorvoError::assertion(format!(\"{{}} == {{}}\", values[0], values[1]))); }}\n", self.indent()));
                 code.push_str(&format!("{}        }}\n", self.indent()));
-                code.push_str(&format!("{}        AssertKind::Gt => {{\n", self.indent()));
+                code.push_str(&format!(
+                    "{}        corvo_lang::ast::AssertKind::Gt => {{\n",
+                    self.indent()
+                ));
                 code.push_str(&format!("{}            if values.len() != 2 || values[0].as_number().unwrap_or(0.0) <= values[1].as_number().unwrap_or(0.0) {{ return Err(CorvoError::assertion(format!(\"{{}} <= {{}}\", values[0], values[1]))); }}\n", self.indent()));
                 code.push_str(&format!("{}        }}\n", self.indent()));
-                code.push_str(&format!("{}        AssertKind::Lt => {{\n", self.indent()));
+                code.push_str(&format!(
+                    "{}        corvo_lang::ast::AssertKind::Lt => {{\n",
+                    self.indent()
+                ));
                 code.push_str(&format!("{}            if values.len() != 2 || values[0].as_number().unwrap_or(0.0) >= values[1].as_number().unwrap_or(0.0) {{ return Err(CorvoError::assertion(format!(\"{{}} >= {{}}\", values[0], values[1]))); }}\n", self.indent()));
                 code.push_str(&format!("{}        }}\n", self.indent()));
                 code.push_str(&format!(
-                    "{}        AssertKind::Match => {{\n",
+                    "{}        corvo_lang::ast::AssertKind::Match => {{\n",
                     self.indent()
                 ));
                 code.push_str(&format!(
@@ -612,6 +646,16 @@ impl Transpiler {
                 }
                 let outer_names_list = outer_names_code.join(", ");
 
+                // When `state_var` is already a `&mut RuntimeState` reference
+                // (inside a procedure callback closure) pass it directly to the
+                // native callback.  In the outer `run()` function `state` is a
+                // plain `RuntimeState` value and must be taken by `&mut`.
+                let state_arg = if self.state_is_ref {
+                    state_var.to_string()
+                } else {
+                    format!("&mut {}", state_var)
+                };
+
                 format!(
                     "{{\n    \
                     let t = {};\n    \
@@ -651,7 +695,7 @@ impl Transpiler {
                     args_list.join(", "),
                     outer_names_list,
                     state_var,
-                    state_var,
+                    state_arg,
                     state_var,
                     state_var,
                     state_var,
@@ -665,13 +709,20 @@ impl Transpiler {
             Expr::Match { value, arms } => {
                 let val_code = self.transpile_expr(value, state_var);
                 let mut arms_code = Vec::new();
+                let mut has_wildcard = false;
                 for arm in arms {
                     let pat = match &arm.pattern {
-                        MatchPattern::Literal(v) => self.value_to_rust_literal(v),
-                        MatchPattern::Wildcard => "_".to_string(),
-                        MatchPattern::Regex(p, f) => {
-                            format!("Value::Regex({:?}.to_string(), {:?}.to_string())", p, f)
+                        MatchPattern::Literal(v) => {
+                            format!("__corvo_match_val if __corvo_match_val == {}", self.value_to_rust_literal(v))
                         }
+                        MatchPattern::Wildcard => {
+                            has_wildcard = true;
+                            "_".to_string()
+                        }
+                        MatchPattern::Regex(p, f) => format!(
+                            "__corvo_match_val if __corvo_match_val == Value::Regex({:?}.to_string(), {:?}.to_string())",
+                            p, f
+                        ),
                     };
                     arms_code.push(format!(
                         "{} => {},",
@@ -679,16 +730,20 @@ impl Transpiler {
                         self.transpile_expr(&arm.body, state_var)
                     ));
                 }
-                format!(
-                    "match {} {{ {} _ => Value::Null }}",
-                    val_code,
-                    arms_code.join(" ")
-                )
+                if has_wildcard {
+                    format!("match {} {{ {} }}", val_code, arms_code.join(" "))
+                } else {
+                    format!(
+                        "match {} {{ {} _ => Value::Null }}",
+                        val_code,
+                        arms_code.join(" ")
+                    )
+                }
             }
             Expr::IndexAccess { target, index } => {
                 let t = self.transpile_expr(target, state_var);
                 let i = self.transpile_expr(index, state_var);
-                format!("match ({}, {}) {{\n    (Value::List(l), Value::Number(idx)) => l.get(*idx as usize).cloned().ok_or_else(|| CorvoError::runtime(\"Index out of bounds\"))?,\n    (Value::Map(m), Value::String(key)) => m.get(&key).cloned().ok_or_else(|| CorvoError::runtime(format!(\"Key not found: {{}}\", key)))?,\n    _ => return Err(CorvoError::r#type(\"index access error\"))\n}}", t, i)
+                format!("match ({}, {}) {{\n    (Value::List(l), Value::Number(idx)) => l.get(idx as usize).cloned().ok_or_else(|| CorvoError::runtime(\"Index out of bounds\"))?,\n    (Value::Map(m), Value::String(key)) => m.get(&key).cloned().ok_or_else(|| CorvoError::runtime(format!(\"Key not found: {{}}\", key)))?,\n    _ => return Err(CorvoError::r#type(\"index access error\"))\n}}", t, i)
             }
             Expr::SliceAccess { target, start, end } => {
                 let t = self.transpile_expr(target, state_var);
@@ -733,9 +788,12 @@ impl Transpiler {
                 }
 
                 // Transpile body
+                // `state_is_ref: true` because the closure parameter is
+                // `state: &mut RuntimeState` (already a reference).
                 let mut sub_transpiler = Transpiler {
                     indent_level: 1,
                     captured_statics: self.captured_statics.clone(),
+                    state_is_ref: true,
                 };
                 for stmt in body {
                     proc_code.push_str(&sub_transpiler.transpile_stmt(stmt, "state"));

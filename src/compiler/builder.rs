@@ -76,12 +76,25 @@ impl Compiler {
         let mut parser = crate::parser::Parser::new(tokens);
         let program = parser.parse()?;
 
-        let mut state = RuntimeState::new();
-        let mut evaluator = crate::compiler::Evaluator::new();
-        // Run the script. Runtime errors are OK - we just want static values.
-        let _ = evaluator.run(&program, &mut state);
+        // Only execute PrepBlock statements to capture static values.
+        // Running the full program would trigger side effects such as network
+        // I/O or blocking calls (e.g. `net.tcp_accept`) that must not be
+        // invoked at compile/transpile time.
+        let prep_stmts: Vec<crate::ast::Stmt> = program
+            .statements
+            .into_iter()
+            .filter(|s| matches!(s, crate::ast::Stmt::PrepBlock { .. }))
+            .collect();
 
-        self.statics = state.statics_snapshot();
+        if !prep_stmts.is_empty() {
+            let prep_program = crate::ast::Program::new(prep_stmts);
+            let mut state = RuntimeState::new();
+            let mut evaluator = crate::compiler::Evaluator::new();
+            // Runtime errors from prep blocks are OK — we just want the statics.
+            let _ = evaluator.run(&prep_program, &mut state);
+            self.statics = state.statics_snapshot();
+        }
+
         Ok(())
     }
 
