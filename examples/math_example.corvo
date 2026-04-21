@@ -1,44 +1,46 @@
-# math_example.corvo - Infix arithmetic (+ - * /) and math.mod (no `%` yet)
-
-@section.call("=== infix + - * / (numbers) ===")
-@random_number = 5
-@infix = 1 + 1 + ((2 * 2) / 2) + @random_number
-sys.echo("1 + 1 + ((2 * 2) / 2) + 5 = ${@infix}")
-assert_eq(@infix, 9)
+# math_example.corvo - Arithmetic and math.* functions
 
 @section = procedure(@title) {
     sys.echo("")
     sys.echo(@title)
 }
 
-@section.call("=== addition (+) ===")
-@sum = 10 + 5
-sys.echo("10 + 5 = ${@sum}")
+@section.call("=== Infix + - * / (numbers) ===")
+@random_number = 5
+@infix = 1 + 1 + ((2 * 2) / 2) + @random_number
+sys.echo("1 + 1 + ((2 * 2) / 2) + 5 = ${@infix}")
+assert_eq(@infix, 9)
 
-@section.call("=== subtraction (-) ===")
-@diff = 10 - 5
-sys.echo("10 - 5 = ${@diff}")
+@section.call("=== Functional form (math.add, etc) ===")
+sys.echo("add(10, 5) = ${math.add(10, 5)}")
+sys.echo("sub(10, 5) = ${math.sub(10, 5)}")
+sys.echo("mul(10, 5) = ${math.mul(10, 5)}")
+sys.echo("div(10, 5) = ${math.div(10, 5)}")
 
-@section.call("=== multiplication (*) ===")
-@product = 10 * 5
-sys.echo("10 * 5 = ${@product}")
+@section.call("=== math.mod ===")
+sys.echo("10 mod 3 = ${math.mod(10, 3)}")
 
-@section.call("=== division (/) ===")
-@quotient = 10 / 5
-sys.echo("10 / 5 = ${@quotient}")
+@section.call("=== math.max / math.min ===")
+sys.echo("max(10, 20, 5) = ${math.max(10, 20, 5)}")
+sys.echo("min(10, 20, 5) = ${math.min(10, 20, 5)}")
 
-# Infix `/` uses IEEE 754 floats (e.g. 10 / 0 is infinity, no error). Use math.div only when you need a runtime error on division by zero.
+@section.call("=== math.floor / math.ceil / math.round ===")
+@n = 3.7
+sys.echo("Number: ${@n}")
+sys.echo("floor: ${math.floor(@n)}")
+sys.echo("ceil:  ${math.ceil(@n)}")
+sys.echo("round: ${math.round(@n)}")
 
-@section.call("=== math.mod (no % operator yet) ===")
-@remainder = math.mod(10, 3)
-sys.echo("10 mod 3 = ${@remainder}")
+@section.call("=== math.random ===")
+sys.echo("Random [0, 1): ${math.random()}")
+sys.echo("Random [0, 100): ${math.random(100)}")
+sys.echo("Random [50, 100): ${math.random(50, 100)}")
 
-@even_check = math.mod(8, 2)
-sys.echo("8 mod 2 = ${@even_check} (0 means even)")
+@section.call("=== math.human_bytes / math.parse_size ===")
+@bytes = 1048576 * 5.5
+sys.echo("Human readable (5.5MB): ${math.human_bytes(@bytes)}")
+sys.echo("Parsed '10K': ${math.parse_size("10K")}")
 
-# Modulo by zero is also an error
-try {
-    @bad_mod = math.mod(10, 0)
-} fallback {
-    sys.echo("math.mod by zero raises an error (caught by fallback)")
-}
+@section.call("=== math.range ===")
+sys.echo("Range 0..5: ${list.join(math.range(5), ", ")}")
+sys.echo("Range 10..20 step 2: ${list.join(math.range(10, 20, 2), ", ")}")

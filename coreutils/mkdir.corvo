@@ -30,8 +30,7 @@
 @exit_code  = 0
 
 # ── Handle --help ─────────────────────────────────────────────────────────────
-try {
-  assert_eq(@o.get("help", false), true)
+if (@o.get("help", false)) {
   sys.echo("Usage: mkdir [OPTION]... DIRECTORY...")
   sys.echo("Create the DIRECTORY(ies), if they do not already exist.")
   sys.echo("")
@@ -42,78 +41,57 @@ try {
   sys.echo("      --help        display this help and exit")
   sys.echo("      --version     output version information and exit")
   @skip_main = true
-} fallback {}
+}
 
 # ── Handle --version ──────────────────────────────────────────────────────────
-try {
-  assert_eq(@o.get("version", false), true)
+if (!@skip_main && @o.get("version", false)) {
   sys.echo("mkdir (Corvo coreutils) 0.1.0")
   @skip_main = true
-} fallback {}
+}
 
 # ── Flag extraction ───────────────────────────────────────────────────────────
-@parents = false
-@verbose = false
-
-try {
-  assert_eq(@skip_main, true)
-} fallback {
+if (!@skip_main) {
   @parents = @o.get("parents", false)
   @verbose = @o.get("verbose", false)
   # -m / --mode is accepted but permissions are governed by the process umask
 
-  try {
-    assert_eq(list.len(@operands), 0)
+  if (list.is_empty(@operands)) {
     sys.eprint("mkdir: missing operand")
     sys.eprint("Try 'mkdir --help' for more information.")
     @exit_code = 1
     @skip_main = true
-  } fallback {}
+  }
 }
 
 # ── Main creation loop ────────────────────────────────────────────────────────
-try {
-  assert_eq(@skip_main, true)
-} fallback {
+if (!@skip_main) {
   browse(@operands, @_oi, @_path) {
-    try {
-      assert_eq(@parents, true)
+    if (@parents) {
       # -p: create parents as needed; do not error if the directory already exists
       @_existed = fs.exists(@_path)
       try {
         fs.mkdir(@_path, true)
-        try {
-          assert_eq(@verbose, true)
-          assert_eq(@_existed, false)
+        if (@verbose && !@_existed) {
           sys.echo("mkdir: created directory '${@_path}'")
-        } fallback {}
+        }
       } fallback {
         # fs.mkdir failed — report an error only when the path still does not exist
-        @_still_absent = false
-        try {
-          assert_eq(fs.exists(@_path), false)
-          @_still_absent = true
-        } fallback {}
-        try {
-          assert_eq(@_still_absent, true)
+        if (!fs.exists(@_path)) {
           sys.eprint("mkdir: cannot create directory '${@_path}': Operation not permitted")
           @exit_code = 1
-        } fallback {}
+        }
       }
-    } fallback {
+    } else {
       # Without -p: error if the path already exists
-      @_exists = fs.exists(@_path)
-      try {
-        assert_eq(@_exists, true)
+      if (fs.exists(@_path)) {
         sys.eprint("mkdir: cannot create directory '${@_path}': File exists")
         @exit_code = 1
-      } fallback {
+      } else {
         try {
           fs.mkdir(@_path, false)
-          try {
-            assert_eq(@verbose, true)
+          if (@verbose) {
             sys.echo("mkdir: created directory '${@_path}'")
-          } fallback {}
+          }
         } fallback {
           sys.eprint("mkdir: cannot create directory '${@_path}': No such file or directory")
           @exit_code = 1

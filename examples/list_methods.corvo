@@ -50,9 +50,28 @@ sys.echo("Index of 'mango' (not found): ${list.find(@fruits, "mango")}")
 sys.echo("Is fruits empty: ${list.is_empty(@fruits)}")
 sys.echo("Is [] empty: ${list.is_empty([])}")
 
-@section.call("=== list.sort ===")
+@section.call("=== list.sort / list.sort_version ===")
 @sorted = list.sort(@fruits)
 sys.echo("Sorted: ${list.join(@sorted, ", ")}")
+@versions = ["1.10.0", "1.2.1", "1.1.0"]
+sys.echo("Version sort: ${list.join(list.sort_version(@versions), " -> ")}")
+
+@section.call("=== list.sort_maps_by_key ===")
+@users = [
+  {"name": "Charlie", "age": 30},
+  {"name": "Alice", "age": 25},
+  {"name": "Bob", "age": 35}
+]
+@sorted_users = list.sort_maps_by_key(@users, "name")
+sys.echo("Sorted by name: ${list.get(list.get(@sorted_users, 0), "name")}, ${list.get(list.get(@sorted_users, 1), "name")}, ...")
+
+@section.call("=== list.columnate ===")
+@items = ["apple", "banana", "cherry", "date", "elderberry", "fig", "grape"]
+@cols = list.columnate(@items, 3)
+sys.echo("Columnated (width 3):")
+browse(@cols, @idx, @row) {
+  sys.echo(list.join(@row, "  "))
+}
 
 @section.call("=== list.reverse ===")
 @reversed = list.reverse(@fruits)

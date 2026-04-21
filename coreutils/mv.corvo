@@ -1,0 +1,115 @@
+# coreutils/mv.corvo — GNU-compatible `mv`
+# Run: `corvo coreutils/mv.corvo -- [OPTION]... SOURCE DEST`
+#      `corvo coreutils/mv.corvo -- [OPTION]... SOURCE... DIRECTORY`
+
+# ── Argument-parser spec ──────────────────────────────────────────────────────
+@_mv_spec = {
+  "aliases": {
+    "f": "force",
+    "i": "interactive",
+    "n": "no_clobber",
+    "u": "update",
+    "v": "verbose",
+    "force": "force",
+    "interactive": "interactive",
+    "no_clobber": "no_clobber",
+    "update": "update",
+    "verbose": "verbose"
+  }
+}
+
+@parsed = args.parse(os.argv(), @_mv_spec)
+@o = @parsed["options"]
+@operands = @parsed["positional"]
+
+@skip_main = false
+@exit_code = 0
+
+# ── Handle --help ─────────────────────────────────────────────────────────────
+if (@o.get("help", false)) {
+  sys.echo("Usage: mv [OPTION]... SOURCE DEST")
+  sys.echo("  or:  mv [OPTION]... SOURCE... DIRECTORY")
+  sys.echo("Rename SOURCE to DEST, or move SOURCE(s) to DIRECTORY.")
+  sys.echo("")
+  sys.echo("  -f, --force                  do not prompt before overwriting")
+  sys.echo("  -i, --interactive            prompt before overwriting")
+  sys.echo("  -n, --no-clobber             do not overwrite an existing file")
+  sys.echo("  -u, --update                 move only when the SOURCE file is newer")
+  sys.echo("                                 than the destination file or when the")
+  sys.echo("                                 destination file is missing")
+  sys.echo("  -v, --verbose                explain what is being done")
+  sys.echo("      --help               display this help and exit")
+  sys.echo("      --version            output version information and exit")
+  @skip_main = true
+}
+
+# ── Handle --version ──────────────────────────────────────────────────────────
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("mv (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+# ── Main processing ───────────────────────────────────────────────────────────
+if (!@skip_main) {
+  @force = @o.get("force", false)
+  @interactive = @o.get("interactive", false)
+  @no_clobber = @o.get("no_clobber", false)
+  @update = @o.get("update", false)
+  @verbose = @o.get("verbose", false)
+
+  @n_ops = list.len(@operands)
+  if (@n_ops < 2) {
+     sys.eprint("mv: missing operand")
+     @exit_code = 1
+     @skip_main = true
+  }
+}
+
+if (!@skip_main) {
+  @dest = list.last(@operands)
+  @sources = list.slice(@operands, 0, @n_ops - 1)
+  
+  @dest_is_dir = false
+  try {
+    @meta = fs.stat(@dest)
+    @dest_is_dir = @meta.get("is_dir", false)
+  } fallback {}
+
+  browse(@sources, @i, @src) {
+    @final_dest = @dest
+    if (@dest_is_dir) {
+      # Extract basename of src
+      @src_base = @src
+      @last_slash = string.last_index_of(@src, "/")
+      if (@last_slash != -1) {
+        @src_base = string.substring(@src, @last_slash + 1)
+      }
+      @final_dest = "${@dest}/${@src_base}"
+    }
+
+    @do_move = true
+    if (fs.exists(@final_dest)) {
+      if (@no_clobber) {
+        @do_move = false
+      } else {
+        if (@update) {
+          @src_meta = fs.stat(@src)
+          @dst_meta = fs.stat(@final_dest)
+          # If dst is newer or same, don't move
+          if (@src_meta.get("mod_time", 0) <= @dst_meta.get("mod_time", 0)) {
+            @do_move = false
+          }
+        }
+      }
+    }
+
+    if (@do_move) {
+      fs.move(@src, @final_dest)
+      if (@verbose) {
+        sys.echo("renamed '${@src}' -> '${@final_dest}'")
+      }
+    }
+  }
+}
+
+sys.exit(@exit_code)

@@ -14,8 +14,12 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
+        let filtered = tokens
+            .into_iter()
+            .filter(|t| !matches!(t.token_type, TokenType::Comment(_)))
+            .collect();
         Self {
-            tokens,
+            tokens: filtered,
             current: 0,
             in_prep_block: false,
         }
@@ -40,10 +44,14 @@ impl Parser {
                 | TokenType::AssertEq
                 | TokenType::AssertNeq
                 | TokenType::AssertGt
+                | TokenType::AssertGe
                 | TokenType::AssertLt
+                | TokenType::AssertLe
                 | TokenType::AssertMatch
                 | TokenType::Procedure
                 | TokenType::Shared
+                | TokenType::If
+                | TokenType::Else
         )
     }
 
@@ -64,10 +72,14 @@ impl Parser {
             TokenType::AssertEq => "assert_eq".to_string(),
             TokenType::AssertNeq => "assert_neq".to_string(),
             TokenType::AssertGt => "assert_gt".to_string(),
+            TokenType::AssertGe => "assert_ge".to_string(),
             TokenType::AssertLt => "assert_lt".to_string(),
+            TokenType::AssertLe => "assert_le".to_string(),
             TokenType::AssertMatch => "assert_match".to_string(),
             TokenType::Procedure => "procedure".to_string(),
             TokenType::Shared => "shared".to_string(),
+            TokenType::If => "if".to_string(),
+            TokenType::Else => "else".to_string(),
             _ => return Err(self.error("Expected variable name after '@'")),
         };
         self.advance();
@@ -123,8 +135,11 @@ impl Parser {
             TokenType::AssertEq
             | TokenType::AssertNeq
             | TokenType::AssertGt
+            | TokenType::AssertGe
             | TokenType::AssertLt
+            | TokenType::AssertLe
             | TokenType::AssertMatch => self.parse_assert()?,
+            TokenType::If => self.parse_if()?,
             TokenType::At => {
                 // @name = value       → VarSet shortcut
                 // @name[index] = val  → VarIndexSet shortcut
@@ -376,6 +391,33 @@ impl Parser {
         Ok(Stmt::DontPanic { body })
     }
 
+    fn parse_if(&mut self) -> CorvoResult<Stmt> {
+        self.advance(); // consume 'if'
+        self.consume(TokenType::LeftParen, "Expected '(' after 'if'")?;
+        let condition = self.parse_expression()?;
+        self.consume(TokenType::RightParen, "Expected ')' after condition")?;
+
+        self.consume(TokenType::LeftBrace, "Expected '{' before if body")?;
+        let then_branch = self.parse_block_body("if body")?;
+
+        let else_branch = if self.match_token(TokenType::Else) {
+            if self.match_token(TokenType::If) {
+                vec![self.parse_if()?]
+            } else {
+                self.consume(TokenType::LeftBrace, "Expected '{' before else body")?;
+                self.parse_block_body("else body")?
+            }
+        } else {
+            vec![]
+        };
+
+        Ok(Stmt::If {
+            condition,
+            then_branch,
+            else_branch,
+        })
+    }
+
     fn parse_at_var_set(&mut self) -> CorvoResult<Stmt> {
         self.advance(); // consume '@'
         let name = self.parse_name_after_at()?;
@@ -508,7 +550,9 @@ impl Parser {
             TokenType::AssertEq => AssertKind::Eq,
             TokenType::AssertNeq => AssertKind::Neq,
             TokenType::AssertGt => AssertKind::Gt,
+            TokenType::AssertGe => AssertKind::Ge,
             TokenType::AssertLt => AssertKind::Lt,
+            TokenType::AssertLe => AssertKind::Le,
             TokenType::AssertMatch => AssertKind::Match,
             _ => return Err(self.error("Expected assertion")),
         };
@@ -552,7 +596,95 @@ impl Parser {
     // --- Expression Parsers ---
 
     fn parse_expression(&mut self) -> CorvoResult<Expr> {
-        self.parse_additive()
+        self.parse_logical_or()
+    }
+
+    fn parse_logical_or(&mut self) -> CorvoResult<Expr> {
+        let mut expr = self.parse_logical_and()?;
+        while self.match_token(TokenType::Or) {
+            let rhs = self.parse_logical_and()?;
+            expr = Expr::Binary {
+                op: BinaryOp::Or,
+                left: Box::new(expr),
+                right: Box::new(rhs),
+            };
+        }
+        Ok(expr)
+    }
+
+    fn parse_logical_and(&mut self) -> CorvoResult<Expr> {
+        let mut expr = self.parse_equality()?;
+        while self.match_token(TokenType::And) {
+            let rhs = self.parse_equality()?;
+            expr = Expr::Binary {
+                op: BinaryOp::And,
+                left: Box::new(expr),
+                right: Box::new(rhs),
+            };
+        }
+        Ok(expr)
+    }
+
+    fn parse_equality(&mut self) -> CorvoResult<Expr> {
+        let mut expr = self.parse_comparison()?;
+        loop {
+            if self.match_token(TokenType::EqualsEquals) {
+                let rhs = self.parse_comparison()?;
+                expr = Expr::Binary {
+                    op: BinaryOp::Eq,
+                    left: Box::new(expr),
+                    right: Box::new(rhs),
+                };
+            } else if self.match_token(TokenType::BangEqual) {
+                let rhs = self.parse_comparison()?;
+                expr = Expr::Binary {
+                    op: BinaryOp::Neq,
+                    left: Box::new(expr),
+                    right: Box::new(rhs),
+                };
+            } else {
+                break;
+            }
+        }
+        Ok(expr)
+    }
+
+    fn parse_comparison(&mut self) -> CorvoResult<Expr> {
+        let mut expr = self.parse_additive()?;
+        loop {
+            if self.match_token(TokenType::LessThan) {
+                let rhs = self.parse_additive()?;
+                expr = Expr::Binary {
+                    op: BinaryOp::Lt,
+                    left: Box::new(expr),
+                    right: Box::new(rhs),
+                };
+            } else if self.match_token(TokenType::LessEqual) {
+                let rhs = self.parse_additive()?;
+                expr = Expr::Binary {
+                    op: BinaryOp::Le,
+                    left: Box::new(expr),
+                    right: Box::new(rhs),
+                };
+            } else if self.match_token(TokenType::GreaterThan) {
+                let rhs = self.parse_additive()?;
+                expr = Expr::Binary {
+                    op: BinaryOp::Gt,
+                    left: Box::new(expr),
+                    right: Box::new(rhs),
+                };
+            } else if self.match_token(TokenType::GreaterEqual) {
+                let rhs = self.parse_additive()?;
+                expr = Expr::Binary {
+                    op: BinaryOp::Ge,
+                    left: Box::new(expr),
+                    right: Box::new(rhs),
+                };
+            } else {
+                break;
+            }
+        }
+        Ok(expr)
     }
 
     fn parse_additive(&mut self) -> CorvoResult<Expr> {
@@ -596,6 +728,13 @@ impl Parser {
                     left: Box::new(expr),
                     right: Box::new(rhs),
                 };
+            } else if self.match_token(TokenType::Percent) {
+                let rhs = self.parse_unary()?;
+                expr = Expr::Binary {
+                    op: BinaryOp::Mod,
+                    left: Box::new(expr),
+                    right: Box::new(rhs),
+                };
             } else {
                 break;
             }
@@ -611,8 +750,12 @@ impl Parser {
                 operand: Box::new(inner),
             });
         }
-        if self.match_token(TokenType::Plus) {
-            return self.parse_unary();
+        if self.match_token(TokenType::Bang) {
+            let inner = self.parse_unary()?;
+            return Ok(Expr::Unary {
+                op: UnaryOp::Not,
+                operand: Box::new(inner),
+            });
         }
         let expr = self.parse_primary()?;
         self.parse_postfix(expr)

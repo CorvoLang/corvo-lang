@@ -1,0 +1,33 @@
+# Print the file name of the terminal connected to standard input.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+if (@o.get("help", false)) {
+  sys.echo("Usage: tty [OPTION]...")
+  sys.echo("Print the file name of the terminal connected to standard input.")
+  sys.echo("")
+  sys.echo("  -s, --silent, --quiet   print nothing, only return an exit status")
+  sys.echo("      --help              display this help and exit")
+  sys.echo("      --version           output version information and exit")
+  sys.exit(0)
+}
+if (@o.get("version", false)) {
+  sys.echo("tty (Corvo coreutils) 0.1.0")
+  sys.exit(0)
+}
+
+@silent = @o.get("silent", @o.get("s", @o.get("quiet", false)))
+@exit_code = 0
+
+try {
+  @name = os.ttyname()
+  if (!@silent) {
+    sys.echo(@name)
+  }
+} fallback {
+  if (!@silent) {
+    sys.echo("not a tty")
+  }
+  @exit_code = 1
+}
+
+sys.exit(@exit_code)

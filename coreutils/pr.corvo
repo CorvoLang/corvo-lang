@@ -1,0 +1,78 @@
+# coreutils/pr.corvo — GNU-compatible `pr`
+# Run: `corvo coreutils/pr.corvo [OPTION]... [FILE]...`
+@spec = {
+  "aliases": { "h": "header", "l": "length" },
+  "short_values": ["h", "l"],
+  "long_values": ["header", "length"]
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: pr [OPTION]... [FILE]...")
+  sys.echo("Paginate or columnate FILE(s) for printing.")
+  sys.echo("")
+  sys.echo("  -h, --header=STRING   use STRING as the header")
+  sys.echo("  -l, --length=PAGE_L   set the page length (default 66)")
+  sys.echo("      --help            display this help and exit")
+  sys.echo("      --version         output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("pr (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  @header = @o.get("header", "")
+  @len = number.parse(66, @o.get("length", "66"))
+
+  @process = procedure(@content, @fname) {
+    @lines = string.split(@content, "\n")
+    @curr = 0
+    @page = 1
+    
+    loop {
+      if (@curr >= list.len(@lines)) { terminate }
+      
+      # Header
+      @time_s = time.format_local(time.unix_now(), 0, "%b %d %H:%M %Y")
+      @h = @header
+      if (string.is_empty(@h)) { @h = @fname }
+      sys.echo("\n\n${@time_s}  ${@h}  Page ${@page}\n\n")
+      
+      # Body
+      @i = 0
+      loop {
+        if (@i >= @len - 10 || @curr >= list.len(@lines)) { terminate }
+        sys.echo(list.get(@lines, @curr))
+        @curr += 1
+        @i += 1
+      }
+      
+      # Fill remaining
+      loop {
+        if (@i >= @len - 5) { terminate }
+        sys.echo("")
+        @i += 1
+      }
+      
+      @page += 1
+    }
+  }
+
+  if (list.len(@paths) == 0) {
+    @process.call(sys.read_all(), "stdin")
+  } else {
+    browse(@paths, @_pi, @p) {
+      if (@p == "-") {
+        @process.call(sys.read_all(), "stdin")
+      } else {
+        @process.call(fs.read(@p), @p)
+      }
+    }
+  }
+}

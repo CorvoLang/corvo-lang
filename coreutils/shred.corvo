@@ -1,0 +1,58 @@
+# coreutils/shred.corvo — Overwrite a file to hide its contents, and optionally delete it.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: shred [OPTION]... FILE...")
+  sys.echo("Overwrite the specified FILE(s) repeatedly, in order to make it harder")
+  sys.echo("for even very expensive hardware interrogation to recover the data.")
+  sys.echo("")
+  sys.echo("  -n, --iterations=N  overwrite N times instead of the default (3)")
+  sys.echo("  -u, --remove        truncate and remove file after overwriting")
+  sys.echo("  -v, --verbose       show progress")
+  sys.echo("      --help          display this help and exit")
+  sys.echo("      --version       output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("shred (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.is_empty(@pos)) {
+    sys.eprint("shred: missing operand")
+    sys.eprint("Try 'shred --help' for more information.")
+    sys.exit(1)
+  }
+
+  @n = number.parse(3, @o.get("iterations", @o.get("n", "3")))
+  @u = @o.get("remove", @o.get("u", false))
+
+  browse(@pos, @i, @file) {
+    try {
+      @meta = fs.stat(@file)
+      @size = @meta["size"]
+      
+      @zeros = string.repeat("\0", 4096)
+      
+      browse(math.range(0, @n), @ii, @iter) {
+         fs.write(@file, "") # Truncate to start overwrite
+         if (@size <= 4096) {
+           fs.write(@file, string.substring(@zeros, 0, @size))
+         } else {
+           fs.write(@file, @zeros) # write first chunk
+         }
+      }
+      
+      if (@u) {
+        fs.delete(@file)
+      }
+    } fallback {
+      sys.eprint("shred: ${@file}: No such file or directory")
+    }
+  }
+}

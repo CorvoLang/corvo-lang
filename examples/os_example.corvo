@@ -1,39 +1,44 @@
-# os_example.corvo - All os.* functions
+# os_example.corvo - Operating System interaction
 
 @section = procedure(@title) {
     sys.echo("")
     sys.echo(@title)
 }
 
-sys.echo("=== os.set_env ===")
-os.set_env("CORVO_APP", "my-app")
-os.set_env("CORVO_ENV", "development")
-sys.echo("Set CORVO_APP and CORVO_ENV")
+sys.echo("=== Environment Variables ===")
+os.set_env("CORVO_VAR", "hello")
+sys.echo("os.get_env('CORVO_VAR'): ${os.get_env("CORVO_VAR")}")
+sys.echo("os.get_env('MISSING', 'default'): ${os.get_env("MISSING", "default")}")
 
-@section.call("=== os.get_env ===")
-@app = os.get_env("CORVO_APP")
-sys.echo("CORVO_APP = ${@app}")
+@section.call("=== Process Information ===")
+sys.echo("Current working directory: ${os.getcwd()}")
+sys.echo("Current User: ${os.username()} (UID: ${os.user_id()}, GID: ${os.group_id()})")
+sys.echo("Process Arguments: ${list.join(os.argv(), ", ")}")
 
-# get_env with a default when the variable is not set
-@missing = os.get_env("CORVO_UNDEFINED_XYZ", "default-value")
-sys.echo("CORVO_UNDEFINED_XYZ (with default) = ${@missing}")
-
-@section.call("=== os.exec ===")
-# os.exec runs a command through sh -c and returns stdout, stderr, code
-@result = os.exec("echo hello from os.exec")
-sys.echo("stdout: ${map.get(@result, "stdout")}")
-sys.echo("exit code: ${map.get(@result, "code")}")
-
-@pwd_result = os.exec("pwd")
-sys.echo("Working dir: ${string.trim(map.get(@pwd_result, "stdout"))}")
-
-@section.call("=== os.argv ===")
-# Arguments after the script path (interpreter) or after the executable (compiled).
-@av = os.argv()
-sys.echo("script argv count: ${list.len(@av)}")
-
-@section.call("=== os.info ===")
+@section.call("=== System Information ===")
 @info = os.info()
-sys.echo("OS: ${map.get(@info, "os")}")
-sys.echo("Arch: ${map.get(@info, "arch")}")
+sys.echo("OS: ${map.get(@info, "os")} ${map.get(@info, "arch")}")
 sys.echo("Hostname: ${map.get(@info, "hostname")}")
+sys.echo("Uptime: ${os.uptime()} seconds")
+@load = os.load_average()
+sys.echo("Load average (1m): ${map.get(@load, "1min")}")
+
+@section.call("=== User Information ===")
+sys.echo("Logged in users count: ${os.user_count()}")
+@users = os.users()
+browse(@users, @idx, @u) {
+  sys.echo("User: ${map.get(@u, "username")} on ${map.get(@u, "tty")}")
+}
+
+@section.call("=== TTY Information ===")
+sys.echo("TTY Name: ${os.ttyname()}")
+try {
+  @mode = os.tty_get_mode()
+  sys.echo("TTY mode retrieved successfully")
+} fallback {
+  sys.echo("Not a TTY or failed to get mode")
+}
+
+@section.call("=== Command Execution (shell) ===")
+@res = os.exec("echo 'hello from shell'")
+sys.echo("Result: ${string.trim(map.get(@res, "stdout"))}")

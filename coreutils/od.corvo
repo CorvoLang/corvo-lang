@@ -1,0 +1,76 @@
+# coreutils/od.corvo — GNU-compatible `od`
+# Run: `corvo coreutils/od.corvo [OPTION]... [FILE]...`
+@spec = {
+  "aliases": { "A": "address-radix", "j": "skip-bytes", "N": "read-bytes", "t": "type" },
+  "short_values": ["A", "j", "N", "t"],
+  "long_values": ["address-radix", "skip-bytes", "read-bytes", "type"]
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: od [OPTION]... [FILE]...")
+  sys.echo("Write an unambiguous representation, octal bytes by default, of FILE to")
+  sys.echo("standard output.  With no FILE, or when FILE is -, read standard input.")
+  sys.echo("")
+  sys.echo("  -A, --address-radix=RADIX  output format for file offsets; RADIX is one of")
+  sys.echo("                               [doxn], for Decimal, Octal, Hex or None")
+  sys.echo("  -j, --skip-bytes=BYTES     skip BYTES input bytes first")
+  sys.echo("  -N, --read-bytes=BYTES     limit dump to BYTES input bytes")
+  sys.echo("  -t, --type=TYPE            select output format or formats")
+  sys.echo("      --help                 display this help and exit")
+  sys.echo("      --version              output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("od (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  @file = @paths.get(0, "-")
+  @addr_radix = @o.get("address-radix", "o") # d, o, x, n
+
+  @offset = number.parse(0, @o.get("skip-bytes", "0"))
+  @limit = number.parse(-1, @o.get("read-bytes", "-1"))
+
+  @hex = ""
+  if (@file == "-") {
+    @hex = string.hex_encode(sys.read_all())
+  } else {
+    @meta = fs.read_meta(@file)
+    @total_size = @meta["size"]
+    @to_read = @total_size - @offset
+    if (@limit != -1) { @to_read = math.min(@to_read, @limit) }
+    @hex = fs.read_hex(@file, @offset, @to_read)
+  }
+
+  @i = 0
+  loop {
+    if (@i >= string.len(@hex)) { terminate }
+    
+    # Address
+    @addr = @offset + (@i / 2)
+    @addr_s = ""
+    if (@addr_radix == "x") { @addr_s = string.pad_start(number.to_string(@addr), 7, "0") } # dummy hex
+    else { @addr_s = string.pad_start(number.to_string(@addr), 7, "0") }
+    
+    @chunk_h = string.substring(@hex, @i, @i + 32) # 16 bytes = 32 hex chars
+    @line = "${@addr_s}"
+    
+    # Hex groups of 4 (2 bytes)
+    @j = 0
+    loop {
+      if (@j >= string.len(@chunk_h)) { terminate }
+      @group = string.substring(@chunk_h, @j, @j + 4)
+      @line = "${@line} ${@group}"
+      @j += 4
+    }
+    
+    sys.echo(@line)
+    @i += 32
+  }
+}

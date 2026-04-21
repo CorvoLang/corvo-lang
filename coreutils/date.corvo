@@ -1,237 +1,31 @@
-# coreutils/date.corvo - GNU-compatible `date`
-# Run: `corvo coreutils/date.corvo -- [OPTION]... [+FORMAT]`
-#
-# Display the current time in the given FORMAT, or set the system date.
-#
-# NOTE: Pass `--` before script arguments so the Corvo runner does not
-#       interpret flags like -d as its own options:
-#         corvo coreutils/date.corvo -- +%Y-%m-%d
+# Display the current time in the given FORMAT.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
 
-# -- Argument-parser spec ------------------------------------------------------
-@_date_spec = {
-  "aliases": {
-    "d": "date",
-    "r": "reference",
-    "R": "rfc_email",
-    "u": "utc",
-    "I": "iso_8601",
-    "date": "date",
-    "reference": "reference",
-    "rfc_email": "rfc_email",
-    "rfc_3339": "rfc_3339",
-    "utc": "utc",
-    "universal": "utc",
-    "iso_8601": "iso_8601"
-  },
-  "short_values": ["d", "r", "I"],
-  "long_values": ["date", "reference", "rfc-3339", "iso-8601"]
+if (@o.get("help", false)) {
+  sys.echo("Usage: date [OPTION]... [+FORMAT]")
+  sys.echo("Display the current time in the given FORMAT.")
+  sys.echo("")
+  sys.echo("      --help     display this help and exit")
+  sys.echo("      --version  output version information and exit")
+  @skip_main = true
 }
 
-@parsed = args.parse(os.argv(), @_date_spec)
-@o = @parsed["options"]
-@positional = @parsed["positional"]
-
-# -- Skip-main flag ------------------------------------------------------------
-@skip_main = false
-@exit_code = 0
-
-# -- Handle --help -------------------------------------------------------------
-try {
-  assert_eq(@o.get("help", false), true)
-  sys.echo("Usage: date [OPTION]... [+FORMAT]")
-  sys.echo("Display the current time in the given FORMAT, or set the system date.")
-  sys.echo("")
-  sys.echo("  -d, --date=STRING        display time described by STRING, not 'now'")
-  sys.echo("  -I[FMT], --iso-8601[=FMT]  output date/time in ISO 8601 format.")
-  sys.echo("                             FMT='date' for date only (the default),")
-  sys.echo("                             'hours', 'minutes', 'seconds', or 'ns'")
-  sys.echo("  -R, --rfc-email          output date and time in RFC 5322 format")
-  sys.echo("      --rfc-3339=FMT       output date/time in RFC 3339 format.")
-  sys.echo("                             FMT='date', 'seconds', or 'ns'")
-  sys.echo("  -r, --reference=FILE     display the last modification time of FILE")
-  sys.echo("  -u, --utc, --universal   print or set Coordinated Universal Time (UTC)")
-  sys.echo("      --help               display this help and exit")
-  sys.echo("      --version            output version information and exit")
-  sys.echo("")
-  sys.echo("FORMAT controls the output.  Common sequences:")
-  sys.echo("  %%   a literal %")
-  sys.echo("  %a   locale's abbreviated weekday name (e.g., Sun)")
-  sys.echo("  %A   locale's full weekday name (e.g., Sunday)")
-  sys.echo("  %b   locale's abbreviated month name (e.g., Jan)")
-  sys.echo("  %B   locale's full month name (e.g., January)")
-  sys.echo("  %c   locale's date and time (e.g., Thu Mar  3 23:05:25 2005)")
-  sys.echo("  %d   day of month (e.g., 01)")
-  sys.echo("  %D   date; same as %m/%d/%y")
-  sys.echo("  %e   day of month, space padded; same as %_d")
-  sys.echo("  %F   full date; like %Y-%m-%d")
-  sys.echo("  %H   hour (00..23)")
-  sys.echo("  %I   hour (01..12)")
-  sys.echo("  %j   day of year (001..366)")
-  sys.echo("  %m   month (01..12)")
-  sys.echo("  %M   minute (00..59)")
-  sys.echo("  %n   a newline")
-  sys.echo("  %N   nanoseconds (000000000..999999999)")
-  sys.echo("  %p   locale's equivalent of either AM or PM")
-  sys.echo("  %r   locale's 12-hour clock time (e.g., 11:11:04 PM)")
-  sys.echo("  %R   24-hour hour and minute; same as %H:%M")
-  sys.echo("  %s   seconds since 1970-01-01 00:00:00 UTC")
-  sys.echo("  %S   second (00..60)")
-  sys.echo("  %t   a tab")
-  sys.echo("  %T   time; same as %H:%M:%S")
-  sys.echo("  %u   day of week (1..7); 1 is Monday")
-  sys.echo("  %w   day of week (0..6); 0 is Sunday")
-  sys.echo("  %x   locale's date representation")
-  sys.echo("  %X   locale's time representation")
-  sys.echo("  %y   last two digits of year (00..99)")
-  sys.echo("  %Y   year")
-  sys.echo("  %z   +hhmm numeric time zone (e.g., -0400)")
-  sys.echo("  %Z   alphabetic time zone abbreviation (e.g., EDT)")
-  @skip_main = true
-} fallback {}
-
-# -- Handle --version ----------------------------------------------------------
-try {
-  assert_eq(@o.get("version", false), true)
+if (!@skip_main && @o.get("version", false)) {
   sys.echo("date (Corvo coreutils) 0.1.0")
   @skip_main = true
-} fallback {}
-
-# -- Flag extraction -----------------------------------------------------------
-@_use_utc = false
-@_date_str = ""
-@_ref_file = ""
-@_format = ""
-@_rfc_email = false
-@_rfc_3339 = ""
-@_iso_8601 = ""
-
-try {
-  assert_eq(@skip_main, true)
-} fallback {
-  @_use_utc = @o.get("utc", false)
-  @_date_str = @o.get("date", "")
-  @_ref_file = @o.get("reference", "")
-  @_rfc_email = @o.get("rfc_email", false)
-  @_rfc_3339 = @o.get("rfc_3339", "")
-  @_iso_8601 = @o.get("iso_8601", "")
-
-  # Get format from positional args (starts with +)
-  browse(@positional, @_idx, @_arg) {
-    try {
-      assert_eq(string.starts_with(@_arg, "+"), true)
-      @_format = string.substring(@_arg, 1, string.len(@_arg))
-    } fallback {}
-  }
 }
 
-# -- Determine timestamp to use ------------------------------------------------
-@_timestamp = 0
-try {
-  assert_eq(@skip_main, true)
-} fallback {
+if (!@skip_main) {
+  @fmt = "%a %b %e %H:%M:%S %Z %Y"
   try {
-    # -d option: parse date string
-    assert_eq(string.is_empty(@_date_str), false)
-    @_timestamp = time.parse_date(@_date_str)
-  } fallback {
-    try {
-      # -r option: use file modification time
-      assert_eq(string.is_empty(@_ref_file), false)
-      @_stat = fs.stat(@_ref_file)
-      @_timestamp = @_stat["mtime"]
-    } fallback {
-      # Default: current time
-      @_timestamp = time.unix_now()
+    @arg = list.get(@pos, 0)
+    if (string.starts_with(@arg, "+")) {
+      @fmt = string.substring(@arg, 1)
     }
-  }
+  } fallback {}
+
+  sys.echo(time.format_local(time.unix_now(), 0, @fmt))
 }
-
-# -- Determine format to use ---------------------------------------------------
-try {
-  assert_eq(@skip_main, true)
-} fallback {
-  try {
-    # RFC 5322 format (-R, --rfc-email)
-    assert_eq(@_rfc_email, true)
-    @_format = "%a, %d %b %Y %H:%M:%S %z"
-  } fallback {
-    try {
-      # RFC 3339 format (--rfc-3339=FMT)
-      assert_eq(string.is_empty(@_rfc_3339), false)
-      try {
-        assert_eq(@_rfc_3339, "date")
-        @_format = "%Y-%m-%d"
-      } fallback {
-        try {
-          assert_eq(@_rfc_3339, "seconds")
-          @_format = "%Y-%m-%d %H:%M:%S%:z"
-        } fallback {
-          try {
-            assert_eq(@_rfc_3339, "ns")
-            @_format = "%Y-%m-%d %H:%M:%S.%9N%:z"
-          } fallback {
-            @_format = "%Y-%m-%d %H:%M:%S%:z"
-          }
-        }
-      }
-    } fallback {
-      try {
-        # ISO 8601 format (-I, --iso-8601)
-        assert_eq(string.is_empty(@_iso_8601), false)
-        try {
-          assert_eq(@_iso_8601, "date")
-          @_format = "%Y-%m-%d"
-        } fallback {
-          try {
-            assert_eq(@_iso_8601, "hours")
-            @_format = "%Y-%m-%dT%H%:z"
-          } fallback {
-            try {
-              assert_eq(@_iso_8601, "minutes")
-              @_format = "%Y-%m-%dT%H:%M%:z"
-            } fallback {
-              try {
-                assert_eq(@_iso_8601, "seconds")
-                @_format = "%Y-%m-%dT%H:%M:%S%:z"
-              } fallback {
-                try {
-                  assert_eq(@_iso_8601, "ns")
-                  @_format = "%Y-%m-%dT%H:%M:%S,%9N%:z"
-                } fallback {
-                  # Default ISO: date only
-                  @_format = "%Y-%m-%d"
-                }
-              }
-            }
-          }
-        }
-      } fallback {
-        # Default format if none specified
-        try {
-          assert_eq(string.is_empty(@_format), true)
-          @_format = "%a %b %e %H:%M:%S %Z %Y"
-        } fallback {}
-      }
-    }
-  }
-}
-
-# -- Main: format and output the date ------------------------------------------
-try {
-  assert_eq(@skip_main, true)
-} fallback {
-  @_ts_int = number.floor(@_timestamp)
-  @_ns = number.floor((@_timestamp - @_ts_int) * 1000000000)
-
-  @_result = ""
-  try {
-    assert_eq(@_use_utc, true)
-    @_result = time.format_utc(@_ts_int, @_ns, @_format)
-  } fallback {
-    @_result = time.format_local(@_ts_int, @_ns, @_format)
-  }
-
-  sys.echo(@_result)
-}
-
-sys.exit(@exit_code)

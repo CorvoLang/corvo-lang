@@ -1,0 +1,43 @@
+# Strip last component from file name.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: dirname [OPTION] NAME...")
+  sys.echo("Strip last component from file name.")
+  sys.echo("")
+  sys.echo("      --help     display this help and exit")
+  sys.echo("      --version  output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("dirname (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  try {
+    @path = list.get(@pos, 0)
+    @path = string.trim_end(@path, "/")
+    
+    @last_slash = string.last_index_of(@path, "/")
+    @neg1 = -1
+    
+    try {
+      assert_neq(@last_slash, @neg1)
+      try {
+        assert_eq(@last_slash, 0)
+        sys.echo("/")
+      } fallback {
+        sys.echo(string.substring(@path, 0, @last_slash))
+      }
+    } fallback {
+      sys.echo(".")
+    }
+  } fallback {
+    sys.echo(".")
+  }
+}

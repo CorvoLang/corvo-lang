@@ -1,68 +1,59 @@
-# fs_example.corvo - All fs.* (file system) functions
+# fs_example.corvo - File System Operations
 
 @tmp = "/tmp/corvo_fs_demo"
+try { fs.mkdir(@tmp) } fallback {}
 
 @section = procedure(@title) {
     sys.echo("")
     sys.echo(@title)
 }
 
-# fs.mkdir - create a directory (try/fallback handles the case where it already exists)
-sys.echo("=== fs.mkdir ===")
-try {
-    fs.mkdir(@tmp)
-} fallback {}
-sys.echo("Directory ready: ${@tmp}")
-
-@section.call("=== fs.exists ===")
-sys.echo("Directory exists: ${fs.exists(@tmp)}")
-sys.echo("Nonexistent exists: ${fs.exists("/tmp/no_such_path_xyz")}")
-
-@section.call("=== fs.write ===")
-@file = string.concat(@tmp, "/hello.txt")
+sys.echo("=== Basic File Ops ===")
+@file = fs.path_join(@tmp, "test.txt")
 fs.write(@file, "Hello, Corvo!\n")
-sys.echo("Wrote to: ${@file}")
+sys.echo("Wrote: ${@file}")
+fs.append(@file, "Appended line.\n")
+sys.echo("Read:\n${fs.read(@file)}")
 
-@section.call("=== fs.read ===")
-@contents = fs.read(@file)
-sys.echo("Read: ${@contents}")
+@section.call("=== Metadata and Stats ===")
+@meta = fs.stat(@file)
+sys.echo("Size: ${map.get(@meta, "size")} bytes")
+sys.echo("Permissions: ${map.get(@meta, "permissions")}")
 
-@section.call("=== fs.append ===")
-fs.append(@file, "Second line\n")
-@contents2 = fs.read(@file)
-sys.echo("After append:")
-sys.echo(@contents2)
+@section.call("=== Path Utilities ===")
+sys.echo("Parent: ${fs.path_parent(@file)}")
+sys.echo("Filename: ${fs.path_filename(@file)}")
+sys.echo("Realpath: ${fs.realpath(@file)}")
 
-@section.call("=== fs.stat ===")
-@info = fs.stat(@file)
-sys.echo("is_dir: ${map.get(@info, "is_dir")}")
-sys.echo("size (bytes): ${map.get(@info, "size")}")
-sys.echo("permissions: ${map.get(@info, "permissions")}")
-sys.echo("modified_at: ${map.get(@info, "modified_at")}")
-
-@section.call("=== fs.copy ===")
-@copy_path = string.concat(@tmp, "/hello_copy.txt")
-fs.copy(@file, @copy_path)
-sys.echo("Copied to: ${@copy_path}")
-sys.echo("Copy exists: ${fs.exists(@copy_path)}")
-
-@section.call("=== fs.move ===")
-@moved_path = string.concat(@tmp, "/hello_moved.txt")
-fs.move(@copy_path, @moved_path)
-sys.echo("Moved to: ${@moved_path}")
-sys.echo("Original gone: ${fs.exists(@copy_path)}")
-sys.echo("Moved exists: ${fs.exists(@moved_path)}")
-
-@section.call("=== fs.list_dir ===")
-@entries = fs.list_dir(@tmp)
-sys.echo("Directory entries:")
-browse(@entries, @idx, @entry) {
-    sys.echo("  ${@entry}")
+@section.call("=== Advanced Ops ===")
+@link = fs.path_join(@tmp, "test_link")
+try {
+  fs.symlink(@file, @link)
+  sys.echo("Symlink created: ${@link} -> ${fs.read_link(@link)}")
+} fallback {
+  sys.echo("Symlink failed (likely on Windows without admin)")
 }
 
-@section.call("=== fs.delete ===")
+@section.call("=== Permissions (Unix) ===")
+try {
+  fs.chmod(@file, 511) # 0777 octal is 511 decimal
+  sys.echo("Permissions updated to 0777")
+} fallback {
+  sys.echo("chmod failed")
+}
+
+@section.call("=== Temp Files ===")
+@t = fs.mktemp(@tmp, "corvo-XXXXXX")
+sys.echo("Created temp: ${@t}")
+fs.delete(@t)
+
+@section.call("=== Directory Listing ===")
+browse(fs.list_dir(@tmp), @idx, @entry) {
+  sys.echo("  - ${@entry}")
+}
+
+# Cleanup
+fs.delete(@link)
 fs.delete(@file)
-sys.echo("Deleted file. Still exists: ${fs.exists(@file)}")
-fs.delete(@moved_path)
 fs.delete(@tmp)
-sys.echo("Deleted directory. Still exists: ${fs.exists(@tmp)}")
+sys.echo("Demo complete, directory cleaned up.")

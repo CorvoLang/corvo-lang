@@ -17,6 +17,7 @@ pub struct MatchArm {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryOp {
     Neg,
+    Not,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,6 +26,15 @@ pub enum BinaryOp {
     Sub,
     Mul,
     Div,
+    Mod,
+    Eq,
+    Neq,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    And,
+    Or,
 }
 
 #[derive(Debug, Clone, PartialEq)]

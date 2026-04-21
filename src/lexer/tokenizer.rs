@@ -406,7 +406,9 @@ impl<'a> Lexer<'a> {
                         "assert_eq" => TokenType::AssertEq,
                         "assert_neq" => TokenType::AssertNeq,
                         "assert_gt" => TokenType::AssertGt,
+                        "assert_ge" => TokenType::AssertGe,
                         "assert_lt" => TokenType::AssertLt,
+                        "assert_le" => TokenType::AssertLe,
                         "assert_match" => TokenType::AssertMatch,
                         "true" => TokenType::Boolean(true),
                         "false" => TokenType::Boolean(false),
@@ -515,6 +517,37 @@ impl<'a> Lexer<'a> {
         let start = self.pos;
         let mut value = String::new();
 
+        if self.peek() == '0' {
+            let next = self.peek_next();
+            if next == 'x' || next == 'X' {
+                self.advance(); // consume '0'
+                self.advance(); // consume 'x'
+                let mut hex = String::new();
+                while !self.is_at_end() && self.peek().is_ascii_hexdigit() {
+                    hex.push(self.advance());
+                }
+                let num = u64::from_str_radix(&hex, 16).map_err(|_| {
+                    CorvoError::lexing(format!("Invalid hex number: 0x{}", hex))
+                })?;
+                return Ok(Token::number(num as f64, start, self.pos));
+            } else if next == 'o' || next == 'O' {
+                self.advance(); // consume '0'
+                self.advance(); // consume 'o'
+                let mut octal = String::new();
+                while !self.is_at_end()
+                    && self.peek().is_ascii_digit()
+                    && self.peek() != '8'
+                    && self.peek() != '9'
+                {
+                    octal.push(self.advance());
+                }
+                let num = u64::from_str_radix(&octal, 8).map_err(|_| {
+                    CorvoError::lexing(format!("Invalid octal number: 0o{}", octal))
+                })?;
+                return Ok(Token::number(num as f64, start, self.pos));
+            }
+        }
+
         while !self.is_at_end() && (self.peek().is_ascii_digit() || self.peek() == '.') {
             if self.peek() == '.' && !self.peek_next().is_ascii_digit() {
                 break;
@@ -556,10 +589,14 @@ impl<'a> Lexer<'a> {
             "terminate" => TokenType::Terminate,
             "dont_panic" => TokenType::DontPanic,
             "match" => TokenType::Match,
+            "if" => TokenType::If,
+            "else" => TokenType::Else,
             "assert_eq" => TokenType::AssertEq,
             "assert_neq" => TokenType::AssertNeq,
             "assert_gt" => TokenType::AssertGt,
+            "assert_ge" => TokenType::AssertGe,
             "assert_lt" => TokenType::AssertLt,
+            "assert_le" => TokenType::AssertLe,
             "assert_match" => TokenType::AssertMatch,
             "procedure" => TokenType::Procedure,
             "shared" => TokenType::Shared,
@@ -590,10 +627,57 @@ impl<'a> Lexer<'a> {
                 if self.peek() == '>' {
                     self.advance(); // consume '>'
                     TokenType::FatArrow
+                } else if self.peek() == '=' {
+                    self.advance(); // consume '='
+                    TokenType::EqualsEquals
                 } else {
                     TokenType::Equals
                 }
             }
+            '!' => {
+                if self.peek() == '=' {
+                    self.advance(); // consume '='
+                    TokenType::BangEqual
+                } else {
+                    TokenType::Bang
+                }
+            }
+            '<' => {
+                if self.peek() == '=' {
+                    self.advance(); // consume '='
+                    TokenType::LessEqual
+                } else {
+                    TokenType::LessThan
+                }
+            }
+            '>' => {
+                if self.peek() == '=' {
+                    self.advance(); // consume '='
+                    TokenType::GreaterEqual
+                } else {
+                    TokenType::GreaterThan
+                }
+            }
+            '&' => {
+                if self.peek() == '&' {
+                    self.advance(); // consume '&'
+                    TokenType::And
+                } else {
+                    TokenType::Illegal(ch.to_string())
+                }
+            }
+            '|' => {
+                if self.peek() == '|' {
+                    self.advance(); // consume '|'
+                    TokenType::Or
+                } else if self.peek() == '=' {
+                    self.advance(); // consume '='
+                    TokenType::OrEqual
+                } else {
+                    TokenType::Illegal(ch.to_string())
+                }
+            }
+            '%' => TokenType::Percent,
             '+' => {
                 if self.peek() == '+' {
                     self.advance(); // consume second '+'

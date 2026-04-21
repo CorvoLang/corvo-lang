@@ -8,10 +8,6 @@
 #         corvo coreutils/cp.corvo -- -r src/ dest/
 
 # ── Argument-parser spec ──────────────────────────────────────────────────────
-# Maps every short flag and long option name to a canonical key.
-# "short_values" lists the short flags that consume the next token as a value.
-# "long_values"  lists the long options (normalised, underscores) that require
-# a value.
 @_cp_spec = {
   "aliases": {
     "r": "recursive",   "R": "recursive",
@@ -50,35 +46,28 @@
 # ── Procedures ────────────────────────────────────────────────────────────────
 
 # Build one (src, eff_dest) work item from a single source path.
-# Extracts the basename (respecting a trailing slash) and resolves the
-# effective destination when the destination is a directory.
-# Used by async_browse so multiple sources are enqueued in parallel.
 @_enqueue_src = procedure(@_src, @dest_p, @dest_is_dir_p, @work_out) {
   @_norm  = string.replace(@_src, "\\", "/")
   @_parts = string.split(@_norm, "/")
   @_sname = list.last(@_parts)
-  try {
-    assert_eq(string.is_empty(@_sname), true)
+  if (string.is_empty(@_sname)) {
     # Trailing slash: use the second-to-last component instead.
-    try {
-      assert_gt(list.len(@_parts), 1)
+    if (list.len(@_parts) > 1) {
       @_sname = list.get(@_parts, list.len(@_parts) - 2)
-    } fallback {
+    } else {
       @_sname = @_src
     }
-  } fallback {}
+  }
 
   @_eff_dest = @dest_p
-  try {
-    assert_eq(@dest_is_dir_p, true)
+  if (@dest_is_dir_p) {
     @_eff_dest = "${@dest_p}/${@_sname}"
-  } fallback {}
+  }
 
   @work_out = list.push(@work_out, [@_src, @_eff_dest])
 }
 
 # Enqueue one directory child as a (src, dst) work item.
-# Used by async_browse so all children of a directory are enqueued in parallel.
 @_enqueue_child = procedure(@_child, @src_p, @dst_p, @work_out) {
   @_cname = @_child["name"]
   @_csrc  = "${@src_p}/${@_cname}"
@@ -86,16 +75,12 @@
   @work_out = list.push(@work_out, [@_csrc, @_cdst])
 }
 
-# ── Skip-main flag: set to true to bypass copy logic ─────────────────────────
-# Used so that --help/--version and validation errors can terminate the copy
-# phase without calling sys.exit() inside a try block (which gets swallowed
-# by the empty fallback).
+# ── Skip-main flag ────────────────────────────────────────────────────────────
 @skip_main = false
 @exit_code  = 0
 
 # ── Handle --help ─────────────────────────────────────────────────────────────
-try {
-  assert_eq(@o.get("help", false), true)
+if (@o.get("help", false)) {
   sys.echo("Usage: cp [OPTION]... [-T] SOURCE DEST")
   sys.echo("  or:  cp [OPTION]... SOURCE... DIRECTORY")
   sys.echo("  or:  cp [OPTION]... -t DIRECTORY SOURCE...")
@@ -121,19 +106,16 @@ try {
   sys.echo("      --help                   display this help and exit")
   sys.echo("      --version                output version information and exit")
   @skip_main = true
-} fallback {}
+}
 
 # ── Handle --version ──────────────────────────────────────────────────────────
-try {
-  assert_eq(@o.get("version", false), true)
+if (!@skip_main && @o.get("version", false)) {
   sys.echo("cp (Corvo coreutils) 0.1.0")
   @skip_main = true
-} fallback {}
+}
 
-# ── Flag extraction (skipped when --help/--version already handled) ───────────
-try {
-  assert_eq(@skip_main, true)
-} fallback {
+# ── Flag extraction ───────────────────────────────────────────────────────────
+if (!@skip_main) {
   @recursive = @o.get("recursive", false)
   @archive   = @o.get("archive",   false)
   @force     = @o.get("force",     false)
@@ -145,17 +127,15 @@ try {
   @no_target_dir = @o.get("no_target_directory", false)
 
   # -a implies -r and --preserve
-  try {
-    assert_eq(@archive, true)
+  if (@archive) {
     @recursive = true
     @preserve  = true
-  } fallback {}
+  }
 
   # -i overrides -n (GNU behaviour)
-  try {
-    assert_eq(@interactive, true)
+  if (@interactive) {
     @no_clobber = false
-  } fallback {}
+  }
 }
 
 # ── Resolve sources and destination ──────────────────────────────────────────
@@ -163,109 +143,77 @@ try {
 @srcs = @positional
 @dest = ""
 
-try {
-  assert_eq(@skip_main, true)
-} fallback {
-  try {
-    assert_eq(string.len(string.trim(@target_dir)), 0)
+if (!@skip_main) {
+  if (string.is_empty(string.trim(@target_dir))) {
     # No -t flag: last positional is the destination, the rest are sources.
-    try {
-      assert_eq(list.len(@srcs), 0)
+    if (list.is_empty(@srcs)) {
       sys.eprint("cp: missing file operand")
       sys.eprint("Try 'cp --help' for more information.")
       @exit_code = 1
       @skip_main = true
-    } fallback {}
-    try {
-      assert_eq(@skip_main, false)
-      assert_eq(list.len(@srcs), 1)
-      sys.eprint("cp: missing destination file operand after '${list.get(@srcs, 0)}'")
-      sys.eprint("Try 'cp --help' for more information.")
-      @exit_code = 1
-      @skip_main = true
-    } fallback {}
-    try {
-      assert_eq(@skip_main, false)
-      @dest = list.get(@srcs, list.len(@srcs) - 1)
-      @srcs = list.slice(@srcs, 0, list.len(@srcs) - 1)
-    } fallback {}
-  } fallback {
+    } else {
+      if (list.len(@srcs) == 1) {
+        sys.eprint("cp: missing destination file operand after '${list.get(@srcs, 0)}'")
+        sys.eprint("Try 'cp --help' for more information.")
+        @exit_code = 1
+        @skip_main = true
+      } else {
+        @dest = list.get(@srcs, list.len(@srcs) - 1)
+        @srcs = list.slice(@srcs, 0, list.len(@srcs) - 1)
+      }
+    }
+  } else {
     # -t flag: all positionals are sources; dest is the target directory.
     @dest = @target_dir
-    try {
-      assert_eq(list.len(@srcs), 0)
+    if (list.is_empty(@srcs)) {
       sys.eprint("cp: missing file operand")
       sys.eprint("Try 'cp --help' for more information.")
       @exit_code = 1
       @skip_main = true
-    } fallback {}
+    }
   }
 }
 
 # ── Determine whether the destination is an existing directory ────────────────
 @dest_is_dir = false
-try {
-  assert_eq(@skip_main, true)
-} fallback {
-  try {
-    assert_eq(fs.exists(@dest), true)
+if (!@skip_main) {
+  if (fs.exists(@dest)) {
     @_dmeta = fs.read_meta(@dest, false)
-    @dest_is_dir = @_dmeta["is_dir"]
-  } fallback {}
+    @dest_is_dir = @_dmeta.get("is_dir", false)
+  }
 
   # -T: treat dest as a regular file, never as a directory.
-  try {
-    assert_eq(@no_target_dir, true)
-    try {
-      assert_eq(@dest_is_dir, true)
+  if (@no_target_dir) {
+    if (@dest_is_dir) {
       sys.eprint("cp: cannot overwrite directory '${@dest}' with non-directory")
       @exit_code = 1
       @skip_main = true
-    } fallback {}
-    try {
-      assert_eq(@skip_main, false)
+    } else {
       @dest_is_dir = false
-    } fallback {}
-  } fallback {}
+    }
+  }
 
   # Multiple sources require the destination to be (or become) a directory.
-  try {
-    assert_eq(@skip_main, false)
-    assert_eq(list.len(@srcs), 1)
-  } fallback {
-    try {
-      assert_eq(@skip_main, false)
-      assert_eq(@dest_is_dir, false)
+  if (!@skip_main && list.len(@srcs) > 1) {
+    if (!@dest_is_dir) {
       sys.eprint("cp: target '${@dest}': is not a directory")
       @exit_code = 1
       @skip_main = true
-    } fallback {}
+    }
   }
 }
 
 # ── Work queue ────────────────────────────────────────────────────────────────
-# Each item is a two-element list: [ src_path, dest_path ].
-# The loop below is BFS: directories enqueue their children at the tail.
 @work = list.new()
 
-# Enqueue each source with its effective resolved destination path.
-# async_browse processes all sources in parallel since each enqueue is
-# independent and @work uses append-delta merge for safe accumulation.
-try {
-  assert_eq(@skip_main, true)
-} fallback {
+if (!@skip_main) {
   async_browse(@srcs, @_enqueue_src, @_src, shared @dest, shared @dest_is_dir, shared @work)
-}
 
-# ── Main copy loop ────────────────────────────────────────────────────────────
-try {
-  assert_eq(@skip_main, true)
-} fallback {
+  # ── Main copy loop ────────────────────────────────────────────────────────────
   loop {
-    try {
-      assert_eq(list.len(@work), 0)
+    if (list.is_empty(@work)) {
       terminate
-    } fallback {}
+    }
 
     @_item = list.get(@work, 0)
     @work  = list.slice(@work, 1, list.len(@work))
@@ -273,104 +221,77 @@ try {
     @_dst  = list.get(@_item, 1)
 
     # Verify the source path exists before doing anything.
-    try {
-      assert_eq(fs.exists(@_src), true)
+    if (fs.exists(@_src)) {
       @_meta = fs.read_meta(@_src, false)
 
-      try {
-        assert_eq(@_meta["is_dir"], true)
+      if (@_meta.get("is_dir", false)) {
         # ── Source is a directory ──────────────────────────────────────────
-        try {
-          assert_eq(@recursive, false)
+        if (!@recursive) {
           sys.eprint("cp: -r not specified; omitting directory '${@_src}'")
           @exit_code = 1
-        } fallback {
-          # Create the destination directory (recursive mkdir: no-op if it
-          # already exists).
+        } else {
+          # Create the destination directory
           try {
             fs.mkdir(@_dst, true)
           } fallback {}
-          try {
-            assert_eq(@verbose, true)
+          if (@verbose) {
             sys.echo("'${@_src}' -> '${@_dst}'")
-          } fallback {}
+          }
           # Enqueue every child for subsequent processing.
-          # async_browse parallelises the enqueue since each child is
-          # independent and @work uses append-delta merge.
           @_children = fs.read_dir_meta(@_src, false)
           async_browse(@_children, @_enqueue_child, @_child, shared @_src, shared @_dst, shared @work)
         }
-      } fallback {
+      } else {
         # ── Source is a regular file or symbolic link ──────────────────────
         @_dst_exists = fs.exists(@_dst)
         @_do_copy    = true
 
         # --no-clobber: skip if the destination already exists.
-        try {
-          assert_eq(@no_clobber,   true)
-          assert_eq(@_dst_exists,  true)
+        if (@no_clobber && @_dst_exists) {
           @_do_copy = false
-        } fallback {}
+        }
 
         # --update: skip if the destination exists and is the same age or newer.
-        try {
-          assert_eq(@_do_copy,    true)
-          assert_eq(@update,      true)
-          assert_eq(@_dst_exists, true)
+        if (@_do_copy && @update && @_dst_exists) {
           @_dst_meta = fs.read_meta(@_dst, false)
           @_src_mt   = @_meta.get("mtime_sec", 0)
           @_dst_mt   = @_dst_meta.get("mtime_sec", 0)
-          try {
-            assert_gt(@_src_mt, @_dst_mt)
-          } fallback {
-            # Source is NOT newer — skip.
+          if (@_src_mt <= @_dst_mt) {
             @_do_copy = false
           }
-        } fallback {}
+        }
 
         # --interactive: prompt the user before overwriting an existing file.
-        try {
-          assert_eq(@_do_copy,    true)
-          assert_eq(@interactive, true)
-          assert_eq(@_dst_exists, true)
+        if (@_do_copy && @interactive && @_dst_exists) {
           @_ans    = sys.read_line("cp: overwrite '${@_dst}'? ")
           @_ans_lc = string.to_lower(string.trim(@_ans))
-          try {
-            assert_eq(string.starts_with(@_ans_lc, "y"), true)
-          } fallback {
-            # User did not confirm — skip.
+          if (!string.starts_with(@_ans_lc, "y")) {
             @_do_copy = false
           }
-        } fallback {}
+        }
 
         # Perform the actual copy.
-        try {
-          assert_eq(@_do_copy, true)
-
-          # --force: remove the destination first so a read-only file does not
-          # block the copy.
-          try {
-            assert_eq(@force,       true)
-            assert_eq(@_dst_exists, true)
+        if (@_do_copy) {
+          # --force: remove the destination first so a read-only file does not block the copy.
+          if (@force && @_dst_exists) {
             try {
               fs.delete(@_dst)
             } fallback {}
-          } fallback {}
+          }
 
           # Copy the file.
           try {
             fs.copy(@_src, @_dst)
-            try {
-              assert_eq(@verbose, true)
+            if (@verbose) {
               sys.echo("'${@_src}' -> '${@_dst}'")
-            } fallback {}
+            }
           } fallback {
             sys.eprint("cp: cannot copy '${@_src}' to '${@_dst}'")
             @exit_code = 1
           }
-        } fallback {}
+        }
       }
-    } fallback {
+    } else {
       sys.eprint("cp: cannot stat '${@_src}': No such file or directory")
       @exit_code = 1
     }

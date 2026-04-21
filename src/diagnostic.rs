@@ -199,6 +199,19 @@ fn lint_stmt(stmt: &Stmt, out: &mut Vec<LintDiagnostic>) {
                 lint_expr(candidate, out);
             }
         }
+        Stmt::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            lint_expr(condition, out);
+            for s in then_branch {
+                lint_stmt(s, out);
+            }
+            for s in else_branch {
+                lint_stmt(s, out);
+            }
+        }
     }
 }
 
@@ -334,6 +347,7 @@ const KNOWN_NAMESPACES: &[&str] = &[
 pub const KNOWN_FUNCTIONS: &[&str] = &[
     // sys
     "sys.echo",
+    "sys.printf",
     "sys.print",
     "sys.eprint",
     "sys.read_line",
@@ -341,18 +355,34 @@ pub const KNOWN_FUNCTIONS: &[&str] = &[
     "sys.panic",
     "sys.exit",
     "sys.exec",
+    "sys.read_all",
+    "sys.chroot",
+    "sys.nice",
+    "sys.sync",
+    "sys.stdin_isatty",
+    "sys.stdout_isatty",
     // os
     "os.get_env",
     "os.set_env",
     "os.exec",
     "os.info",
+    "os.environ",
+    "os.groups",
+    "os.hostid",
+    "os.nproc",
+    "os.df",
     "os.argv",
     "os.getcwd",
+    "os.username",
+    "os.ttyname",
     "os.uptime",
     "os.load_average",
     "os.user_count",
+    "os.users",
     "os.user_id",
     "os.group_id",
+    "os.tty_get_mode",
+    "os.tty_set_mode",
     // math
     "math.add",
     "math.sub",
@@ -360,22 +390,41 @@ pub const KNOWN_FUNCTIONS: &[&str] = &[
     "math.div",
     "math.mod",
     "math.max",
+    "math.min",
+    "math.floor",
+    "math.round",
+    "math.ceil",
+    "math.random",
     "math.human_bytes",
+    "math.parse_size",
+    "math.range",
     // fs
     "fs.read",
+    "fs.read_lines",
     "fs.write",
     "fs.append",
     "fs.delete",
     "fs.exists",
     "fs.mkdir",
+    "fs.mkfifo",
+    "fs.mknod",
     "fs.list_dir",
     "fs.copy",
     "fs.move",
+    "fs.link",
+    "fs.symlink",
+    "fs.realpath",
+    "fs.truncate",
     "fs.stat",
     "fs.read_link",
     "fs.read_dir_meta",
+    "fs.mktemp",
+    "fs.read_hex",
+    "fs.write_hex",
     "fs.read_meta",
+    "fs.path_filename",
     "fs.path_parent",
+    "fs.path_join",
     "fs.path_relative",
     "fs.chmod",
     "fs.chown",
@@ -403,6 +452,7 @@ pub const KNOWN_FUNCTIONS: &[&str] = &[
     "crypto.hash_stdin",
     "crypto.checksum",
     "crypto.crc32_file",
+    "crypto.crc32_stdin",
     "crypto.encrypt",
     "crypto.decrypt",
     "crypto.uuid",
@@ -479,6 +529,7 @@ pub const KNOWN_FUNCTIONS: &[&str] = &[
     "string.byte_slice",
     "string.substring",
     "string.index_of",
+    "string.last_index_of",
     "string.char_at",
     "string.repeat",
     "string.replace_first",
@@ -515,6 +566,7 @@ pub const KNOWN_FUNCTIONS: &[&str] = &[
     "list.len",
     "list.first",
     "list.last",
+    "list.concat",
     "list.is_empty",
     "list.contains",
     "list.delete",
@@ -547,7 +599,9 @@ pub const KNOWN_FUNCTIONS: &[&str] = &[
     "map.merge",
     "map.new",
     "map.column",
-    // var / static (handled by parser but may appear as function calls in some paths)
+    // os methods (some are in sys but os namespace is also used)
+    "os.temp_dir",
+    "os.get_env",
     "var.get",
     "var.set",
     "static.get",

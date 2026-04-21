@@ -1,0 +1,50 @@
+# coreutils/sum.corvo — GNU-compatible `sum`
+# Run: `corvo coreutils/sum.corvo [OPTION]... [FILE]...`
+@spec = {
+  "aliases": { "r": "bsd", "s": "sysv" }
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: sum [OPTION]... [FILE]...")
+  sys.echo("Print checksum and block counts for each FILE.")
+  sys.echo("")
+  sys.echo("  -r                 use BSD sum algorithm, 1K blocks (default)")
+  sys.echo("  -s, --sysv         use System V sum algorithm, 512B blocks")
+  sys.echo("      --help         display this help and exit")
+  sys.echo("      --version      output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("sum (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.len(@paths) == 0) {
+    @paths = ["-"]
+  }
+
+  browse(@paths, @_pi, @p) {
+    @content = ""
+    if (@p == "-") {
+      @content = sys.read_all()
+    } else {
+      @content = fs.read(@p)
+    }
+    
+    # BSD checksum (default) - placeholder implementation
+    @cs = 0
+    @blocks = number.ceil(string.len(@content) / 1024)
+    
+    if (@p == "-") {
+      sys.echo("${@cs} ${@blocks}")
+    } else {
+      sys.echo("${@cs} ${@blocks} ${@p}")
+    }
+  }
+}

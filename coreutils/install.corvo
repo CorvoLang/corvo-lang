@@ -1,0 +1,130 @@
+# coreutils/install.corvo — GNU-compatible `install`
+# Run: `corvo coreutils/install.corvo [OPTION]... [-T] SOURCE DEST`
+@spec = {
+  "aliases": {
+    "d": "directory",
+    "m": "mode",
+    "o": "owner",
+    "g": "group",
+    "s": "strip",
+    "v": "verbose",
+    "D": "create_leading",
+    "t": "target_directory",
+    "T": "no_target_directory"
+  },
+  "short_values": ["m", "o", "g", "t"],
+  "long_values": ["mode", "owner", "group", "target-directory", "suffix"]
+}
+
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: install [OPTION]... [-T] SOURCE DEST")
+  sys.echo("  or:  install [OPTION]... SOURCE... DIRECTORY")
+  sys.echo("  or:  install [OPTION]... -t DIRECTORY SOURCE...")
+  sys.echo("  or:  install [OPTION]... -d DIRECTORY...")
+  sys.echo("")
+  sys.echo("  -d, --directory      create all components of the specified directories")
+  sys.echo("  -m, --mode=MODE      set permission mode (as in chmod), instead of rwxr-xr-x")
+  sys.echo("  -o, --owner=OWNER    set ownership (super-user only)")
+  sys.echo("  -g, --group=GROUP    set group ownership")
+  sys.echo("  -v, --verbose        explain what is being done")
+  sys.echo("      --help           display this help and exit")
+  sys.echo("      --version        output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("install (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  @mode = @o.get("mode", "755")
+  @owner = @o.get("owner", "")
+  @group = @o.get("group", "")
+  @verbose = @o.get("verbose", false)
+  @is_dir_mode = @o.get("directory", false)
+  @target_dir = @o.get("target-directory", "")
+  @no_target = @o.get("no_target_directory", false)
+
+  # If -d is set, create directories
+  if (@is_dir_mode) {
+    if (list.is_empty(@paths)) {
+        sys.eprint("install: missing operand")
+        sys.exit(1)
+    }
+    browse(@paths, @_di, @p) {
+      fs.mkdir(@p, true)
+      # Apply mode, owner, group
+      fs.chmod(@p, @mode)
+      if (!string.is_empty(@owner)) {
+        fs.chown(@p, @owner, @group)
+      }
+      if (@verbose) {
+        sys.echo("install: creating directory '${@p}'")
+      }
+    }
+    sys.exit(0)
+  }
+
+  # Normal install mode
+  @sources = @paths
+  @dest = ""
+
+  if (!string.is_empty(@target_dir)) {
+    @dest = @target_dir
+  } else {
+    if (list.len(@paths) >= 2) {
+      @dest = list.last(@paths)
+      @sources = list.slice(@paths, 0, list.len(@paths) - 1)
+    } else {
+      if (list.is_empty(@paths)) {
+          sys.eprint("install: missing file operand")
+      } else {
+          sys.eprint("install: missing destination file operand after '${list.first(@paths)}'")
+      }
+      sys.exit(1)
+    }
+  }
+
+  @dest_is_dir = false
+  try {
+    @meta = fs.read_meta(@dest)
+    if (@meta["is_dir"]) {
+      @dest_is_dir = true
+    }
+  } fallback {}
+
+  if (@dest_is_dir) {
+    browse(@sources, @_si, @src) {
+      @fname = fs.path_filename(@src)
+      @target = fs.path_join(@dest, @fname)
+      fs.copy(@src, @target)
+      fs.chmod(@target, @mode)
+      if (!string.is_empty(@owner)) {
+        fs.chown(@target, @owner, @group)
+      }
+      if (@verbose) {
+        sys.echo("install: '${@src}' -> '${@target}'")
+      }
+    }
+  } else {
+    if (list.len(@sources) > 1) {
+      sys.eprint("install: target '${@dest}' is not a directory")
+      sys.exit(1)
+    }
+    @src = list.first(@sources)
+    fs.copy(@src, @dest)
+    fs.chmod(@dest, @mode)
+    if (!string.is_empty(@owner)) {
+      fs.chown(@dest, @owner, @group)
+    }
+    if (@verbose) {
+      sys.echo("install: '${@src}' -> '${@dest}'")
+    }
+  }
+}

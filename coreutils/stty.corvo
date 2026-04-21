@@ -1,0 +1,26 @@
+# Print or change terminal line settings.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+if (@o.get("help", false)) {
+  sys.echo("Usage: stty [OPTION]... [SETTING]...")
+  sys.echo("Print or change terminal line settings.")
+  sys.echo("")
+  sys.echo("  -a, --all        print all current settings in human-readable form")
+  sys.echo("  -g, --save       print all current settings in a stty-readable form")
+  sys.echo("      --help       display this help and exit")
+  sys.echo("      --version    output version information and exit")
+  sys.exit(0)
+}
+if (@o.get("version", false)) {
+  sys.echo("stty (Corvo coreutils) 0.1.0")
+  sys.exit(0)
+}
+
+try {
+  @mode = os.tty_get_mode()
+  sys.echo("speed 38400 baud; line 0;")
+  sys.echo("iflag ${number.to_string(@mode["iflag"])}; oflag ${number.to_string(@mode["oflag"])}; cflag ${number.to_string(@mode["cflag"])}; lflag ${number.to_string(@mode["lflag"])};")
+} fallback {
+  sys.eprint("stty: 'standard input': Inappropriate ioctl for device")
+  sys.exit(1)
+}

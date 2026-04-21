@@ -1,0 +1,31 @@
+# Call the link function to create a link named FILE2 to an existing FILE1.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: link FILE1 FILE2")
+  sys.echo("Call the link function to create a link named FILE2 to an existing FILE1.")
+  sys.echo("")
+  sys.echo("      --help     display this help and exit")
+  sys.echo("      --version  output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("link (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  try {
+    @f1 = list.get(@pos, 0)
+    @f2 = list.get(@pos, 1)
+    fs.link(@f1, @f2)
+  } fallback {
+    sys.eprint("link: missing operand")
+    sys.eprint("Try 'link --help' for more information.")
+    sys.exit(1)
+  }
+}

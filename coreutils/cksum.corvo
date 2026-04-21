@@ -62,30 +62,38 @@ try {
   } fallback {}
 }
 
-try {
-  assert_eq(@skip_main, true)
-} fallback {
-  try {
-    assert_eq(list.len(@files), 0)
-    sys.eprint("cksum: missing operand")
-    sys.eprint("Try 'cksum --help' for more information.")
-    @exit_code = 1
-  } fallback {
-    browse(@files, @_ci, @_cf) {
-      try {
+if (!@skip_main) {
+  if (list.len(@files) == 0) {
+    @files = ["-"]
+  }
+
+  browse(@files, @_ci, @_cf) {
+    @_is_stdin = (@_cf == "-")
+    
+    try {
+      @_cksm = {}
+      if (@_is_stdin) {
+        @_cksm = crypto.crc32_stdin()
+      } else {
         assert_eq(fs.exists(@_cf), true)
         @_cksm = crypto.crc32_file(@_cf)
-        @_crc_n = @_cksm["crc"]
-        @_sz_n = @_cksm["size"]
-        @_int_str.call(@_crc_n)
-        @_crc_s = @_is_s
-        @_int_str.call(@_sz_n)
-        @_sz_s = @_is_s
-        sys.echo("${@_crc_s} ${@_sz_s} ${@_cf}")
-      } fallback {
-        sys.eprint("cksum: ${@_cf}: No such file or directory")
-        @exit_code = 1
       }
+      
+      @_crc_n = @_cksm["crc"]
+      @_sz_n = @_cksm["size"]
+      @_int_str.call(@_crc_n)
+      @_crc_s = @_is_s
+      @_int_str.call(@_sz_n)
+      @_sz_s = @_is_s
+      
+      if (@_is_stdin) {
+        sys.echo("${@_crc_s} ${@_sz_s}")
+      } else {
+        sys.echo("${@_crc_s} ${@_sz_s} ${@_cf}")
+      }
+    } fallback {
+      sys.eprint("cksum: ${@_cf}: No such file or directory")
+      @exit_code = 1
     }
   }
 }

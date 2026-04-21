@@ -10,6 +10,11 @@ Functions are grouped by module. Parameter names in `[brackets]` are optional.
 | Function | Parameters | Returns | Description |
 |---|---|---|---|
 | `sys.echo` | `message: string` | `null` | Print a value to stdout |
+| `sys.print` | `message: string` | `null` | Print a value to stdout without a trailing newline |
+| `sys.printf` | `format: string, [args: any]` | `null` | Formatted print supporting `%s`, `%d`, `%f`, `%x` |
+| `sys.read_all` | *(none)* | `string` | Read all data from stdin until EOF |
+| `sys.chroot` | `path: string` | `bool` | Change root directory (Unix only) |
+| `sys.nice` | `inc: number` | `bool` | Increment process priority (Unix only) |
 | `sys.read_line` | `[prompt: string]` | `string` | Read a line from stdin |
 | `sys.sleep` | `ms: number` | `null` | Pause execution for `ms` milliseconds |
 | `sys.panic` | `[message: string]` | *(exits)* | Terminate with a non-zero exit code |
@@ -28,6 +33,12 @@ Functions are grouped by module. Parameter names in `[brackets]` are optional.
 | `os.set_env` | `key: string, value: string` | `null` | Set an environment variable |
 | `os.exec` | `cmd: string` | `map{stdout, stderr, code}` | Run a shell command via `sh -c` |
 | `os.info` | *(none)* | `map{os, arch, hostname}` | Return OS / architecture / hostname |
+| `os.environ` | *(none)* | `map` | Return all environment variables |
+| `os.groups` | *(none)* | `list[string]` | Return supplementary groups |
+| `os.hostid` | *(none)* | `string` | Return numeric host identifier |
+| `os.nproc` | *(none)* | `number` | Return number of available CPUs |
+| `os.username` | *(none)* | `string` | Return the current login username |
+| `os.ttyname` | *(none)* | `string` | Return the path of the terminal device associated with stdin (Unix only) |
 | `os.argv` | *(none)* | `list[string]` | Script arguments (after `corvo script.corvo …` or after the compiled binary name) |
 
 **Example file:** [`examples/os_example.corvo`](examples/os_example.corvo)
@@ -68,6 +79,7 @@ Functions are grouped by module. Parameter names in `[brackets]` are optional.
 | `math.div` | `a: number, b: number` | `number` | `a / b` — error if `b == 0` |
 | `math.mod` | `a: number, b: number` | `number` | `a % b` — error if `b == 0` |
 | `math.max` | `a: number, b: number, …` | `number` | Largest argument (two or more numbers) |
+| `math.range` | `start: number, end: number, [step: number]` | `list[number]` | Return a list of numbers from `start` to `end` (exclusive) by `step` |
 | `math.human_bytes` | `bytes: number, [si: bool]` | `string` | Human-readable size (`1024`‑based by default; `si: true` uses `1000`‑based prefixes) |
 
 **Example file:** [`examples/math_example.corvo`](examples/math_example.corvo)

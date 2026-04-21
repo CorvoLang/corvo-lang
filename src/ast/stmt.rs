@@ -65,6 +65,11 @@ pub enum Stmt {
         item_param: String,
         shared_vars: Vec<String>,
     },
+    If {
+        condition: Expr,
+        then_branch: Vec<Stmt>,
+        else_branch: Vec<Stmt>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -72,6 +77,8 @@ pub enum AssertKind {
     Eq,
     Neq,
     Gt,
+    Ge,
     Lt,
+    Le,
     Match,
 }

@@ -1,0 +1,80 @@
+# coreutils/tr.corvo — GNU-compatible `tr`
+# Run: `corvo coreutils/tr.corvo [OPTION]... SET1 [SET2]`
+@spec = {
+  "aliases": { "d": "delete", "s": "squeeze-repeats", "c": "complement" }
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@sets = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: tr [OPTION]... SET1 [SET2]")
+  sys.echo("Translate, squeeze, and/or delete characters from standard input,")
+  sys.echo("writing to standard output.")
+  sys.echo("")
+  sys.echo("  -c, -C, --complement    use the complement of SET1")
+  sys.echo("  -d, --delete            delete characters in SET1, do not translate")
+  sys.echo("  -s, --squeeze-repeats   replace each sequence of a repeated character that is")
+  sys.echo("                            listed in the last specified SET, with a single occurrence")
+  sys.echo("      --help              display this help and exit")
+  sys.echo("      --version           output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("tr (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.is_empty(@sets)) {
+    sys.eprint("tr: missing operand")
+    sys.eprint("Try 'tr --help' for more information.")
+    sys.exit(1)
+  }
+
+  @set1 = list.get(@sets, 0)
+  @set2 = list.get(@sets, 1, "")
+
+  @delete = @o.get("delete", false)
+  @squeeze = @o.get("squeeze-repeats", false)
+
+  @input = sys.read_all()
+  @chars = string.chars(@input)
+  @output_parts = []
+
+  @s1_chars = string.chars(@set1)
+  @s2_chars = []
+  if (!string.is_empty(@set2)) {
+    @s2_chars = string.chars(@set2)
+  }
+
+  @last_ch = ""
+
+  browse(@chars, @_ci, @ch) {
+    @idx = list.index_of(@s1_chars, @ch)
+
+    if (@idx != -1) {
+      if (!@delete) {
+        if (!list.is_empty(@s2_chars)) {
+          @new_ch = list.get(@s2_chars, math.min(@idx, list.len(@s2_chars) - 1))
+          if (!@squeeze || @new_ch != @last_ch) {
+             @output_parts = list.push(@output_parts, @new_ch)
+             @last_ch = @new_ch
+          }
+        } else {
+          @output_parts = list.push(@output_parts, @ch)
+          @last_ch = @ch
+        }
+      }
+    } else {
+      if (!@squeeze || @ch != @last_ch || !list.contains(@s1_chars, @ch)) {
+        @output_parts = list.push(@output_parts, @ch)
+        @last_ch = @ch
+      }
+    }
+  }
+
+  sys.print(string.join(@output_parts, ""))
+}

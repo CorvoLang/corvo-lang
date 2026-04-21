@@ -1,0 +1,95 @@
+# coreutils/dd.corvo — GNU-compatible `dd`
+# Run: `corvo coreutils/dd.corvo [OPERAND]...`
+
+@operands = os.argv()
+@if = "-"
+@of = "-"
+@bs = 512
+@count = -1
+@skip = 0
+@seek = 0
+@skip_main = false
+
+browse(@operands, @_oi, @op) {
+  if (@op == "--help") {
+    sys.echo("Usage: dd [OPERAND]...")
+    sys.echo("Copy a file, converting and formatting according to the operands.")
+    sys.echo("")
+    sys.echo("  bs=BYTES        read and write up to BYTES bytes at a time (default: 512)")
+    sys.echo("  count=N         copy only N input blocks")
+    sys.echo("  if=FILE         read from FILE instead of stdin")
+    sys.echo("  of=FILE         write to FILE instead of stdout")
+    sys.echo("  seek=N          skip N blocks at start of output")
+    sys.echo("  skip=N          skip N blocks at start of input")
+    sys.echo("")
+    sys.echo("      --help      display this help and exit")
+    sys.echo("      --version   output version information and exit")
+    sys.exit(0)
+  }
+  if (@op == "--version") {
+    sys.echo("dd (Corvo coreutils) 0.1.0")
+    sys.exit(0)
+  }
+  
+  if (string.contains(@op, "=")) {
+    @parts = string.split(@op, "=")
+    @key = list.get(@parts, 0)
+    @val = list.get(@parts, 1)
+    
+    if (@key == "if") { @if = @val }
+    if (@key == "of") { @of = @val }
+    if (@key == "bs") { @bs = math.parse_size(@val) }
+    if (@key == "count") { @count = number.parse(-1, @val) }
+    if (@key == "skip") { @skip = number.parse(0, @val) }
+    if (@key == "seek") { @seek = number.parse(0, @val) }
+  }
+}
+
+if (!@skip_main) {
+  if (@if == "-") {
+     @bytes = sys.read_all()
+     @hex_all = string.hex_encode(@bytes)
+     @h_offset = @skip * @bs * 2
+     @h_len = -1
+     if (@count != -1) { @h_len = @count * @bs * 2 }
+     
+     @h_snippet = ""
+     if (@h_len != -1) {
+       @h_snippet = string.substring(@hex_all, @h_offset, @h_offset + @h_len)
+     } else {
+       @h_snippet = string.substring(@hex_all, @h_offset, string.len(@hex_all))
+     }
+     
+     if (@of == "-") {
+       sys.print(string.hex_decode(@h_snippet))
+     } else {
+       fs.write_hex(@of, @seek * @bs, @h_snippet)
+     }
+  } else {
+     @offset = @skip * @bs
+     @total_to_read = @count * @bs
+     if (@count == -1) {
+        @meta = fs.read_meta(@if)
+        @total_to_read = @meta["size"] - @offset
+     }
+     
+     @chunk_size = 65536 # 64KB chunks
+     @read_so_far = 0
+     loop {
+        if (@read_so_far >= @total_to_read) { terminate }
+        @rem = @total_to_read - @read_so_far
+        @to_read = @chunk_size
+        if (@rem < @chunk_size) { @to_read = @rem }
+        
+        @h = fs.read_hex(@if, @offset + @read_so_far, @to_read)
+        if (string.is_empty(@h)) { terminate }
+        
+        if (@of == "-") {
+          sys.print(string.hex_decode(@h))
+        } else {
+          fs.write_hex(@of, @seek * @bs + @read_so_far, @h)
+        }
+        @read_so_far = @read_so_far + @to_read
+     }
+  }
+}

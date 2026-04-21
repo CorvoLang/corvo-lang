@@ -1,0 +1,81 @@
+# coreutils/du.corvo — Estimate file space usage
+@spec = {
+  "aliases": { "s": "summary", "h": "human-readable", "b": "bytes", "c": "total" }
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: du [OPTION]... [FILE]...")
+  sys.echo("Summarize disk usage of the set of FILEs, recursively for directories.")
+  sys.echo("")
+  sys.echo("  -b, --bytes           equivalent to '--apparent-size --block-size=1'")
+  sys.echo("  -c, --total           produce a grand total")
+  sys.echo("  -h, --human-readable  print sizes in human readable format (e.g., 1K 234M 2G)")
+  sys.echo("  -s, --summary         display only a total for each argument")
+  sys.echo("      --help            display this help and exit")
+  sys.echo("      --version         output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("du (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.is_empty(@pos)) {
+    @pos = ["."]
+  }
+
+  @_summary = @o.get("summary", false)
+  @_human = @o.get("human-readable", false)
+  @_bytes = @o.get("bytes", false)
+  @_total = 0
+
+  @du_proc = procedure(@path, @is_top) {
+    @meta = fs.stat(@path)
+    @size = @meta["size"]
+    
+    if (@meta["is_dir"]) {
+      browse(fs.list_dir(@path), @i, @child) {
+        @child_path = fs.path_join(@path, @child)
+        @size = @size + @du_proc.call(@child_path, false)
+      }
+    }
+    
+    @display_size = @size
+    if (!@_bytes) {
+      @display_size = number.ceil(@size / 1024)
+    }
+    
+    @out_str = number.to_string(@display_size)
+    if (@_human) {
+      @out_str = math.human_bytes(@size, false)
+    }
+    
+    if (@_summary) {
+      if (@is_top) {
+        sys.echo("${@out_str}\t${@path}")
+      }
+    } else {
+      sys.echo("${@out_str}\t${@path}")
+    }
+    
+    return @size
+  }
+
+  browse(@pos, @i, @p) {
+    @_total = @_total + @du_proc.call(@p, true)
+  }
+
+  if (@o.get("total", false)) {
+    @total_disp = number.ceil(@_total / 1024)
+    if (@_bytes) { @total_disp = @_total }
+    @total_str = number.to_string(@total_disp)
+    if (@_human) { @total_str = math.human_bytes(@_total, false) }
+    sys.echo("${@total_str}\ttotal")
+  }
+}

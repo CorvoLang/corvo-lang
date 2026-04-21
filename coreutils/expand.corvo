@@ -1,0 +1,81 @@
+# coreutils/expand.corvo — GNU-compatible `expand`
+# Run: `corvo coreutils/expand.corvo [OPTION]... [FILE]...`
+@spec = {
+  "aliases": { "t": "tabs", "i": "initial" },
+  "short_values": ["t"],
+  "long_values": ["tabs"]
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: expand [OPTION]... [FILE]...")
+  sys.echo("Convert tabs in each FILE to spaces, writing to standard output.")
+  sys.echo("")
+  sys.echo("  -i, --initial       do not convert tabs after non blanks")
+  sys.echo("  -t, --tabs=N        have tabs N characters apart, not 8")
+  sys.echo("      --help          display this help and exit")
+  sys.echo("      --version       output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("expand (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  @tab_size = 8
+  @ts = @o.get("tabs", "")
+  try {
+    assert_neq(@ts, "")
+    @tab_size = number.parse(@ts)
+  } fallback {}
+
+  @initial_only = @o.get("initial", false)
+
+  @process = procedure(@content) {
+    @lines = string.split(@content, "\n")
+    browse(@lines, @_li, @line) {
+      @out = ""
+      @col = 0
+      @in_initial = true
+      @chars = string.chars(@line)
+      @_space = " "
+      browse(@chars, @_ci, @ch) {
+        if (@ch == "\t") {
+          if (!@initial_only || @in_initial) {
+            @spaces = @tab_size - (@col % @tab_size)
+            @_rep = string.repeat(@_space, @spaces)
+            @out = "${@out}${@_rep}"
+            @col += @spaces
+          } else {
+            @out = "${@out}${@ch}"
+            @col += 1
+          }
+        } else {
+          @out = "${@out}${@ch}"
+          @col += 1
+          if (@ch != " ") {
+            @in_initial = false
+          }
+        }
+      }
+      sys.echo(@out)
+    }
+  }
+
+  if (list.len(@paths) == 0) {
+    @process.call(sys.read_all())
+  } else {
+    browse(@paths, @_pi, @p) {
+      if (@p == "-") {
+        @process.call(sys.read_all())
+      } else {
+        @process.call(fs.read(@p))
+      }
+    }
+  }
+}

@@ -21,6 +21,20 @@ pub fn read(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult
         .map_err(|e| CorvoError::file_system(e.to_string()))
 }
 
+pub fn read_lines(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
+    let path = args
+        .first()
+        .and_then(|v| v.as_string())
+        .ok_or_else(|| CorvoError::invalid_argument("fs.read_lines requires a path"))?;
+
+    let content = fs::read_to_string(path).map_err(|e| CorvoError::file_system(e.to_string()))?;
+    let lines: Vec<Value> = content
+        .lines()
+        .map(|l| Value::String(l.to_string()))
+        .collect();
+    Ok(Value::List(lines))
+}
+
 pub fn write(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     let path = args
         .first()
@@ -145,6 +159,77 @@ pub fn move_file(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoR
         .ok_or_else(|| CorvoError::invalid_argument("fs.move requires a destination path"))?;
 
     fs::rename(src, dest)
+        .map(|_| Value::Boolean(true))
+        .map_err(|e| CorvoError::file_system(e.to_string()))
+}
+
+pub fn link(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
+    let src = args
+        .first()
+        .and_then(|v| v.as_string())
+        .ok_or_else(|| CorvoError::invalid_argument("fs.link requires a source path"))?;
+
+    let dest = args
+        .get(1)
+        .and_then(|v| v.as_string())
+        .ok_or_else(|| CorvoError::invalid_argument("fs.link requires a destination path"))?;
+
+    fs::hard_link(src, dest)
+        .map(|_| Value::Boolean(true))
+        .map_err(|e| CorvoError::file_system(e.to_string()))
+}
+
+pub fn symlink(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
+    let src = args
+        .first()
+        .and_then(|v| v.as_string())
+        .ok_or_else(|| CorvoError::invalid_argument("fs.symlink requires a source path"))?;
+
+    let dest = args
+        .get(1)
+        .and_then(|v| v.as_string())
+        .ok_or_else(|| CorvoError::invalid_argument("fs.symlink requires a destination path"))?;
+
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(src, dest)
+            .map(|_| Value::Boolean(true))
+            .map_err(|e| CorvoError::file_system(e.to_string()))
+    }
+    #[cfg(not(unix))]
+    {
+        Err(CorvoError::runtime("fs.symlink is only supported on Unix"))
+    }
+}
+
+pub fn realpath(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
+    let path = args
+        .first()
+        .and_then(|v| v.as_string())
+        .ok_or_else(|| CorvoError::invalid_argument("fs.realpath requires a path"))?;
+
+    fs::canonicalize(path)
+        .map(|p| Value::String(p.to_string_lossy().to_string()))
+        .map_err(|e| CorvoError::file_system(e.to_string()))
+}
+
+pub fn truncate(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
+    let path = args
+        .first()
+        .and_then(|v| v.as_string())
+        .ok_or_else(|| CorvoError::invalid_argument("fs.truncate requires a path"))?;
+
+    let size = args
+        .get(1)
+        .and_then(|v| v.as_number())
+        .ok_or_else(|| CorvoError::invalid_argument("fs.truncate requires a size"))? as u64;
+
+    let f = fs::OpenOptions::new()
+        .write(true)
+        .open(path)
+        .map_err(|e| CorvoError::file_system(e.to_string()))?;
+    
+    f.set_len(size)
         .map(|_| Value::Boolean(true))
         .map_err(|e| CorvoError::file_system(e.to_string()))
 }
@@ -327,6 +412,67 @@ pub fn read_meta(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoR
     Ok(Value::Map(m))
 }
 
+pub fn mkfifo(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
+    let path = args
+        .first()
+        .and_then(|v| v.as_string())
+        .ok_or_else(|| CorvoError::invalid_argument("fs.mkfifo requires a path"))?;
+
+    let mode = args
+        .get(1)
+        .and_then(|v| v.as_number())
+        .map(|n| n as u32)
+        .unwrap_or(0o644);
+
+    #[cfg(unix)]
+    {
+        use std::ffi::CString;
+        let c_path = CString::new(path.as_str()).map_err(|e| CorvoError::invalid_argument(e.to_string()))?;
+        unsafe {
+            if libc::mkfifo(c_path.as_ptr(), mode as libc::mode_t) != 0 {
+                return Err(CorvoError::io(format!("mkfifo failed: {}", std::io::Error::last_os_error())));
+            }
+        }
+        Ok(Value::Boolean(true))
+    }
+    #[cfg(not(unix))]
+    {
+        Err(CorvoError::runtime("fs.mkfifo is only supported on Unix"))
+    }
+}
+
+pub fn mknod(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
+    let path = args
+        .first()
+        .and_then(|v| v.as_string())
+        .ok_or_else(|| CorvoError::invalid_argument("fs.mknod requires a path"))?;
+
+    let mode = args
+        .get(1)
+        .and_then(|v| v.as_number())
+        .ok_or_else(|| CorvoError::invalid_argument("fs.mknod requires a mode"))? as u32;
+
+    let dev = args
+        .get(2)
+        .and_then(|v| v.as_number())
+        .unwrap_or(0.0) as u64;
+
+    #[cfg(unix)]
+    {
+        use std::ffi::CString;
+        let c_path = CString::new(path.as_str()).map_err(|e| CorvoError::invalid_argument(e.to_string()))?;
+        unsafe {
+            if libc::mknod(c_path.as_ptr(), mode as libc::mode_t, dev as libc::dev_t) != 0 {
+                return Err(CorvoError::io(format!("mknod failed: {}", std::io::Error::last_os_error())));
+            }
+        }
+        Ok(Value::Boolean(true))
+    }
+    #[cfg(not(unix))]
+    {
+        Err(CorvoError::runtime("fs.mknod is only supported on Unix"))
+    }
+}
 pub fn read_link(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     let path = args
         .first()
@@ -336,6 +482,107 @@ pub fn read_link(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoR
     let target =
         fs::read_link(path.as_str()).map_err(|e| CorvoError::file_system(e.to_string()))?;
     Ok(Value::String(target.to_string_lossy().to_string()))
+}
+
+pub fn mktemp(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
+    use rand::{distributions::Alphanumeric, Rng};
+    let template = args
+        .get(0)
+        .and_then(|v| v.as_string())
+        .map(|s| s.as_str())
+        .unwrap_or("tmp.XXXXXX");
+    let is_dir = args.get(1).and_then(|v| v.as_bool()).unwrap_or(false);
+    let tmp_dir = args
+        .get(2)
+        .and_then(|v| v.as_string())
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    let suffix = args.get(3).and_then(|v| v.as_string()).cloned().unwrap_or_default();
+
+    let mut rng = rand::thread_rng();
+    
+    // Replace XXXXXX in template
+    let parts: Vec<&str> = template.split("XXXXXX").collect();
+    if parts.len() < 2 {
+         return Err(CorvoError::runtime("fs.mktemp: template must contain 'XXXXXX'"));
+    }
+    
+    // We only replace the FIRST occurrence in GNU mktemp? 
+    // Actually GNU mktemp replaces the sequence of X's at the end.
+    // If multiple blocks of X's exist, it's usually the last set.
+    
+    let mut name = template.to_string();
+    if let Some(pos) = name.rfind("XXXXXX") {
+        let rand_s: String = (0..6)
+            .map(|_| rng.sample(Alphanumeric) as char)
+            .collect();
+        name.replace_range(pos..pos+6, &rand_s);
+    }
+    name.push_str(&suffix);
+
+    let final_path = tmp_dir.join(name);
+    let path_s = final_path.to_string_lossy().to_string();
+
+    if is_dir {
+        fs::create_dir_all(&final_path).map_err(|e| CorvoError::file_system(e.to_string()))?;
+    } else {
+        fs::File::create(&final_path).map_err(|e| CorvoError::file_system(e.to_string()))?;
+    }
+
+    Ok(Value::String(path_s))
+}
+
+pub fn read_hex(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
+    use std::io::{Read, Seek, SeekFrom};
+    let path = args
+        .get(0)
+        .and_then(|v| v.as_string())
+        .ok_or_else(|| CorvoError::invalid_argument("fs.read_hex: path missing"))?;
+    let offset = args.get(1).and_then(|v| v.as_number()).unwrap_or(0.0) as u64;
+    let size = args.get(2).and_then(|v| v.as_number()).unwrap_or(0.0) as usize;
+
+    let mut f = fs::File::open(path).map_err(|e| CorvoError::file_system(e.to_string()))?;
+    f.seek(SeekFrom::Start(offset)).map_err(|e| CorvoError::file_system(e.to_string()))?;
+    
+    let mut buf = vec![0u8; size];
+    let n = f.read(&mut buf).map_err(|e| CorvoError::file_system(e.to_string()))?;
+    buf.truncate(n);
+    
+    let hex_s: String = buf.iter().map(|b| format!("{:02x}", b)).collect();
+    Ok(Value::String(hex_s))
+}
+
+pub fn write_hex(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
+    use std::io::{Seek, SeekFrom, Write};
+    let path = args
+        .get(0)
+        .and_then(|v| v.as_string())
+        .ok_or_else(|| CorvoError::invalid_argument("fs.write_hex: path missing"))?;
+    let offset = args.get(1).and_then(|v| v.as_number()).unwrap_or(0.0) as u64;
+    let hex_data = args
+        .get(2)
+        .and_then(|v| v.as_string())
+        .ok_or_else(|| CorvoError::invalid_argument("fs.write_hex: data missing"))?;
+
+    let mut bytes = Vec::new();
+    for i in (0..hex_data.len()).step_by(2) {
+        if i + 2 <= hex_data.len() {
+            if let Ok(b) = u8::from_str_radix(&hex_data[i..i+2], 16) {
+                bytes.push(b);
+            }
+        }
+    }
+
+    let mut f = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open(path)
+        .map_err(|e| CorvoError::file_system(e.to_string()))?;
+    
+    f.seek(SeekFrom::Start(offset)).map_err(|e| CorvoError::file_system(e.to_string()))?;
+    f.write_all(&bytes).map_err(|e| CorvoError::file_system(e.to_string()))?;
+    
+    Ok(Value::Boolean(true))
 }
 
 /// Directory entries with metadata suitable for GNU `ls` (uses `lstat` per entry).
@@ -513,6 +760,31 @@ pub fn path_parent(args: &[Value], _named_args: &HashMap<String, Value>) -> Corv
         .map(|x| x.to_string_lossy().to_string())
         .unwrap_or_default();
     Ok(Value::String(out))
+}
+
+pub fn path_filename(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
+    let path = args
+        .first()
+        .and_then(|v| v.as_string())
+        .ok_or_else(|| CorvoError::invalid_argument("fs.path_filename requires a path"))?;
+
+    Ok(Value::String(
+        std::path::Path::new(path)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string(),
+    ))
+}
+
+pub fn path_join(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
+    let mut path = std::path::PathBuf::new();
+    for arg in args {
+        if let Some(s) = arg.as_string() {
+            path.push(s);
+        }
+    }
+    Ok(Value::String(path.to_string_lossy().to_string()))
 }
 
 /// Path of `path` relative to `base` (both strings). If `path` is not under `base`, returns `path` unchanged.

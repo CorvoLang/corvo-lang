@@ -1,0 +1,22 @@
+# Output who is currently logged in to the current host.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+if (@o.get("help", false)) {
+  sys.echo("Usage: users [OPTION]... [FILE]")
+  sys.echo("Output who is currently logged in to the current host.")
+  sys.echo("")
+  sys.echo("      --help     display this help and exit")
+  sys.echo("      --version  output version information and exit")
+  sys.exit(0)
+}
+if (@o.get("version", false)) {
+  sys.echo("users (Corvo coreutils) 0.1.0")
+  sys.exit(0)
+}
+@names = list.new()
+browse(os.users(), @i, @u) {
+  @names = list.push(@names, @u["user"])
+}
+@unique = list.unique(@names)
+@sorted = list.sort(@unique)
+sys.echo(list.join(@sorted, " "))

@@ -1,4 +1,4 @@
-# coreutils/sha256sum.corvo
+# coreutils/sha256sum.corvo — GNU-compatible `sha256sum`
 @spec = {
   "aliases": {
     "c": "check",
@@ -9,20 +9,50 @@
   }
 }
 @parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
 @files = @parsed["positional"]
 @algorithm = "sha256"
+@skip_main = false
 
 try {
-    assert_eq(list.is_empty(@files), true)
-    @hash = crypto.hash_stdin(@algorithm)
-    sys.echo("${@hash}  -")
-} fallback {
-    browse(@files, @idx, @f) {
-        try {
-            @hash = crypto.hash_file(@algorithm, @f)
-            sys.echo("${@hash}  ${@f}")
-        } fallback {
-            sys.eprint("sha256sum: ${@f}: No such file or directory")
-        }
-    }
+  assert_eq(@o.get("help", false), true)
+  sys.echo("Usage: sha256sum [OPTION]... [FILE]...")
+  sys.echo("Print or check SHA256 (256-bit) checksums.")
+  sys.echo("")
+  sys.echo("  -b, --binary         read in binary mode")
+  sys.echo("  -c, --check          read checksums from the FILEs and check them")
+  sys.echo("  -t, --text           read in text mode (default)")
+  sys.echo("      --help           display this help and exit")
+  sys.echo("      --version        output version information and exit")
+  @skip_main = true
+} fallback {}
+
+try {
+  assert_eq(@o.get("version", false), true)
+  sys.echo("sha256sum (Corvo coreutils) 0.1.0")
+  @skip_main = true
+} fallback {}
+
+if (!@skip_main) {
+  if (list.is_empty(@files)) {
+     @files = ["-"]
+  }
+
+  browse(@files, @idx, @f) {
+      @_is_stdin = (@f == "-")
+      try {
+          @hash = ""
+          if (@_is_stdin) {
+              @hash = crypto.hash_stdin(@algorithm)
+          } else {
+              @hash = crypto.hash_file(@algorithm, @f)
+          }
+          
+          @disp = @f
+          if (@_is_stdin) { @disp = "-" }
+          sys.echo("${@hash}  ${@disp}")
+      } fallback {
+          sys.eprint("sha256sum: ${@f}: No such file or directory")
+      }
+  }
 }

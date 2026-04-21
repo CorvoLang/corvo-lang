@@ -1,0 +1,62 @@
+# coreutils/ptx.corvo — GNU-compatible `ptx`
+# Run: `corvo coreutils/ptx.corvo [OPTION]... [FILE]...`
+@spec = {
+  "aliases": { "w": "width", "i": "ignore-case" },
+  "short_values": ["w"],
+  "long_values": ["width"]
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: ptx [OPTION]... [FILE]...")
+  sys.echo("Produce a permuted index, including context, of the words in the input files.")
+  sys.echo("")
+  sys.echo("  -i, --ignore-case     ignore differences in case when comparing words")
+  sys.echo("  -w, --width=WIDTH     set the maximum line width (default 72)")
+  sys.echo("      --help            display this help and exit")
+  sys.echo("      --version           output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("ptx (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  @width = number.parse(72, @o.get("width", "72"))
+
+  @file = @paths.get(0, "-")
+  @content = ""
+  if (@file == "-") { @content = sys.read_all() }
+  else { @content = fs.read(@file) }
+
+  @lines = string.split(@content, "\n")
+  @index = []
+
+  browse(@lines, @_li, @line) {
+    @words = string.split(string.trim(@line), " ")
+    @i = 0
+    browse(@words, @_wi, @word) {
+      if (!string.is_empty(@word)) {
+        @entry = { "key": @word, "line": @line, "pos": @i }
+        @index = list.push(@index, @entry)
+      }
+      @i += 1
+    }
+  }
+
+  # Sort by key
+  @sorted = list.sort_maps_by_key(@index, "key")
+
+  browse(@sorted, @_si, @entry) {
+    @key = @entry["key"]
+    @line = @entry["line"]
+    # Simple ptx: key highlighted in its line
+    @_space = " "
+    sys.echo("${string.pad_end(@key, 15, @_space)} ${@line}")
+  }
+}

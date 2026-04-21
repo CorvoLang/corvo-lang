@@ -1,0 +1,36 @@
+# Shrink or extend the size of each FILE to the specified size.
+@parsed = args.parse(os.argv(), { "aliases": { "s": "size" } })
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: truncate OPTION... FILE...")
+  sys.echo("Shrink or extend the size of each FILE to the specified size.")
+  sys.echo("")
+  sys.echo("  -c, --no-create        do not create any files")
+  sys.echo("  -s, --size=SIZE        set or adjust the file size by SIZE bytes")
+  sys.echo("      --help             display this help and exit")
+  sys.echo("      --version          output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("truncate (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.is_empty(@pos)) {
+    sys.eprint("truncate: missing operand")
+    sys.eprint("Try 'truncate --help' for more information.")
+    sys.exit(1)
+  }
+
+  @size_str = @o.get("size", "0")
+  @size = math.parse_size(@size_str)
+
+  browse(@pos, @i, @file) {
+    fs.truncate(@file, @size)
+  }
+}

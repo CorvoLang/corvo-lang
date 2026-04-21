@@ -1,0 +1,55 @@
+# coreutils/df.corvo — GNU-compatible `df`
+@spec = {
+  "aliases": { "h": "human-readable" }
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: df [OPTION]... [FILE]...")
+  sys.echo("Show information about the file system on which each FILE resides,")
+  sys.echo("or all file systems by default.")
+  sys.echo("")
+  sys.echo("  -h, --human-readable  print sizes in powers of 1024 (e.g., 1023M)")
+  sys.echo("      --help            display this help and exit")
+  sys.echo("      --version         output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("df (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.is_empty(@pos)) {
+    @pos = ["."]
+  }
+
+  @_human = @o.get("human-readable", false)
+
+  sys.echo("Filesystem     1K-blocks      Used Available Use% Mounted on")
+  browse(@pos, @i, @path) {
+    @d = os.df(@path)
+    @used = @d["blocks"] - @d["bfree"]
+    
+    @perc = 0
+    if (@d["blocks"] != 0) {
+      @perc = math.floor((@used / @d["blocks"]) * 100)
+    }
+    
+    @size_str = number.to_string(@d["blocks"])
+    @used_str = number.to_string(@used)
+    @avail_str = number.to_string(@d["bavail"])
+    
+    if (@_human) {
+      @size_str = math.human_bytes(@d["blocks"] * 1024, false)
+      @used_str = math.human_bytes(@used * 1024, false)
+      @avail_str = math.human_bytes(@d["bavail"] * 1024, false)
+    }
+    
+    sys.echo("${@path}    ${@size_str} ${@used_str} ${@avail_str} ${number.to_string(@perc)}% /")
+  }
+}

@@ -1,0 +1,86 @@
+# coreutils/split.corvo — GNU-compatible `split`
+# Run: `corvo coreutils/split.corvo [OPTION]... [FILE [PREFIX]]`
+@spec = {
+  "aliases": { "l": "lines", "b": "bytes", "d": "numeric_suffixes", "a": "suffix_length" },
+  "short_values": ["l", "b", "a"],
+  "long_values": ["lines", "bytes", "suffix-length", "additional-suffix"]
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: split [OPTION]... [FILE [PREFIX]]")
+  sys.echo("Output pieces of FILE to PREFIXaa, PREFIXab, ...; default size is 1000 lines,")
+  sys.echo("and default PREFIX is 'x'.")
+  sys.echo("")
+  sys.echo("  -b, --bytes=SIZE        put SIZE bytes per output file")
+  sys.echo("  -l, --lines=NUMBER      put NUMBER lines/records per output file")
+  sys.echo("  -d                      use numeric suffixes instead of alphabetic")
+  sys.echo("  -a, --suffix-length=N   generate suffixes of length N (default 2)")
+  sys.echo("      --help              display this help and exit")
+  sys.echo("      --version             output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("split (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  @file = list.get(@paths, 0, "-")
+  @prefix = list.get(@paths, 1, "x")
+
+  @bytes_mode = false
+  @size = 1000 # default 1000 lines
+
+  @b_str = @o.get("bytes", "")
+  @l_str = @o.get("lines", "")
+
+  if (!string.is_empty(@b_str)) {
+    @bytes_mode = true
+    @size = math.parse_size(@b_str)
+  } else {
+    if (!string.is_empty(@l_str)) {
+      @size = math.parse_size(@l_str)
+    }
+  }
+
+  @content = ""
+  if (@file == "-") {
+    @content = sys.read_all()
+  } else {
+    @content = fs.read(@file)
+  }
+
+  if (@bytes_mode) {
+    @len = string.len(@content)
+    @i = 0
+    @part = 0
+    loop {
+      if (@i >= @len) { terminate }
+      @end = math.min(@i + @size, @len)
+      @chunk = string.byte_slice(@content, @i, @end)
+      @fname = "${@prefix}${number.to_string(@part)}" # simple suffix
+      fs.write(@fname, @chunk)
+      @i += @size
+      @part += 1
+    }
+  } else {
+    @lines = string.split(@content, "\n")
+    @len = list.len(@lines)
+    @i = 0
+    @part = 0
+    loop {
+      if (@i >= @len) { terminate }
+      @end = math.min(@i + @size, @len)
+      @chunk = list.slice(@lines, @i, @end)
+      @fname = "${@prefix}${number.to_string(@part)}"
+      fs.write(@fname, list.join(@chunk, "\n"))
+      @i += @size
+      @part += 1
+    }
+  }
+}

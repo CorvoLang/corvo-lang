@@ -41,8 +41,12 @@ pub fn run_source_with_script_argv(source: &str, script_argv: Vec<String>) -> Co
 pub fn run_source_with_state(source: &str, state: &mut RuntimeState) -> CorvoResult<()> {
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize()?;
-
-    let mut parser = Parser::new(tokens);
+    let mut parser = Parser::new(
+        tokens
+            .into_iter()
+            .filter(|t| !matches!(t.token_type, crate::lexer::token::TokenType::Comment(_)))
+            .collect(),
+    );
     let program = parser.parse()?;
 
     let mut evaluator = Evaluator::new();

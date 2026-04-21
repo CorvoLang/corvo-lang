@@ -1,0 +1,33 @@
+# Run a command in a different security context.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: runcon CONTEXT COMMAND [ARGS]...")
+  sys.echo("Run a command in a different security context.")
+  sys.echo("")
+  sys.echo("      --help     display this help and exit")
+  sys.echo("      --version  output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("runcon (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  try {
+    @ctx = list.get(@pos, 0)
+    @cmd = list.slice(@pos, 1)
+    
+    @res = sys.exec(@cmd, context: @ctx)
+    sys.exit(@res["code"])
+  } fallback {
+    sys.eprint("runcon: missing operand")
+    sys.eprint("Try 'runcon --help' for more information.")
+    sys.exit(1)
+  }
+}

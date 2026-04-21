@@ -288,20 +288,12 @@ fn make_cksum_crc_table() -> [u32; 256] {
     table
 }
 
-/// Compute the GNU cksum CRC-32 for a file.
-/// Returns a map with keys "crc" (u32 as f64) and "size" (byte count as f64).
-pub fn crc32_file(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
-    let path = args
-        .first()
-        .and_then(|v| v.as_string())
-        .ok_or_else(|| CorvoError::invalid_argument("crypto.crc32_file requires a file path"))?;
-
-    let data = std::fs::read(path).map_err(|e| CorvoError::file_system(e.to_string()))?;
+fn compute_cksum_crc(data: &[u8]) -> (u32, u64) {
     let size = data.len() as u64;
     let table = make_cksum_crc_table();
 
     let mut crc: u32 = 0;
-    for byte in &data {
+    for byte in data {
         crc = table[((crc >> 24) ^ *byte as u32) as usize] ^ (crc << 8);
     }
     // Append length bytes (LSB first, until zero)
@@ -314,6 +306,35 @@ pub fn crc32_file(args: &[Value], _named_args: &HashMap<String, Value>) -> Corvo
         }
     }
     crc ^= 0xffff_ffff;
+    (crc, size)
+}
+
+/// Compute the GNU cksum CRC-32 for standard input.
+pub fn crc32_stdin(_args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
+    use std::io::Read;
+    let mut data = Vec::new();
+    std::io::stdin()
+        .read_to_end(&mut data)
+        .map_err(|e| CorvoError::io(e.to_string()))?;
+
+    let (crc, size) = compute_cksum_crc(&data);
+
+    let mut result = std::collections::HashMap::new();
+    result.insert("crc".to_string(), Value::Number(crc as f64));
+    result.insert("size".to_string(), Value::Number(size as f64));
+    Ok(Value::Map(result))
+}
+
+/// Compute the GNU cksum CRC-32 for a file.
+/// Returns a map with keys "crc" (u32 as f64) and "size" (byte count as f64).
+pub fn crc32_file(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
+    let path = args
+        .first()
+        .and_then(|v| v.as_string())
+        .ok_or_else(|| CorvoError::invalid_argument("crypto.crc32_file requires a file path"))?;
+
+    let data = std::fs::read(path).map_err(|e| CorvoError::file_system(e.to_string()))?;
+    let (crc, size) = compute_cksum_crc(&data);
 
     let mut result = std::collections::HashMap::new();
     result.insert("crc".to_string(), Value::Number(crc as f64));

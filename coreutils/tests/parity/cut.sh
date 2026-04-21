@@ -19,6 +19,8 @@ run_case cut "tab delimiter"          "gnu-cut -f2 /tmp/cut_tab.txt"            
 run_case cut "characters 1-4"         "gnu-cut -c1-4 /tmp/cut_chars.txt"              "corvo /corvo/coreutils/cut.corvo -- -c1-4 /tmp/cut_chars.txt"
 run_case cut "bytes 2-5"              "gnu-cut -b2-5 /tmp/cut_chars.txt"              "corvo /corvo/coreutils/cut.corvo -- -b2-5 /tmp/cut_chars.txt"
 run_case cut "field from end 2-"      "gnu-cut -d: -f2- /tmp/cut_colon.txt"           "corvo /corvo/coreutils/cut.corvo -- -d: -f2- /tmp/cut_colon.txt"
+run_case cut "stdin"                   "echo 'a:b:c' | gnu-cut -d: -f2"               "echo 'a:b:c' | corvo /corvo/coreutils/cut.corvo -- -d: -f2"
+run_case cut "stdin dash"              "echo 'a:b:c' | gnu-cut -d: -f2 -"             "echo 'a:b:c' | corvo /corvo/coreutils/cut.corvo -- -d: -f2 -"
 
 run_uutils_case cut "field 2"         "uu-cut -d: -f2 /tmp/cut_colon.txt"             "corvo /corvo/coreutils/cut.corvo -- -d: -f2 /tmp/cut_colon.txt"
 

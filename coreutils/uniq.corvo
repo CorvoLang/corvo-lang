@@ -1,0 +1,62 @@
+# coreutils/uniq.corvo — GNU-compatible `uniq`
+@spec = {
+  "aliases": { "c": "count", "d": "repeated", "u": "unique", "i": "ignore-case" }
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: uniq [OPTION]... [INPUT [OUTPUT]]")
+  sys.echo("Filter adjacent matching lines from INPUT (or standard input).")
+  sys.echo("")
+  sys.echo("  -c, --count          prefix lines by the number of occurrences")
+  sys.echo("  -d, --repeated       only print duplicate lines, one for each group")
+  sys.echo("  -i, --ignore-case    ignore differences in case when comparing")
+  sys.echo("  -u, --unique         only print unique lines")
+  sys.echo("      --help           display this help and exit")
+  sys.echo("      --version        output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("uniq (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.is_empty(@pos)) {
+    @pos = ["-"]
+  }
+
+  @_last_line = ""
+  @_first = true
+
+  browse(@pos, @i, @file) {
+    @content = ""
+    if (@file == "-") {
+      @content = sys.read_all()
+    } else {
+      @content = fs.read(@file)
+    }
+    
+    @lines = string.split(@content, "\n")
+    if (list.len(@lines) > 0 && string.is_empty(list.last(@lines))) {
+      @lines = list.slice(@lines, 0, list.len(@lines) - 1)
+    }
+
+    browse(@lines, @ii, @line) {
+      if (@_first) {
+        sys.echo(@line)
+        @_last_line = @line
+        @_first = false
+      } else {
+        if (@line != @_last_line) {
+          sys.echo(@line)
+          @_last_line = @line
+        }
+      }
+    }
+  }
+}

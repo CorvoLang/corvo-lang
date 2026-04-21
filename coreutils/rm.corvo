@@ -34,8 +34,7 @@
 @exit_code  = 0
 
 # ── Handle --help ─────────────────────────────────────────────────────────────
-try {
-  assert_eq(@o.get("help", false), true)
+if (@o.get("help", false)) {
   sys.echo("Usage: rm [OPTION]... [FILE]...")
   sys.echo("Remove (unlink) the FILE(s).")
   sys.echo("")
@@ -48,26 +47,16 @@ try {
   sys.echo("      --help            display this help and exit")
   sys.echo("      --version         output version information and exit")
   @skip_main = true
-} fallback {}
+}
 
 # ── Handle --version ──────────────────────────────────────────────────────────
-try {
-  assert_eq(@o.get("version", false), true)
+if (!@skip_main && @o.get("version", false)) {
   sys.echo("rm (Corvo coreutils) 0.1.0")
   @skip_main = true
-} fallback {}
+}
 
 # ── Flag extraction ───────────────────────────────────────────────────────────
-@recursive        = false
-@force            = false
-@interactive      = false
-@verbose          = false
-@dir_flag         = false
-@no_preserve_root = false
-
-try {
-  assert_eq(@skip_main, true)
-} fallback {
+if (!@skip_main) {
   @recursive        = @o.get("recursive",        false)
   @force            = @o.get("force",            false)
   @interactive      = @o.get("interactive",      false)
@@ -76,143 +65,110 @@ try {
   @no_preserve_root = @o.get("no_preserve_root", false)
 
   # No operands: -f suppresses the error (GNU behaviour)
-  try {
-    assert_eq(list.len(@operands), 0)
-    try {
-      assert_eq(@force, false)
+  if (list.is_empty(@operands)) {
+    if (!@force) {
       sys.eprint("rm: missing operand")
       sys.eprint("Try 'rm --help' for more information.")
       @exit_code = 1
-    } fallback {}
+    }
     @skip_main = true
-  } fallback {}
+  }
 }
 
 # ── Main removal loop ─────────────────────────────────────────────────────────
-try {
-  assert_eq(@skip_main, true)
-} fallback {
+if (!@skip_main) {
   browse(@operands, @_oi, @_path) {
     # Root protection: refuse to operate on "/" unless --no-preserve-root
     @_is_root = false
-    try {
-      assert_eq(@no_preserve_root, false)
-      try {
-        assert_eq(@_path, "/")
-        @_is_root = true
-      } fallback {}
-    } fallback {}
+    if (!@no_preserve_root && @_path == "/") {
+      @_is_root = true
+    }
 
-    try {
-      assert_eq(@_is_root, true)
+    if (@_is_root) {
       sys.eprint("rm: it is dangerous to operate recursively on '/'")
       sys.eprint("rm: use --no-preserve-root to override this failsafe")
       @exit_code = 1
-    } fallback {
-      @_exists = fs.exists(@_path)
-
-      try {
-        assert_eq(@_exists, false)
+    } else {
+      if (!fs.exists(@_path)) {
         # Path does not exist — only an error when -f is not given
-        try {
-          assert_eq(@force, false)
+        if (!@force) {
           sys.eprint("rm: cannot remove '${@_path}': No such file or directory")
           @exit_code = 1
-        } fallback {}
-      } fallback {
+        }
+      } else {
         # Path exists — get metadata without following symlinks
         @_meta   = fs.read_meta(@_path, false)
-        @_is_dir = @_meta["is_dir"]
+        @_is_dir = @_meta.get("is_dir", false)
 
-        try {
-          assert_eq(@_is_dir, true)
+        if (@_is_dir) {
           # ── Target is a directory ──────────────────────────────────────────
           @_do_remove = true
 
           # Without -r or -d: cannot remove a directory
-          try {
-            assert_eq(@recursive, false)
-            assert_eq(@dir_flag,  false)
+          if (!@recursive && !@dir_flag) {
             sys.eprint("rm: cannot remove '${@_path}': Is a directory")
             @exit_code  = 1
             @_do_remove = false
-          } fallback {}
-
-          # -d (without -r): only empty directories may be removed
-          try {
-            assert_eq(@_do_remove, true)
-            assert_eq(@dir_flag,   true)
-            assert_eq(@recursive,  false)
-            @_entries = fs.list_dir(@_path)
-            try {
-              assert_gt(list.len(@_entries), 0)
-              sys.eprint("rm: cannot remove '${@_path}': Directory not empty")
-              @exit_code  = 1
-              @_do_remove = false
-            } fallback {}
-          } fallback {}
+          } else {
+            # -d (without -r): only empty directories may be removed
+            if (@dir_flag && !@recursive) {
+              @_entries = fs.list_dir(@_path)
+              if (list.len(@_entries) > 0) {
+                sys.eprint("rm: cannot remove '${@_path}': Directory not empty")
+                @exit_code  = 1
+                @_do_remove = false
+              }
+            }
+          }
 
           # Interactive prompt for directories
-          try {
-            assert_eq(@_do_remove,  true)
-            assert_eq(@interactive, true)
+          if (@_do_remove && @interactive) {
             @_ans    = sys.read_line("rm: remove directory '${@_path}'? ")
             @_ans_lc = string.to_lower(string.trim(@_ans))
-            try {
-              assert_eq(string.starts_with(@_ans_lc, "y"), true)
-            } fallback {
+            if (!string.starts_with(@_ans_lc, "y")) {
               @_do_remove = false
             }
-          } fallback {}
+          }
 
-          try {
-            assert_eq(@_do_remove, true)
+          if (@_do_remove) {
             try {
               fs.delete(@_path)
-              try {
-                assert_eq(@verbose, true)
+              if (@verbose) {
                 sys.echo("removed directory '${@_path}'")
-              } fallback {}
+              }
             } fallback {
               sys.eprint("rm: cannot remove '${@_path}': Operation not permitted")
               @exit_code = 1
             }
-          } fallback {}
-        } fallback {
+          }
+        } else {
           # ── Target is a regular file or symbolic link ──────────────────────
           @_do_remove = true
 
           # Interactive prompt for files
-          try {
-            assert_eq(@interactive, true)
-            @_is_symlink = @_meta["is_symlink"]
-            @_ftype      = "regular file"
-            try {
-              assert_eq(@_is_symlink, true)
+          if (@interactive) {
+            @_ftype = "regular file"
+            if (@_meta.get("is_symlink", false)) {
               @_ftype = "symbolic link"
-            } fallback {}
+            }
             @_ans    = sys.read_line("rm: remove ${@_ftype} '${@_path}'? ")
             @_ans_lc = string.to_lower(string.trim(@_ans))
-            try {
-              assert_eq(string.starts_with(@_ans_lc, "y"), true)
-            } fallback {
+            if (!string.starts_with(@_ans_lc, "y")) {
               @_do_remove = false
             }
-          } fallback {}
+          }
 
-          try {
-            assert_eq(@_do_remove, true)
+          if (@_do_remove) {
             try {
               fs.delete(@_path)
-              try {
-                assert_eq(@verbose, true)
+              if (@verbose) {
                 sys.echo("removed '${@_path}'")
-              } fallback {}
+              }
             } fallback {
               sys.eprint("rm: cannot remove '${@_path}': Operation not permitted")
               @exit_code = 1
             }
-          } fallback {}
+          }
         }
       }
     }

@@ -1,0 +1,28 @@
+# Pause for NUMBER seconds.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+if (@o.get("help", false)) {
+  sys.echo("Usage: sleep NUMBER[SUFFIX]...")
+  sys.echo("  or:  sleep OPTION")
+  sys.echo("Pause for NUMBER seconds.  SUFFIX may be 's' for seconds (the default),")
+  sys.echo("'m' for minutes, 'h' for hours or 'd' for days.")
+  sys.echo("")
+  sys.echo("      --help     display this help and exit")
+  sys.echo("      --version  output version information and exit")
+  sys.exit(0)
+}
+if (@o.get("version", false)) {
+  sys.echo("sleep (Corvo coreutils) 0.1.0")
+  sys.exit(0)
+}
+try {
+  @n_str = list.get(@pos, 0)
+  @n = number.parse(@n_str)
+  # Corvo sys.sleep takes milliseconds
+  sys.sleep(@n * 1000)
+} fallback {
+  sys.eprint("sleep: missing operand")
+  sys.eprint("Try 'sleep --help' for more information.")
+  sys.exit(1)
+}

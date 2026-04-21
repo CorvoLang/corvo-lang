@@ -39,8 +39,7 @@
 @exit_code  = 0
 
 # ── Handle --help ─────────────────────────────────────────────────────────────
-try {
-  assert_eq(@o.get("help", false), true)
+if (@o.get("help", false)) {
   sys.echo("Usage: tail [OPTION]... [FILE]...")
   sys.echo("Print the last 10 lines of each FILE to standard output.")
   sys.echo("With more than one FILE, precede each with a header giving the file name.")
@@ -57,14 +56,13 @@ try {
   sys.echo("      --help               display this help and exit")
   sys.echo("      --version            output version information and exit")
   @skip_main = true
-} fallback {}
+}
 
 # ── Handle --version ──────────────────────────────────────────────────────────
-try {
-  assert_eq(@o.get("version", false), true)
+if (!@skip_main && @o.get("version", false)) {
   sys.echo("tail (Corvo coreutils) 0.1.0")
   @skip_main = true
-} fallback {}
+}
 
 # ── Flag extraction and validation ───────────────────────────────────────────
 @_n_lines    = 10
@@ -75,89 +73,68 @@ try {
 @_from_start_lines = false
 @_from_start_bytes = false
 
-try {
-  assert_eq(@skip_main, true)
-} fallback {
+if (!@skip_main) {
   @_quiet   = @o.get("quiet",   false)
   @_verbose = @o.get("verbose", false)
 
   # Warn that -f is not supported
-  try {
-    assert_eq(@o.get("follow", false), true)
+  if (@o.get("follow", false)) {
     sys.echo("tail: warning: --follow is not supported in this implementation")
-  } fallback {}
-  try {
-    assert_eq(@o.get("follow_retry", false), true)
+  }
+  if (@o.get("follow_retry", false)) {
     sys.echo("tail: warning: -F (follow+retry) is not supported in this implementation")
-  } fallback {}
+  }
 
   # Parse --lines / -n
-  @_n_str = @o.get("lines", "")
-  try {
-    assert_eq(string.is_empty(@_n_str), false)
-    # '+N' means output starting at line N (from the beginning)
-    try {
-      assert_eq(string.starts_with(@_n_str, "+"), true)
+  @_n_lines_str = @o.get("lines", "")
+  if (!string.is_empty(@_n_lines_str)) {
+    @_n_str = @_n_lines_str
+    if (string.starts_with(@_n_str, "+")) {
       @_from_start_lines = true
       @_n_str = string.replace(@_n_str, "+", "")
-    } fallback {}
+    }
     try {
-      @_n_lines = number.parse(0, @_n_str)
+      @_n_lines = math.parse_size(@_n_str)
       @_n_lines = number.floor(@_n_lines)
     } fallback {
-      sys.echo("tail: invalid number of lines: '${@o.get("lines", "")}'")
+      sys.eprint("tail: invalid number of lines: '${@_n_lines_str}'")
       @exit_code = 1
       @skip_main = true
     }
-  } fallback {}
+  }
 
   # Parse --bytes / -c
-  try {
-    assert_eq(@skip_main, false)
-    @_c_str = @o.get("bytes", "")
-    try {
-      assert_eq(string.is_empty(@_c_str), false)
+  if (!@skip_main) {
+    @_c_str_orig = @o.get("bytes", "")
+    if (!string.is_empty(@_c_str_orig)) {
       @_use_bytes = true
-      # '+N' means output starting at byte N
-      try {
-        assert_eq(string.starts_with(@_c_str, "+"), true)
+      @_c_str = @_c_str_orig
+      if (string.starts_with(@_c_str, "+")) {
         @_from_start_bytes = true
         @_c_str = string.replace(@_c_str, "+", "")
-      } fallback {}
+      }
       try {
-        @_n_bytes = number.parse(0, @_c_str)
+        @_n_bytes = math.parse_size(@_c_str)
         @_n_bytes = number.floor(@_n_bytes)
       } fallback {
-        sys.echo("tail: invalid number of bytes: '${@o.get("bytes", "")}'")
+        sys.eprint("tail: invalid number of bytes: '${@_c_str_orig}'")
         @exit_code = 1
         @skip_main = true
       }
-    } fallback {}
-  } fallback {}
+    }
+  }
 }
 
 # ── Procedure: print the last N lines of a list ───────────────────────────────
 @_tail_lines = procedure(@lines, @count, @from_start) {
   @_total = list.len(@lines)
-  @_start = @_total - @count
+  @_start = 0
   @_end   = @_total
 
-  # '+N' means start from line N (1-based)
-  try {
-    assert_eq(@from_start, true)
-    @_start = @count - 1
-    # Clamp to valid range
-    try {
-      assert_lt(@_start, 0)
-      @_start = 0
-    } fallback {}
-    @_end = @_total
-  } fallback {
-    # Normal tail: last N lines
-    try {
-      assert_lt(@_start, 0)
-      @_start = 0
-    } fallback {}
+  if (@from_start) {
+    @_start = math.max(0, @count - 1)
+  } else {
+    @_start = math.max(0, @_total - @count)
   }
 
   @_chunk = list.slice(@lines, @_start, @_end)
@@ -171,20 +148,10 @@ try {
   @_total = string.len(@content)
   @_start = 0
 
-  try {
-    assert_eq(@from_start, true)
-    # 1-based: start from byte @count
-    @_start = @count - 1
-    try {
-      assert_lt(@_start, 0)
-      @_start = 0
-    } fallback {}
-  } fallback {
-    @_start = @_total - @count
-    try {
-      assert_lt(@_start, 0)
-      @_start = 0
-    } fallback {}
+  if (@from_start) {
+    @_start = math.max(0, @count - 1)
+  } else {
+    @_start = math.max(0, @_total - @count)
   }
 
   @_slice = string.byte_slice(@content, @_start, @_total)
@@ -194,130 +161,84 @@ try {
 # ── Helper: read content from a file path or stdin ────────────────────────────
 @_read_content = procedure(@path, @content_out, @ok_out) {
   @ok_out = false
-  @_is_stdin = false
-  try {
-    assert_eq(@path, "-")
-    @_is_stdin = true
-  } fallback {}
-
-  try {
-    assert_eq(@_is_stdin, true)
+  if (@path == "-") {
     try {
       @content_out = fs.read("/dev/stdin")
       @ok_out = true
     } fallback {
-      # Line-by-line fallback
-      @content_out = ""
-      loop {
-        @_ln = sys.read_line("")
-        try {
-          assert_eq(string.len(@_ln), 0)
-          terminate
-        } fallback {}
-        @content_out = string.concat(@content_out, "${@_ln}\n")
-      }
+      @content_out = sys.read_all()
       @ok_out = true
     }
-  } fallback {
-    try {
-      assert_eq(fs.exists(@path), true)
-      @content_out = fs.read(@path)
-      @ok_out = true
-    } fallback {}
+  } else {
+    if (fs.exists(@path)) {
+      try {
+        @content_out = fs.read(@path)
+        @ok_out = true
+      } fallback {}
+    }
   }
 }
 
 # ── Determine header printing mode ────────────────────────────────────────────
 @_print_header = false
 @_file_count   = list.len(@files)
+if (@_file_count == 0) { @_file_count = 1 }
 
-try {
-  assert_eq(@skip_main, true)
-} fallback {
-  try {
-    assert_eq(@_file_count, 0)
-    @_file_count = 1
-  } fallback {}
-
-  try {
-    assert_gt(@_file_count, 1)
+if (!@skip_main) {
+  if (@_file_count > 1 || @_verbose) {
     @_print_header = true
-  } fallback {}
-
-  try {
-    assert_eq(@_verbose, true)
-    @_print_header = true
-  } fallback {}
-
-  try {
-    assert_eq(@_quiet, true)
+  }
+  if (@_quiet) {
     @_print_header = false
-  } fallback {}
+  }
 }
 
 # ── Main: process each file ───────────────────────────────────────────────────
 @_first_file = true
 
-try {
-  assert_eq(@skip_main, true)
-} fallback {
-  try {
-    # No files: read stdin
-    assert_eq(list.len(@files), 0)
+if (!@skip_main) {
+  if (list.is_empty(@files)) {
     @_content = ""
     @_ok      = false
     @_read_content.call("-", @_content, @_ok)
-    try {
-      assert_eq(@_ok, true)
-      try {
-        assert_eq(@_print_header, true)
+    if (@_ok) {
+      if (@_print_header) {
         sys.echo("==> standard input <==")
-      } fallback {}
-      try {
-        assert_eq(@_use_bytes, true)
+      }
+      if (@_use_bytes) {
         @_tail_bytes.call(@_content, @_n_bytes, @_from_start_bytes)
-      } fallback {
+      } else {
         @_lines = string.split(@_content, "\n")
-        try {
-          assert_eq(string.is_empty(list.last(@_lines)), true)
+        if (list.len(@_lines) > 0 && string.is_empty(list.last(@_lines))) {
           @_lines = list.slice(@_lines, 0, list.len(@_lines) - 1)
-        } fallback {}
+        }
         @_tail_lines.call(@_lines, @_n_lines, @_from_start_lines)
       }
-    } fallback {
-      sys.echo("tail: error reading standard input")
+    } else {
+      sys.eprint("tail: error reading standard input")
       @exit_code = 1
     }
-  } fallback {
-    # Process each named file
+  } else {
     browse(@files, @_fi, @_fname) {
       @_content = ""
       @_ok      = false
       @_read_content.call(@_fname, @_content, @_ok)
-      try {
-        assert_eq(@_ok, true)
-        try {
-          assert_eq(@_print_header, true)
-          # Blank line before headers (except the very first)
-          try {
-            assert_eq(@_first_file, false)
-            sys.echo("")
-          } fallback {}
+      if (@_ok) {
+        if (@_print_header) {
+          if (!@_first_file) { sys.echo("") }
           sys.echo("==> ${@_fname} <==")
           @_first_file = false
-        } fallback {}
-        try {
-          assert_eq(@_use_bytes, true)
+        }
+        if (@_use_bytes) {
           @_tail_bytes.call(@_content, @_n_bytes, @_from_start_bytes)
-        } fallback {
+        } else {
           @_lines = string.split(@_content, "\n")
-          try {
-            assert_eq(string.is_empty(list.last(@_lines)), true)
+          if (list.len(@_lines) > 0 && string.is_empty(list.last(@_lines))) {
             @_lines = list.slice(@_lines, 0, list.len(@_lines) - 1)
-          } fallback {}
+          }
           @_tail_lines.call(@_lines, @_n_lines, @_from_start_lines)
         }
-      } fallback {
+      } else {
         sys.eprint("tail: cannot open '${@_fname}' for reading: No such file or directory")
         @exit_code = 1
       }

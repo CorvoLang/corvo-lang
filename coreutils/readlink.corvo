@@ -1,0 +1,51 @@
+# Print value of a symbolic link or canonical file name.
+@parsed = args.parse(os.argv(), { "aliases": { "f": "canonicalize" } })
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: readlink [OPTION]... FILE...")
+  sys.echo("Print value of a symbolic link or canonical file name.")
+  sys.echo("")
+  sys.echo("  -f, --canonicalize            canonicalize by following every symlink in")
+  sys.echo("                                every component of the given name recursively")
+  sys.echo("  -n, --no-newline              do not output the trailing newline")
+  sys.echo("  -q, --quiet")
+  sys.echo("  -s, --silent                  suppress most error messages (default)")
+  sys.echo("  -v, --verbose                 report error messages")
+  sys.echo("      --help                    display this help and exit")
+  sys.echo("      --version                 output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("readlink (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.is_empty(@pos)) {
+    sys.eprint("readlink: missing operand")
+    sys.eprint("Try 'readlink --help' for more information.")
+    sys.exit(1)
+  }
+  @no_newline = @o.get("no-newline", @o.get("n", false))
+  @canonicalize = @o.get("canonicalize", @o.get("f", false))
+
+  browse(@pos, @idx, @path) {
+    try {
+      @res = ""
+      if (@canonicalize) {
+        @res = fs.realpath(@path)
+      } else {
+        @res = fs.read_link(@path)
+      }
+      if (@no_newline) {
+        sys.print(@res)
+      } else {
+        sys.echo(@res)
+      }
+    } fallback {}
+  }
+}

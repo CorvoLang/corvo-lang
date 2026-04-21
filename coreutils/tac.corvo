@@ -1,0 +1,45 @@
+# coreutils/tac.corvo — Reverse cat
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: tac [OPTION]... [FILE]...")
+  sys.echo("Write each FILE to standard output, last line first.")
+  sys.echo("")
+  sys.echo("      --help     display this help and exit")
+  sys.echo("      --version  output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("tac (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.len(@pos) == 0) {
+    @pos = ["-"]
+  }
+
+  browse(@pos, @i, @file) {
+    @content = ""
+    if (@file == "-") {
+      @content = sys.read_all()
+    } else {
+      @content = fs.read(@file)
+    }
+    
+    @lines = string.split(@content, "\n")
+    if (list.len(@lines) > 0) {
+      if (string.is_empty(list.last(@lines))) {
+        @lines = list.slice(@lines, 0, list.len(@lines) - 1)
+      }
+    }
+    
+    browse(list.reverse(@lines), @ii, @line) {
+      sys.echo(@line)
+    }
+  }
+}

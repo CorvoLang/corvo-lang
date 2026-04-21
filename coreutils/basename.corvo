@@ -1,0 +1,65 @@
+# Strip directory and suffix from filenames.
+# Usage: basename NAME [SUFFIX]
+@spec = {
+  "aliases": { "a": "multiple", "s": "suffix", "z": "zero" }
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: basename NAME [SUFFIX]")
+  sys.echo("  or:  basename OPTION... NAME...")
+  sys.echo("Print NAME with any leading directory components removed.")
+  sys.echo("If specified, also remove a trailing SUFFIX.")
+  sys.echo("")
+  sys.echo("  -a, --multiple       support multiple arguments and treat each as a NAME")
+  sys.echo("  -s, --suffix=SUFFIX  remove a trailing SUFFIX; implies -a")
+  sys.echo("  -z, --zero           end each output line with NUL, not newline")
+  sys.echo("      --help           display this help and exit")
+  sys.echo("      --version        output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("basename (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  try {
+    @name = list.get(@pos, 0)
+    @suffix = list.get(@pos, 1, "")
+    
+    # Remove trailing slashes
+    @name = string.trim_end(@name, "/")
+    
+    @last_slash = string.last_index_of(@name, "/")
+    @base = @name
+    @neg1 = -1
+    try {
+      assert_neq(@last_slash, @neg1)
+      @base = string.substring(@name, @last_slash + 1)
+    } fallback {
+      # Handle cases like "///" -> empty
+      if (string.is_empty(@base)) {
+          # Keep as empty
+      }
+    }
+    
+    try {
+      assert_neq(@suffix, "")
+      try {
+        assert_eq(string.ends_with(@base, @suffix), true)
+        @base = string.substring(@base, 0, string.len(@base) - string.len(@suffix))
+      } fallback {}
+    } fallback {}
+    
+    sys.echo(@base)
+  } fallback {
+    sys.eprint("basename: missing operand")
+    sys.eprint("Try 'basename --help' for more information.")
+    sys.exit(1)
+  }
+}

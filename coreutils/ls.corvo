@@ -3,9 +3,6 @@
 # For deterministic diffs vs GNU ls: `LC_ALL=C TZ=UTC` and `--time-style=long-iso`.
 
 # ── Argument-parser spec ─────────────────────────────────────────────────────
-# Maps every short flag letter and every long-option name to a canonical key,
-# declares which options take an argument, and marks options that accumulate
-# (i.e. may be supplied multiple times and are collected into a list).
 @_ls_spec = {
   "aliases": {
     "a": "all",             "A": "almost_all",     "b": "escape",
@@ -38,7 +35,6 @@
   "long_optional_values": ["color", "hyperlink"],
   "accumulate": ["ignore", "hide"]
 }
-# Parse argv; split result into options map and positional list.
 @parsed = args.parse(os.argv(), @_ls_spec)
 @o = @parsed["options"]
 @paths = @parsed["positional"]
@@ -46,117 +42,92 @@
 
 # ── Procedures ───────────────────────────────────────────────────────────────
 
-# Default the path list to ["."] when the user supplies no arguments.
 @default_to_dot_if_empty = procedure(@paths_in, @paths_out) {
   @paths_out = @paths_in
-  try {
-    assert_eq(list.len(@paths_out), 0)
+  if (list.is_empty(@paths_out)) {
     @paths_out = ["."]
-  } fallback {}
+  }
 }
 
-# Return the classify indicator suffix for an entry:
-#   "/"  directories,  "@"  symlinks,  "*"  executables,  ""  everything else.
-# Only appends a suffix when @classify_flag is true (-F / --classify).
 @get_entry_suffix = procedure(@entry, @classify_flag, @suf_out) {
   @suf_out = ""
-  try {
-    assert_eq(@classify_flag, true)
-    try {
-      assert_eq(@entry["is_dir"], true)
+  if (@classify_flag) {
+    if (@entry.get("is_dir", false)) {
       @suf_out = "/"
-    } fallback {
-      try {
-        assert_eq(@entry["is_symlink"], true)
+    } else {
+      if (@entry.get("is_symlink", false)) {
         @suf_out = "@"
-      } fallback {
-        try {
-          assert_eq(@entry["is_executable"], true)
+      } else {
+        if (@entry.get("is_executable", false)) {
           @suf_out = "*"
-        } fallback {}
-      }
-    }
-  } fallback {}
-}
-
-# Build the size column string for one entry.
-# Block/char devices show "major, minor"; regular files show the byte count
-# (or a human-readable approximation when -h / --human-readable is set).
-# Directories always use binary units (never SI) for human-readable output.
-@get_size_string = procedure(@entry, @human_flag, @si_flag, @sz_out) {
-  @_ft = @entry.get("file_type_char", "-")
-  @_is_dir = @entry.get("is_dir", false)
-  try {
-    assert_eq(@_ft, "b")
-    @_maj = number.to_string(@entry.get("major", 0))
-    @_min = number.to_string(@entry.get("minor", 0))
-    @sz_out = "${@_maj}, ${@_min}"
-  } fallback {
-    try {
-      assert_eq(@_ft, "c")
-      @_maj = number.to_string(@entry.get("major", 0))
-      @_min = number.to_string(@entry.get("minor", 0))
-      @sz_out = "${@_maj}, ${@_min}"
-    } fallback {
-      @sz_out = number.to_string(@entry.get("size", 0))
-      try {
-        assert_eq(@human_flag, true)
-        try {
-          assert_eq(@_is_dir, true)
-          @sz_out = math.human_bytes(@entry.get("size", 0), false)
-        } fallback {
-          @sz_out = math.human_bytes(@entry.get("size", 0), @si_flag)
         }
-      } fallback {}
+      }
     }
   }
 }
 
-# Select the correct timestamp field (mtime by default; atime with -u; ctime
-# with -c) and format it according to the resolved time-style strftime string.
+@get_size_string = procedure(@entry, @human_flag, @si_flag, @sz_out) {
+  @_ft = @entry.get("file_type_char", "-")
+  @_is_dir = @entry.get("is_dir", false)
+  
+  match (@_ft) {
+    "b" => {
+      @_maj = number.to_string(@entry.get("major", 0))
+      @_min = number.to_string(@entry.get("minor", 0))
+      @sz_out = "${@_maj}, ${@_min}"
+    },
+    "c" => {
+      @_maj = number.to_string(@entry.get("major", 0))
+      @_min = number.to_string(@entry.get("minor", 0))
+      @sz_out = "${@_maj}, ${@_min}"
+    },
+    _ => {
+      if (@human_flag) {
+        if (@_is_dir) {
+          @sz_out = math.human_bytes(@entry.get("size", 0), false)
+        } else {
+          @sz_out = math.human_bytes(@entry.get("size", 0), @si_flag)
+        }
+      } else {
+        @sz_out = number.to_string(@entry.get("size", 0))
+      }
+    }
+  }
+}
+
 @get_time_string = procedure(@entry, @time_access_flag, @time_change_flag, @fmt_str, @tstr_out) {
   @_tsec = @entry.get("mtime_sec", 0)
   @_tnsec = @entry.get("mtime_nsec", 0)
-  try {
-    assert_eq(@time_access_flag, true)
+  if (@time_access_flag) {
     @_tsec = @entry.get("atime_sec", 0)
     @_tnsec = @entry.get("atime_nsec", 0)
-  } fallback {}
-  try {
-    assert_eq(@time_change_flag, true)
-    @_tsec = @entry.get("ctime_sec", 0)
-    @_tnsec = @entry.get("ctime_nsec", 0)
-  } fallback {}
+  } else {
+    if (@time_change_flag) {
+      @_tsec = @entry.get("ctime_sec", 0)
+      @_tnsec = @entry.get("ctime_nsec", 0)
+    }
+  }
   @tstr_out = time.format_local(@_tsec, @_tnsec, @fmt_str)
 }
 
-# Sum the raw 512-byte block counts for all entries in @sorted_list, convert
-# to 1 KiB blocks (divide by 2, round up), and print the "total N" line that
-# GNU ls emits before a directory listing.
 @print_total_blocks = procedure(@sorted_list, @human_flag) {
   @_tb = 0
   browse(@sorted_list, @_ptb, @_pee) {
     @_tb += @_pee.get("blocks", 0)
   }
   @_tk = number.ceil(@_tb / 2)
-  try {
-    assert_eq(@human_flag, true)
+  if (@human_flag) {
     sys.echo("total ${math.human_bytes(@_tk * 1024, false)}")
-  } fallback {
+  } else {
     sys.echo("total ${@_tk}")
   }
 }
 
-# Enrich one entry with its file extension and the pre-fetched sort-key value.
-# Extracted from the entry-enrichment pass so async_browse can parallelise it
-# when a sort will follow (making the intermediate list order irrelevant).
 @_enrich_entry = procedure(@ee, @sk, @acc) {
   @_nm = @ee["name"]
   @_parts = string.split(@_nm, ".")
   @_ext = ""
-  try {
-    assert_eq(list.len(@_parts), 1)
-  } fallback {
+  if (list.len(@_parts) > 1) {
     @_ext = list.get(@_parts, list.len(@_parts) - 1)
   }
   @_ee2 = @ee
@@ -166,52 +137,32 @@
 }
 
 # ── Initialisation ───────────────────────────────────────────────────────────
-
-# Default to "." when no paths were given.
 @default_to_dot_if_empty.call(@paths, @paths)
 
-# ── Skip-main flag: set to true to bypass listing logic ──────────────────────
-# Used so that --help / --version / --dired can signal early termination
-# without calling sys.exit() inside a try block (which gets swallowed by the
-# empty fallback).
 @_ls_skip = false
 @_ls_exit_code = 0
 
-# Handle --help / --version / --dired before touching the filesystem.
-try {
-  assert_eq(@o.get("help", false), true)
+if (@o.get("help", false)) {
   sys.echo("Usage: ls [OPTION]... [FILE]...")
   @_ls_skip = true
-} fallback {}
+}
 
-try {
-  assert_eq(@o.get("version", false), true)
+if (!@_ls_skip && @o.get("version", false)) {
   sys.echo("ls (Corvo coreutils) 0.1.0")
   @_ls_skip = true
-} fallback {}
+}
 
-try {
-  assert_eq(@o.get("dired", false), true)
+if (!@_ls_skip && @o.get("dired", false)) {
   sys.echo("ls.corvo: --dired is not implemented")
   @_ls_exit_code = 2
   @_ls_skip = true
-} fallback {}
+}
 
 # ── Flag extraction ───────────────────────────────────────────────────────────
-# Flatten the most-used option flags into simple boolean variables so the rest
-# of the script can reference them without repeated map lookups.
 @follow = false
-try {
-  assert_eq(@_ls_skip, true)
-} fallback {
-  try {
-    assert_eq(@o.get("dereference_command_line", false), true)
+if (!@_ls_skip) {
+  if (@o.get("dereference_command_line", false) || @o.get("dereference", false)) {
     @follow = true
-  } fallback {
-    try {
-      assert_eq(@o.get("dereference", false), true)
-      @follow = true
-    } fallback {}
   }
 }
 
@@ -230,65 +181,44 @@ try {
 @dir_only   = @o.get("directory",      false)
 @stream     = @o.get("stream",         false)
 
-# ── Output format: resolve -C / --format=vertical vs -1 ─────────────────────
-# -C (or --format=vertical) selects multi-column output; -1 overrides it back
-# to one-name-per-line mode.
 @fmt_C = @o.get("format_vertical", false)
-try {
-  assert_eq(@o.get("format", ""), "vertical")
+if (@o.get("format", "") == "vertical") {
   @fmt_C = true
-} fallback {}
-try {
-  assert_eq(@o.get("one_per_line", false), true)
+}
+if (@o.get("one_per_line", false)) {
   @fmt_C = false
-} fallback {}
+}
 
-# ── Terminal width ────────────────────────────────────────────────────────────
-# Default to 80 columns; override with -w / --width if the user supplied a value.
 @term_w = 80
 @ww = @o.get("width", "")
-try {
-  assert_eq(string.is_empty(string.trim(@ww)), true)
-} fallback {
+if (!string.is_empty(string.trim(@ww))) {
   @term_w = number.parse(0, @ww)
 }
 
 @hides   = @o.get("hide",   list.new())
 @ignores = @o.get("ignore", list.new())
 
-# ── Sort key ──────────────────────────────────────────────────────────────────
-# -t sets time-sort; the specific time field (-c ctime, -u atime, else mtime).
-# -S sets size-sort; -X sets extension-sort.
-# --sort= overrides all short-flag sorts.  Default is alphabetical ("name").
 @sort_key = "name"
-try {
-  assert_eq(@o["time_sort_modified"], true)
-  try {
-    assert_eq(@o["time_change"], true)
+if (@o.get("time_sort_modified", false)) {
+  if (@o.get("time_change", false)) {
     @sort_key = "ctime_sec"
-  } fallback {
-    try {
-      assert_eq(@o["time_access"], true)
+  } else {
+    if (@o.get("time_access", false)) {
       @sort_key = "atime_sec"
-    } fallback {
+    } else {
       @sort_key = "mtime_sec"
     }
   }
-} fallback {}
+}
 
-# -S: sort by file size (largest first by default)
-try {
-  assert_eq(@o.get("sort_size", false), true)
+if (@o.get("sort_size", false)) {
   @sort_key = "size"
-} fallback {}
+}
 
-# -X: sort alphabetically by extension
-try {
-  assert_eq(@o.get("sort_extension", false), true)
+if (@o.get("sort_extension", false)) {
   @sort_key = "extension"
-} fallback {}
+}
 
-# --sort= flag overrides all short-flag sort selections above.
 @sort_key = match(@o.get("sort", "")) {
   "size" => "size",
   "time" => "mtime_sec",
@@ -299,28 +229,15 @@ try {
 }
 
 @unsorted = @o.get("unsorted", false)
-
-# Whether a sort will be applied after enrichment.  When true the order of
-# intermediate lists does not matter and async_browse can be used safely.
-# When false (-f / -U / --sort=none) the filesystem order must be preserved.
 @_sorting_active = true
-try {
-  assert_eq(@unsorted, true)
+if (@unsorted || @sort_key == "none") {
   @_sorting_active = false
-} fallback {}
-try {
-  assert_eq(@sort_key, "none")
-  @_sorting_active = false
-} fallback {}
+}
 
-# ── Time-style / strftime format ──────────────────────────────────────────────
-# Resolve --time-style (falling back to the TIME_STYLE env var, then "locale").
-# Map the chosen style name to a strftime format string used later.
 @time_style = @o.get("time_style", "")
-try {
-  assert_eq(string.is_empty(string.trim(@time_style)), true)
+if (string.is_empty(string.trim(@time_style))) {
   @time_style = os.get_env("TIME_STYLE", "locale")
-} fallback {}
+}
 
 @tfmt = match(@time_style) {
   "long-iso" => "%Y-%m-%d %H:%M",
@@ -329,39 +246,19 @@ try {
   _ => "%b %e %H:%M"
 }
 
-# ── Multi-argument header flag ────────────────────────────────────────────────
-# When more than one path is listed, GNU ls prints "dirname:" before each
-# directory block.  Track that requirement here.
 @need_hdr = false
-try {
-  assert_eq(@_ls_skip, false)
-  try {
-    assert_eq(list.len(@paths), 1)
-  } fallback {
-    @need_hdr = true
-  }
-} fallback {}
+if (!@_ls_skip && list.len(@paths) > 1) {
+  @need_hdr = true
+}
 
-# ── Main processing loop ──────────────────────────────────────────────────────
-# @work is a FIFO queue of paths to process.  In recursive mode, subdirectory
-# paths are prepended so they are visited depth-first in the correct order.
 @work = @paths
 @rec_first = true
 
 loop {
-  # Exit immediately when --help / --version / --dired has been handled.
-  try {
-    assert_eq(@_ls_skip, true)
+  if (@_ls_skip || list.is_empty(@work)) {
     terminate
-  } fallback {}
+  }
 
-  # Terminate when the work queue is empty.
-  try {
-    assert_eq(list.len(@work), 0)
-    terminate
-  } fallback {}
-
-  # Dequeue the next path and read its filesystem metadata.
   @pth = list.get(@work, 0)
   @work = list.slice(@work, 1, list.len(@work))
 
@@ -369,45 +266,30 @@ loop {
   @is_dir = @meta["is_dir"]
   @from_dir_read = false
 
-  # Build the raw entry list:
-  #   - directory + -d → treat the directory itself as the sole entry
-  #   - directory (normal) → read its children via fs.read_dir_meta
-  #   - non-directory → the path metadata is the single entry
   @entries = []
-  try {
-    assert_eq(@is_dir, true)
-    try {
-      assert_eq(@dir_only, true)
-      # Use @pth as the display name so that absolute paths like /fixtures
-      # are shown as-is rather than just the basename.
+  if (@is_dir) {
+    if (@dir_only) {
       @_dm = @meta
       @_dm["name"] = @pth
       @entries = list.push(@entries, @_dm)
-    } fallback {
+    } else {
       @entries = fs.read_dir_meta(@pth, @follow)
       @from_dir_read = true
     }
-  } fallback {
-    # Non-directory: display the path as given (not just the basename).
+  } else {
     @_fm = @meta
     @_fm["name"] = @pth
     @entries = list.push(@entries, @_fm)
   }
 
-  # -a / --all: prepend synthetic "." and ".." entries to the list.
-  # "." is the directory itself; ".." is its parent (omitted for the root).
-  try {
-    assert_eq(@all, true)
-    assert_eq(@from_dir_read, true)
+  if (@all && @from_dir_read) {
     @md1 = fs.read_meta(@pth, @follow)
     @md1["name"] = "."
     @md1["path"] = @pth
     @entries2 = list.new()
     @entries2 = list.push(@entries2, @md1)
     @parp = fs.path_parent(@pth)
-    try {
-      assert_eq(string.is_empty(@parp), true)
-    } fallback {
+    if (!string.is_empty(@parp)) {
       @md2 = fs.read_meta(@parp, @follow)
       @md2["name"] = ".."
       @md2["path"] = @parp
@@ -417,155 +299,85 @@ loop {
       @entries2 = list.push(@entries2, @e)
     }
     @entries = @entries2
-  } fallback {}
+  }
 
-  # ── Visibility filter ─────────────────────────────────────────────────────
-  # Apply the dot-file / backup hiding rules:
-  #   -d          → pass through unconditionally (already the sole entry)
-  #   -a / --all  → show everything including "." and ".."
-  #   -A          → show dotfiles but hide "." and ".."
-  #   (default)   → hide any name that starts with "."
-  #   -B          → additionally hide names ending with "~" (backup files)
   @filtered = []
   browse(@entries, @_ei, @ee) {
     @nm = @ee["name"]
-    try {
-      assert_eq(@dir_only, true)
+    if (@dir_only) {
       @filtered = list.push(@filtered, ee)
-    } fallback {
+    } else {
       @drop = false
-      try {
-        assert_eq(@all, true)
-        @drop = false
-      } fallback {
-        try {
-          assert_eq(@almost, true)
-          try {
-            assert_eq(@nm, ".")
+      if (!@all) {
+        if (@almost) {
+          if (@nm == "." || @nm == "..") {
             @drop = true
-          } fallback {}
-          try {
-            assert_eq(@nm, "..")
+          }
+        } else {
+          if (string.starts_with(@nm, ".")) {
             @drop = true
-          } fallback {}
-        } fallback {
-          try {
-            assert_eq(string.starts_with(@nm, "."), true)
-            @drop = true
-          } fallback {
-            @drop = false
           }
         }
       }
-      try {
-        assert_eq(@drop, true)
-      } fallback {
-        try {
-          assert_eq(@o["ignore_backups"], true)
-          assert_eq(string.ends_with(@nm, "~"), true)
-        } fallback {
+      if (!@drop) {
+        if (@o.get("ignore_backups", false) && string.ends_with(@nm, "~")) {
+           # skip
+        } else {
           @filtered = list.push(@filtered, ee)
         }
       }
     }
   }
 
-  # Apply --hide and --ignore glob patterns as a second filter pass.
-  # --hide patterns are applied first; entries that survive are then checked
-  # against --ignore patterns.  Both use fnmatch (shell-style globbing).
   @filtered2 = []
   browse(@filtered, @_f2, @ee) {
     @nm2 = @ee["name"]
     @skip_h = false
     browse(@hides, @_hp, @pat) {
-      try {
-        assert_eq(string.fnmatch(@nm2, @pat), true)
+      if (string.fnmatch(@nm2, @pat)) {
         @skip_h = true
-      } fallback {}
+      }
     }
-    try {
-      assert_eq(@skip_h, true)
-    } fallback {
+    if (!@skip_h) {
       @skip_i = false
       browse(@ignores, @_ip, @ipat) {
-        try {
-          assert_eq(string.fnmatch(@nm2, @ipat), true)
+        if (string.fnmatch(@nm2, @ipat)) {
           @skip_i = true
-        } fallback {}
+        }
       }
-      try {
-        assert_eq(@skip_i, true)
-      } fallback {
+      if (!@skip_i) {
         @filtered2 = list.push(@filtered2, ee)
       }
     }
   }
   @filtered = @filtered2
 
-  # ── Entry enrichment ──────────────────────────────────────────────────────
-  # Attach two synthetic fields to every entry before sorting:
-  #   "extension" — the last dot-separated component of the name (for -X sort)
-  #   "_skey"     — a pre-fetched copy of the active sort field value
-  # Use async_browse when a sort follows so thread-completion order is fine;
-  # fall back to a sequential browse when filesystem order must be preserved
-  # (i.e. -f / -U / --sort=none).
   @prepared = list.new()
-  try {
-    assert_eq(@_sorting_active, true)
+  if (@_sorting_active) {
     async_browse(@filtered, @_enrich_entry, @ee, shared @sort_key, shared @prepared)
-  } fallback {
+  } else {
     browse(@filtered, @_pj, @ee) {
       @_enrich_entry.call(@ee, @sort_key, @prepared)
     }
   }
 
-  # ── Sort direction ────────────────────────────────────────────────────────
-  # GNU ls sorts size and time fields largest/newest first by default (i.e.
-  # descending).  For those keys, invert the effective direction so that -r
-  # (--reverse) yields the opposite of the natural default.
   @sort_desc_default = false
-  try {
-    assert_eq(@sort_key, "size")
+  if (@sort_key == "size" || @sort_key == "mtime_sec" || @sort_key == "atime_sec" || @sort_key == "ctime_sec") {
     @sort_desc_default = true
-  } fallback {}
-  try {
-    assert_eq(@sort_key, "mtime_sec")
-    @sort_desc_default = true
-  } fallback {}
-  try {
-    assert_eq(@sort_key, "atime_sec")
-    @sort_desc_default = true
-  } fallback {}
-  try {
-    assert_eq(@sort_key, "ctime_sec")
-    @sort_desc_default = true
-  } fallback {}
+  }
 
   @eff_reverse = @reverse
-  try {
-    assert_eq(@sort_desc_default, true)
-    try {
-      assert_eq(@reverse, true)
+  if (@sort_desc_default) {
+    if (@reverse) {
       @eff_reverse = false
-    } fallback {
+    } else {
       @eff_reverse = true
     }
-  } fallback {}
+  }
 
-  # ── Sorting ───────────────────────────────────────────────────────────────
-  # -f / -U skip sorting entirely.  --sort=none is equivalent.
-  # Version sort (-v) uses a dedicated list.sort_version on just the names and
-  # then re-maps back to entries.  All other keys use list.sort_maps_by_key
-  # with an optional tie-breaker (name, or nanoseconds for time keys).
   @sorted = @prepared
-  try {
-    assert_eq(@unsorted, true)
-  } fallback {
-    try {
-      assert_eq(@sort_key, "none")
-    } fallback {
-      try {
-        assert_eq(@sort_key, "version")
+  if (!@unsorted && @sort_key != "none") {
+      if (@sort_key == "version") {
         @names = []
         browse(@prepared, @_a, @ee) {
           @names = list.push(@names, @ee["name"])
@@ -574,132 +386,67 @@ loop {
         @sorted = []
         browse(@ord, @_b, @nn) {
           browse(@prepared, @_c, @ee) {
-            try {
-              assert_eq(@ee["name"], @nn)
+            if (@ee["name"] == @nn) {
               @sorted = list.push(@sorted, @ee)
-            } fallback {}
-          }
-        }
-      } fallback {
-        try {
-          assert_eq(@sort_key, "extension")
-          @sorted = list.sort_maps_by_key(@prepared, "extension", @eff_reverse, "name")
-        } fallback {
-          try {
-            assert_eq(@sort_key, "name")
-            @sorted = list.sort_maps_by_key(@prepared, "name", @eff_reverse)
-          } fallback {
-            try {
-              assert_eq(@sort_key, "size")
-              @sorted = list.sort_maps_by_key(@prepared, "size", @eff_reverse, "name")
-            } fallback {
-              try {
-                assert_eq(@sort_key, "mtime_sec")
-                @sorted = list.sort_maps_by_key(@prepared, "mtime_sec", @eff_reverse, "name", "mtime_nsec")
-              } fallback {
-                try {
-                  assert_eq(@sort_key, "atime_sec")
-                  @sorted = list.sort_maps_by_key(@prepared, "atime_sec", @eff_reverse, "name", "atime_nsec")
-                } fallback {
-                  try {
-                    assert_eq(@sort_key, "ctime_sec")
-                    @sorted = list.sort_maps_by_key(@prepared, "ctime_sec", @eff_reverse, "name", "ctime_nsec")
-                  } fallback {
-                    @sorted = list.sort_maps_by_key(@prepared, @sort_key, @eff_reverse, "name")
-                  }
-                }
-              }
             }
           }
         }
+      } else {
+        match (@sort_key) {
+          "extension" => { @sorted = list.sort_maps_by_key(@prepared, "extension", @eff_reverse, "name") },
+          "name" => { @sorted = list.sort_maps_by_key(@prepared, "name", @eff_reverse) },
+          "size" => { @sorted = list.sort_maps_by_key(@prepared, "size", @eff_reverse, "name") },
+          "mtime_sec" => { @sorted = list.sort_maps_by_key(@prepared, "mtime_sec", @eff_reverse, "name", "mtime_nsec") },
+          "atime_sec" => { @sorted = list.sort_maps_by_key(@prepared, "atime_sec", @eff_reverse, "name", "atime_nsec") },
+          "ctime_sec" => { @sorted = list.sort_maps_by_key(@prepared, "ctime_sec", @eff_reverse, "name", "ctime_nsec") },
+          _ => { @sorted = list.sort_maps_by_key(@prepared, @sort_key, @eff_reverse, "name") }
+        }
       }
-    }
   }
 
-  # ── Recursive directory header ────────────────────────────────────────────
-  # In -R mode, print a blank separator line before each directory (except the
-  # very first), then emit the relative path followed by a colon.
-  try {
-    assert_eq(@recursive, true)
-    assert_eq(@from_dir_read, true)
-    try {
-      assert_eq(@rec_first, true)
+  if (@recursive && @from_dir_read) {
+    if (@rec_first) {
       @rec_first = false
-    } fallback {
+    } else {
       sys.echo("")
     }
     @rel = fs.path_relative(@cwd, @pth)
     @hpre = @rel
-    try {
-      assert_eq(@hpre, ".")
-    } fallback {
-      try {
-        assert_eq(string.starts_with(@hpre, "./"), true)
-      } fallback {
+    if (@hpre == ".") {
+       # keep as is or handled below
+    } else {
+      if (!string.starts_with(@hpre, "./")) {
         @hpre = "./${@hpre}"
       }
     }
     sys.echo("${@hpre}:")
-  } fallback {}
+  }
 
-  # ── Multi-argument directory header ──────────────────────────────────────
-  # When multiple path arguments were given and the current entry is a
-  # directory (not -d), print "path:" before its listing (non-recursive only;
-  # the recursive header above already handles that case).
-  try {
-    assert_eq(@need_hdr, true)
-    assert_eq(@is_dir, true)
-    assert_eq(@dir_only, false)
-    try {
-      assert_eq(@recursive, true)
-    } fallback {
-      sys.echo("${@pth}:")
-    }
-  } fallback {}
+  if (@need_hdr && @is_dir && !@dir_only && !@recursive) {
+    sys.echo("${@pth}:")
+  }
 
-  # ── "total N" block-count line ────────────────────────────────────────────
-  # Printed before a directory's listing in -l mode, and also in short -s mode.
-  try {
-    assert_eq(@long, true)
-    assert_eq(@from_dir_read, true)
+  if (@from_dir_read && (@long || @blocks)) {
     @print_total_blocks.call(@sorted, @human)
-  } fallback {}
+  }
 
-  try {
-    assert_eq(@blocks, true)
-    assert_eq(@long, false)
-    assert_eq(@from_dir_read, true)
-    @print_total_blocks.call(@sorted, @human)
-  } fallback {}
-
-  # ── Column-width pass (short formats: inode and blocks columns) ───────────
-  # In non-long mode, compute the widths of the optional inode and block-count
-  # prefix columns so they can be right-aligned in the output.
   @max_ino_s = 1
-  try {
-    assert_eq(@long, false)
-    assert_eq(@inode_col, true)
+  if (!@long && @inode_col) {
     browse(@sorted, @_ix, @ee) {
       @ixs = number.to_string(@ee.get("inode", 0))
       @max_ino_s = math.max(@max_ino_s, string.len(@ixs))
     }
-  } fallback {}
+  }
 
   @max_blk_s = 1
-  try {
-    assert_eq(@long, false)
-    assert_eq(@blocks, true)
+  if (!@long && @blocks) {
     browse(@sorted, @_bx, @ee) {
       @bw = @ee.get("blocks", 0)
       @bsw = number.to_string(number.floor(@bw / 2))
       @max_blk_s = math.max(@max_blk_s, string.len(@bsw))
     }
-  } fallback {}
+  }
 
-  # ── Column-width pass (long format: all columns) ──────────────────────────
-  # Walk every entry in long (-l) mode and record the maximum rendered width of
-  # each column: inode, blocks, nlink, user, group, size, and timestamp.
-  # These maximums are used to right- or left-pad the columns for alignment.
   @max_ino = 0
   @max_blk = 0
   @max_nl = 0
@@ -709,42 +456,30 @@ loop {
   @max_tm = 0
   @szm = ""
   @tstr_m = ""
-  try {
-    assert_eq(@long, true)
+  if (@long) {
     browse(@sorted, @_mw, @ee) {
-      try {
-        assert_eq(@inode_col, true)
+      if (@inode_col) {
         @iw = number.to_string(@ee.get("inode", 0))
         @max_ino = math.max(@max_ino, string.len(@iw))
-      } fallback {}
-
-      try {
-        assert_eq(@blocks, true)
+      }
+      if (@blocks) {
         @bw = @ee.get("blocks", 0)
         @bsw = number.to_string(number.floor(@bw / 2))
         @max_blk = math.max(@max_blk, string.len(@bsw))
-      } fallback {}
-
+      }
       @nlm = number.to_string(@ee.get("nlink", 1))
       @max_nl = math.max(@max_nl, string.len(@nlm))
 
       @uum = @ee.get("user", "")
       @ggm = @ee.get("group", "")
-      try {
-        assert_eq(@numeric_ids, true)
+      if (@numeric_ids) {
         @uum = number.to_string(@ee.get("uid", 0))
         @ggm = number.to_string(@ee.get("gid", 0))
-      } fallback {}
-      try {
-        assert_eq(@omit_group, true)
-        @ggm = ""
-      } fallback {}
+      }
+      if (@omit_group) { @ggm = "" }
 
       @max_u = math.max(@max_u, string.len(@uum))
-      try {
-        assert_eq(@omit_group, false)
-        @max_g = math.max(@max_g, string.len(@ggm))
-      } fallback {}
+      if (!@omit_group) { @max_g = math.max(@max_g, string.len(@ggm)) }
 
       @_em = @ee
       @get_size_string.call(@_em, @human, @si, @szm)
@@ -755,36 +490,19 @@ loop {
       @get_time_string.call(@_em, @_ta, @_tc, @tfmt, @tstr_m)
       @max_tm = math.max(@max_tm, string.len(@tstr_m))
     }
-  } fallback {}
+  }
 
   @max_nl = math.max(@max_nl, 1)
   @max_u = math.max(@max_u, 1)
   @max_sz = math.max(@max_sz, 1)
   @max_tm = math.max(@max_tm, 1)
-  try {
-    assert_eq(@omit_group, false)
-    @max_g = math.max(@max_g, 1)
-  } fallback {}
-  try {
-    assert_eq(@inode_col, true)
-    @max_ino = math.max(@max_ino, 1)
-  } fallback {}
-  try {
-    assert_eq(@blocks, true)
-    @max_blk = math.max(@max_blk, 1)
-  } fallback {}
+  if (!@omit_group) { @max_g = math.max(@max_g, 1) }
+  if (@inode_col) { @max_ino = math.max(@max_ino, 1) }
+  if (@blocks) { @max_blk = math.max(@max_blk, 1) }
 
-  # ── Output ────────────────────────────────────────────────────────────────
-  # Three mutually exclusive output branches selected by flags:
-  #   1. -m (stream)     — names separated by ", " on a single line
-  #   2. -C (fmt_C)      — names arranged in columns sized to @term_w
-  #   3. default / -l    — one name per line; long format when -l is active
   @suf = ""
 
-  # Branch 1: stream mode (-m)
-  # Items are separated by ", " and lines are wrapped at @term_w columns.
-  try {
-    assert_eq(@stream, true)
+  if (@stream) {
     @_stream_line = ""
     @_stream_first = true
     browse(@sorted, @_so, @ee) {
@@ -792,171 +510,104 @@ loop {
       @_e = @ee
       @get_entry_suffix.call(@_e, @classify, @suf)
       @_item = "${@nm}${@suf}"
-      try {
-        assert_eq(@_stream_first, true)
+      if (@_stream_first) {
         @_stream_line = @_item
         @_stream_first = false
-      } fallback {
-        # Check if adding ", item" would exceed terminal width
-        @_candidate = "${@_stream_line}, ${@_item}"
-        try {
-          assert_gt(string.len(@_candidate), @term_w)
-          # Would overflow: flush current line with trailing comma and start new line
-          sys.echo("${@_stream_line},")
+      } else {
+        if (string.len(@_stream_line) + string.len(@_item) + 2 <= @term_w) {
+          @_stream_line = "${@_stream_line}, ${@_item}"
+        } else {
+          sys.echo(@_stream_line)
           @_stream_line = @_item
-        } fallback {
-          @_stream_line = @_candidate
         }
       }
     }
-    # Print the final (or only) line — no trailing comma
-    try {
-      assert_eq(@_stream_first, false)
-      sys.echo(@_stream_line)
-    } fallback {}
-  } fallback {
-      # Branch 2: multi-column mode (-C)
-      try {
-        assert_eq(@fmt_C, true)
-        @names_out2 = []
-        browse(@sorted, @_so2, @ee) {
-          @nm = @ee["name"]
-          @_e = @ee
-          @get_entry_suffix.call(@_e, @classify, @suf)
-          @names_out2 = list.push(@names_out2, "${@nm}${@suf}")
-        }
-        sys.echo(list.columnate(@names_out2, @term_w))
-      } fallback {
-        # Branch 3: one name per line (default) or long format (-l)
-        browse(@sorted, @_si, @ee) {
-          @nm = @ee["name"]
-          @_e = @ee
-          @get_entry_suffix.call(@_e, @classify, @suf)
+    sys.echo(@_stream_line)
+  } else {
+    if (@fmt_C) {
+      @names = []
+      browse(@sorted, @_cn, @ee) {
+        @nm = @ee["name"]
+        @_e = @ee
+        @get_entry_suffix.call(@_e, @classify, @suf)
+        @names = list.push(@names, "${@nm}${@suf}")
+      }
+      sys.echo(list.columnate(@names, @term_w))
+    } else {
+      browse(@sorted, @_on, @ee) {
+        @nm = @ee["name"]
+        @_e = @ee
+        @get_entry_suffix.call(@_e, @classify, @suf)
 
-          @namel = "${@nm}${@suf}"
-          # In long mode, append " -> target" for symbolic links.
-          try {
-            assert_eq(@long, true)
-            try {
-              assert_eq(@ee["is_symlink"], true)
-              @_tgt = @ee.get("symlink_target", "")
-              @namel = "${@namel} -> ${@_tgt}"
-            } fallback {}
-          } fallback {}
-
-          # Short format (not -l): optionally prefix with block count and inode.
-          try {
-            assert_eq(@long, false)
-            @pre_ln = ""
-            try {
-              assert_eq(@blocks, true)
-              @b = @ee.get("blocks", 0)
-              @bb = number.to_string(number.floor(@b / 2))
-              @pre_ln = string.pad_start(@bb, @max_blk_s, " ")
-              @pre_ln += " "
-            } fallback {}
-            try {
-              assert_eq(@inode_col, true)
-              @ipr = string.pad_start(number.to_string(@ee.get("inode", 0)), @max_ino_s, " ")
-              @ipr += " "
-              @pre_ln += @ipr
-            } fallback {}
-            sys.echo("${@pre_ln}${@namel}")
-          } fallback {
-            # Long format (-l): assemble all columns and emit one line.
-            @ino_s = ""
-            @sz_raw = ""
-            @tstr = ""
-            try {
-              assert_eq(@inode_col, true)
-              @ino_s = string.pad_start(number.to_string(@ee.get("inode", 0)), @max_ino, " ")
-              @ino_s += " "
-            } fallback {}
-
-            @blk_s = ""
-            try {
-              assert_eq(@blocks, true)
-              @b = @ee.get("blocks", 0)
-              @bb = number.to_string(number.floor(@b / 2))
-              @blk_s = string.pad_start(@bb, @max_blk, " ")
-              @blk_s += " "
-            } fallback {}
-
-            @mode or= (@ee["mode_string"], "----------")
-            @nl = number.to_string(@ee.get("nlink", 1))
-            @nl_p = string.pad_start(@nl, @max_nl, " ")
-            @uu = @ee.get("user", "")
-            @gg = @ee.get("group", "")
-            try {
-              assert_eq(@numeric_ids, true)
-              @uu = number.to_string(@ee.get("uid", 0))
-              @gg = number.to_string(@ee.get("gid", 0))
-            } fallback {}
-
-            try {
-              assert_eq(@omit_group, true)
-              @gg = ""
-            } fallback {}
-
-            @uu_p = string.pad_end(@uu, @max_u, " ")
-
-            # Format and right-align the size column.
-            @get_size_string.call(@_e, @human, @si, @sz_raw)
-            @szcol = string.pad_start(@sz_raw, @max_sz, " ")
-
-            # Format and left-align the timestamp column.
-            @_ta = @o.get("time_access", false)
-            @_tc = @o.get("time_change", false)
-            @get_time_string.call(@_e, @_ta, @_tc, @tfmt, @tstr)
-            @t_p = string.pad_end(@tstr, @max_tm, " ")
-
-            # Compose the full output line (with or without the group column).
-            try {
-              assert_eq(@omit_group, false)
-              @gg_p = string.pad_end(@gg, @max_g, " ")
-              @line = "${@ino_s}${@blk_s}${@mode} ${@nl_p} ${@uu_p} ${@gg_p} ${@szcol} ${@t_p} ${@namel}"
-            } fallback {
-              @line = "${@ino_s}${@blk_s}${@mode} ${@nl_p} ${@uu_p} ${@szcol} ${@t_p} ${@namel}"
-            }
-            sys.echo(@line)
+        if (@long) {
+          @pstr = @ee.get("permissions_str", "----------")
+          @nlink = string.pad_start(number.to_string(@ee.get("nlink", 1)), @max_nl, " ")
+          @user = string.pad_end(@ee.get("user", ""), @max_u, " ")
+          @group = string.pad_end(@ee.get("group", ""), @max_g, " ")
+          if (@numeric_ids) {
+            @user = string.pad_start(number.to_string(@ee.get("uid", 0)), @max_u, " ")
+            @group = string.pad_start(number.to_string(@ee.get("gid", 0)), @max_g, " ")
           }
+
+          @get_size_string.call(@_e, @human, @si, @sz)
+          @sz_s = string.pad_start(@sz, @max_sz, " ")
+
+          @_ta = @o.get("time_access", false)
+          @_tc = @o.get("time_change", false)
+          @get_time_string.call(@_e, @_ta, @_tc, @tfmt, @tm)
+          @tm_s = string.pad_start(@tm, @max_tm, " ")
+
+          @_link_target = ""
+          if (@ee.get("is_symlink", false)) {
+            @_lt = fs.read_link(@ee["path"])
+            @_link_target = " -> ${_lt}"
+          }
+
+          @_prefix = ""
+          if (@inode_col) {
+            @_iw = string.pad_start(number.to_string(@ee.get("inode", 0)), @max_ino, " ")
+            @_prefix = "${@_iw} "
+          }
+          if (@blocks) {
+            @_bw = @ee.get("blocks", 0)
+            @_bsw = string.pad_start(number.to_string(number.floor(@_bw / 2)), @max_blk, " ")
+            @_prefix = "${@_prefix}${@_bsw} "
+          }
+
+          if (@omit_group) {
+            sys.echo("${@_prefix}${@pstr} ${@nlink} ${@user} ${@sz_s} ${@tm_s} ${@nm}${@suf}${@_link_target}")
+          } else {
+            sys.echo("${@_prefix}${@pstr} ${@nlink} ${@user} ${@group} ${@sz_s} ${@tm_s} ${@nm}${@suf}${@_link_target}")
+          }
+        } else {
+          @_prefix = ""
+          if (@inode_col) {
+            @_iw = string.pad_start(number.to_string(@ee.get("inode", 0)), @max_ino_s, " ")
+            @_prefix = "${@_iw} "
+          }
+          if (@blocks) {
+            @_bw = @ee.get("blocks", 0)
+            @_bsw = string.pad_start(number.to_string(number.floor(@_bw / 2)), @max_blk_s, " ")
+            @_prefix = "${@_prefix}${@_bsw} "
+          }
+          sys.echo("${@_prefix}${@nm}${@suf}")
         }
       }
     }
+  }
 
-  # ── Recursive child-directory enqueue ─────────────────────────────────────
-  # In -R mode, collect all subdirectory paths found in the current listing
-  # (excluding "." and "..") and prepend them to the work queue so they are
-  # processed in the next iterations, maintaining depth-first order.
-  try {
-    assert_eq(@recursive, true)
-    assert_eq(@dir_only, false)
-    assert_eq(@from_dir_read, true)
-    @kids = []
-    browse(@sorted, @_rj, @ee) {
-      try {
-        assert_eq(@ee["is_dir"], true)
-        @snm = @ee["name"]
-        try {
-          assert_eq(@snm, ".")
-        } fallback {
-          try {
-            assert_eq(@snm, "..")
-          } fallback {
-            @kids = list.push(@kids, @ee["path"])
-          }
+  if (@recursive && @from_dir_read) {
+    @_subdirs = []
+    browse(@sorted, @_rb, @ee) {
+      if (@ee.get("is_dir", false)) {
+        @_nm = @ee["name"]
+        if (@_nm != "." && @_nm != "..") {
+          @_subdirs = list.push(@_subdirs, @ee["path"])
         }
-      } fallback {}
+      }
     }
-    @new_work = []
-    browse(@kids, @_kc, @kp) {
-      @new_work = list.push(@new_work, @kp)
-    }
-    browse(@work, @_wr, @wp) {
-      @new_work = list.push(@new_work, @wp)
-    }
-    @work = @new_work
-  } fallback {}
+    @work = list.concat(@_subdirs, @work)
+  }
 }
 
 sys.exit(@_ls_exit_code)

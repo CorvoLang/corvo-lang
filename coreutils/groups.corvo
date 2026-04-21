@@ -1,0 +1,13 @@
+# Print group names a user is in.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+if (@o.get("help", false)) {
+  sys.echo("Usage: groups [USER]...")
+  sys.echo("Print group names a user is in.")
+  sys.exit(0)
+}
+if (@o.get("version", false)) {
+  sys.echo("groups (Corvo coreutils) 0.1.0")
+  sys.exit(0)
+}
+sys.echo(list.join(os.groups(), " "))

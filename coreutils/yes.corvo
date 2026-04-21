@@ -1,0 +1,24 @@
+# Output a string repeatedly until killed.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+if (@o.get("help", false)) {
+  sys.echo("Usage: yes [STRING]...")
+  sys.echo("  or:  yes OPTION")
+  sys.echo("Repeatedly output a line with all specified STRING(s), or 'y'.")
+  sys.echo("")
+  sys.echo("      --help     display this help and exit")
+  sys.echo("      --version  output version information and exit")
+  sys.exit(0)
+}
+if (@o.get("version", false)) {
+  sys.echo("yes (Corvo coreutils) 0.1.0")
+  sys.exit(0)
+}
+@msg = "y"
+if (list.len(@pos) > 0) {
+  @msg = list.join(@pos, " ")
+}
+loop {
+  sys.echo(@msg)
+}

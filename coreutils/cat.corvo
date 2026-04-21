@@ -40,8 +40,7 @@
 @exit_code  = 0
 
 # ── Handle --help ─────────────────────────────────────────────────────────────
-try {
-  assert_eq(@o.get("help", false), true)
+if (@o.get("help", false)) {
   sys.echo("Usage: cat [OPTION]... [FILE]...")
   sys.echo("Concatenate FILE(s) to standard output.")
   sys.echo("")
@@ -58,25 +57,16 @@ try {
   sys.echo("      --help               display this help and exit")
   sys.echo("      --version            output version information and exit")
   @skip_main = true
-} fallback {}
+}
 
 # ── Handle --version ──────────────────────────────────────────────────────────
-try {
-  assert_eq(@o.get("version", false), true)
+if (!@skip_main && @o.get("version", false)) {
   sys.echo("cat (Corvo coreutils) 0.1.0")
   @skip_main = true
-} fallback {}
+}
 
 # ── Flag extraction ───────────────────────────────────────────────────────────
-@_number      = false
-@_number_nonblank = false
-@_squeeze     = false
-@_show_ends   = false
-@_show_tabs   = false
-
-try {
-  assert_eq(@skip_main, true)
-} fallback {
+if (!@skip_main) {
   @_number      = @o.get("number",        false)
   @_number_nonblank = @o.get("number_nonblank", false)
   @_squeeze     = @o.get("squeeze_blank", false)
@@ -84,34 +74,28 @@ try {
   @_show_tabs   = @o.get("show_tabs",     false)
 
   # -b overrides -n
-  try {
-    assert_eq(@_number_nonblank, true)
+  if (@_number_nonblank) {
     @_number = false
-  } fallback {}
+  }
 
   # -A implies -E and -T
-  try {
-    assert_eq(@o.get("show_all", false), true)
+  if (@o.get("show_all", false)) {
     @_show_ends = true
     @_show_tabs = true
-  } fallback {}
+  }
 
   # -e implies -E
-  try {
-    assert_eq(@o.get("show_ends_nonprinting", false), true)
+  if (@o.get("show_ends_nonprinting", false)) {
     @_show_ends = true
-  } fallback {}
+  }
 
   # -t implies -T
-  try {
-    assert_eq(@o.get("show_tabs_nonprinting", false), true)
+  if (@o.get("show_tabs_nonprinting", false)) {
     @_show_tabs = true
-  } fallback {}
+  }
 }
 
 # ── Procedure: print a list of lines applying all active options ──────────────
-# @lnum and @prev_blank are in/out: persisted across calls so that line
-# numbering and squeeze-blank state span multiple files.
 @_print_lines = procedure(@lines, @n_flag, @b_flag, @s_flag, @E_flag, @T_flag, @lnum, @prev_blank) {
   browse(@lines, @_idx, @_raw) {
     # Strip bare carriage return (Windows line endings)
@@ -120,51 +104,41 @@ try {
 
     # Squeeze: drop this line when both it and the previous line are blank
     @_skip = false
-    try {
-      assert_eq(@s_flag,     true)
-      assert_eq(@_is_blank,  true)
-      assert_eq(@prev_blank, true)
+    if (@s_flag && @_is_blank && @prev_blank) {
       @_skip = true
-    } fallback {}
+    }
 
-    try {
-      assert_eq(@_skip, true)
-    } fallback {
+    if (!@_skip) {
       @prev_blank = @_is_blank
 
       # -T: replace hard tabs with ^I
-      try {
-        assert_eq(@T_flag, true)
+      if (@T_flag) {
         @_l = string.replace(@_l, "\t", "^I")
-      } fallback {}
+      }
 
       # -E: append $ at end of each line
       @_suf = ""
-      try {
-        assert_eq(@E_flag, true)
+      if (@E_flag) {
         @_suf = "$"
-      } fallback {}
+      }
 
       # -n: number all lines
-      try {
-        assert_eq(@n_flag, true)
+      if (@n_flag) {
         @lnum += 1
         @_ns = string.pad_start(number.to_string(@lnum), 6, " ")
         sys.echo("${@_ns}\t${@_l}${@_suf}")
-      } fallback {
+      } else {
         # -b: number non-blank lines only
-        try {
-          assert_eq(@b_flag, true)
-          try {
-            assert_eq(@_is_blank, false)
+        if (@b_flag) {
+          if (!@_is_blank) {
             @lnum += 1
             @_ns = string.pad_start(number.to_string(@lnum), 6, " ")
             sys.echo("${@_ns}\t${@_l}${@_suf}")
-          } fallback {
+          } else {
             # Blank line with -b: no number, but still print suffix if -E
             sys.echo("${@_suf}")
           }
-        } fallback {
+        } else {
           # No numbering
           sys.echo("${@_l}${@_suf}")
         }
@@ -178,77 +152,57 @@ try {
 @_prev_blank = false
 
 # ── Main: read each file (or stdin) and print ─────────────────────────────────
-try {
-  assert_eq(@skip_main, true)
-} fallback {
-  try {
+if (!@skip_main) {
+  if (list.is_empty(@files)) {
     # No files given — read standard input
-    assert_eq(list.len(@files), 0)
-    # Try /dev/stdin first (works on Linux/macOS for piped data)
     try {
       @_content = fs.read("/dev/stdin")
       @_lines   = string.split(@_content, "\n")
-      # Drop the trailing empty element produced by a final newline
-      try {
-        assert_eq(string.is_empty(list.last(@_lines)), true)
+      if (list.len(@_lines) > 0 && string.is_empty(list.last(@_lines))) {
         @_lines = list.slice(@_lines, 0, list.len(@_lines) - 1)
-      } fallback {}
+      }
       @_print_lines.call(@_lines, @_number, @_number_nonblank, @_squeeze, @_show_ends, @_show_tabs, @_lnum, @_prev_blank)
     } fallback {
-      # Fallback: read line by line (EOF signalled by empty read)
+      # Fallback: read line by line
       loop {
         @_line = sys.read_line("")
-        try {
-          assert_eq(string.len(@_line), 0)
+        if (string.len(@_line) == 0) {
           terminate
-        } fallback {}
+        }
         @_sl = [@_line]
         @_print_lines.call(@_sl, @_number, @_number_nonblank, @_squeeze, @_show_ends, @_show_tabs, @_lnum, @_prev_blank)
       }
     }
-  } fallback {
+  } else {
     # Process each file in order
     browse(@files, @_fi, @_fname) {
-      # "-" means standard input
-      @_use_stdin = false
-      try {
-        assert_eq(@_fname, "-")
-        @_use_stdin = true
-      } fallback {}
-
-      try {
-        assert_eq(@_use_stdin, true)
+      if (@_fname == "-") {
         try {
           @_content = fs.read("/dev/stdin")
           @_lines   = string.split(@_content, "\n")
-          try {
-            assert_eq(string.is_empty(list.last(@_lines)), true)
+          if (list.len(@_lines) > 0 && string.is_empty(list.last(@_lines))) {
             @_lines = list.slice(@_lines, 0, list.len(@_lines) - 1)
-          } fallback {}
+          }
           @_print_lines.call(@_lines, @_number, @_number_nonblank, @_squeeze, @_show_ends, @_show_tabs, @_lnum, @_prev_blank)
         } fallback {
           loop {
             @_line = sys.read_line("")
-            try {
-              assert_eq(string.len(@_line), 0)
+            if (string.len(@_line) == 0) {
               terminate
-            } fallback {}
+            }
             @_sl = [@_line]
             @_print_lines.call(@_sl, @_number, @_number_nonblank, @_squeeze, @_show_ends, @_show_tabs, @_lnum, @_prev_blank)
           }
         }
-      } fallback {
-        try {
-          assert_eq(fs.exists(@_fname), true)
+      } else {
+        if (fs.exists(@_fname)) {
           @_content = fs.read(@_fname)
           @_lines   = string.split(@_content, "\n")
-          # Drop trailing empty element from final newline
-          try {
-            assert_eq(string.is_empty(list.last(@_lines)), true)
+          if (list.len(@_lines) > 0 && string.is_empty(list.last(@_lines))) {
             @_lines = list.slice(@_lines, 0, list.len(@_lines) - 1)
-          } fallback {}
+          }
           @_print_lines.call(@_lines, @_number, @_number_nonblank, @_squeeze, @_show_ends, @_show_tabs, @_lnum, @_prev_blank)
-        } fallback {
+        } else {
           sys.eprint("cat: ${@_fname}: No such file or directory")
           @exit_code = 1
         }

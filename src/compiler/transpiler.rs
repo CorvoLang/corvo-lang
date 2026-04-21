@@ -363,6 +363,32 @@ impl Transpiler {
             Stmt::Terminate => {
                 code.push_str(&format!("{}return Ok(());\n", self.indent()));
             }
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                let cond_c = self.transpile_expr(condition, state_var);
+                code.push_str(&format!(
+                    "{}if {}.as_bool().unwrap_or(false) {{\n",
+                    self.indent(),
+                    cond_c
+                ));
+                self.indent_level += 1;
+                for s in then_branch {
+                    code.push_str(&self.transpile_stmt(s, state_var));
+                }
+                self.indent_level -= 1;
+                if !else_branch.is_empty() {
+                    code.push_str(&format!("{}}} else {{\n", self.indent()));
+                    self.indent_level += 1;
+                    for s in else_branch {
+                        code.push_str(&self.transpile_stmt(s, state_var));
+                    }
+                    self.indent_level -= 1;
+                }
+                code.push_str(&format!("{}}}\n", self.indent()));
+            }
             Stmt::TryBlock { body, fallbacks } => {
                 code.push_str(&format!("{}{{\n", self.indent()));
                 code.push_str(&format!(
@@ -422,10 +448,16 @@ impl Transpiler {
                 code.push_str(&format!("{}            if values.len() != 2 || values[0] == values[1] {{ return Err(CorvoError::assertion(format!(\"{{}} == {{}}\", values[0], values[1]))); }}\n", self.indent()));
                 code.push_str(&format!("{}        }}\n", self.indent()));
                 code.push_str(&format!("{}        AssertKind::Gt => {{\n", self.indent()));
-                code.push_str(&format!("{}            if values.len() != 2 || values[0].as_number().unwrap_or(0.0) <= values[1].as_number().unwrap_or(0.0) {{ return Err(CorvoError::assertion(format!(\"{{}} <= {{}}\", values[0], values[1]))); }}\n", self.indent()));
+                code.push_str(&format!("{}            if values.len() != 2 || values[0].as_number().unwrap_or(0.0) <= values[1].as_number().unwrap_or(0.0) {{ return Err(CorvoError::assertion(format!(\"{{}} !> {{}}\", values[0], values[1]))); }}\n", self.indent()));
+                code.push_str(&format!("{}        }}\n", self.indent()));
+                code.push_str(&format!("{}        AssertKind::Ge => {{\n", self.indent()));
+                code.push_str(&format!("{}            if values.len() != 2 || values[0].as_number().unwrap_or(0.0) < values[1].as_number().unwrap_or(0.0) {{ return Err(CorvoError::assertion(format!(\"{{}} !>= {{}}\", values[0], values[1]))); }}\n", self.indent()));
                 code.push_str(&format!("{}        }}\n", self.indent()));
                 code.push_str(&format!("{}        AssertKind::Lt => {{\n", self.indent()));
-                code.push_str(&format!("{}            if values.len() != 2 || values[0].as_number().unwrap_or(0.0) >= values[1].as_number().unwrap_or(0.0) {{ return Err(CorvoError::assertion(format!(\"{{}} >= {{}}\", values[0], values[1]))); }}\n", self.indent()));
+                code.push_str(&format!("{}            if values.len() != 2 || values[0].as_number().unwrap_or(0.0) >= values[1].as_number().unwrap_or(0.0) {{ return Err(CorvoError::assertion(format!(\"{{}} !< {{}}\", values[0], values[1]))); }}\n", self.indent()));
+                code.push_str(&format!("{}        }}\n", self.indent()));
+                code.push_str(&format!("{}        AssertKind::Le => {{\n", self.indent()));
+                code.push_str(&format!("{}            if values.len() != 2 || values[0].as_number().unwrap_or(0.0) > values[1].as_number().unwrap_or(0.0) {{ return Err(CorvoError::assertion(format!(\"{{}} !<= {{}}\", values[0], values[1]))); }}\n", self.indent()));
                 code.push_str(&format!("{}        }}\n", self.indent()));
                 code.push_str(&format!(
                     "{}        AssertKind::Match => {{\n",
@@ -515,19 +547,69 @@ impl Transpiler {
             Expr::StaticGet { name } => format!("{}.static_get(\"{}\")?", state_var, name),
             Expr::Binary { op, left, right } => {
                 let l = self.transpile_expr(left, state_var);
-                let r = self.transpile_expr(right, state_var);
-                let op_str = match op {
-                    BinaryOp::Add => "+",
-                    BinaryOp::Sub => "-",
-                    BinaryOp::Mul => "*",
-                    BinaryOp::Div => "/",
-                };
-                format!("match ({}, {}) {{ (Value::Number(a), Value::Number(b)) => Value::Number(a {} b), _ => return Err(CorvoError::r#type(\"Arithmetic error\")) }}", l, r, op_str)
+                match op {
+                    BinaryOp::And => format!(
+                        "(if {}.as_bool().unwrap_or(false) {{ Value::Boolean({}.as_bool().unwrap_or(false)) }} else {{ Value::Boolean(false) }})",
+                        l,
+                        self.transpile_expr(right, state_var)
+                    ),
+                    BinaryOp::Or => format!(
+                        "(if {}.as_bool().unwrap_or(false) {{ Value::Boolean(true) }} else {{ Value::Boolean({}.as_bool().unwrap_or(false)) }})",
+                        l,
+                        self.transpile_expr(right, state_var)
+                    ),
+                    BinaryOp::Eq => format!(
+                        "Value::Boolean({} == {})",
+                        l,
+                        self.transpile_expr(right, state_var)
+                    ),
+                    BinaryOp::Neq => format!(
+                        "Value::Boolean({} != {})",
+                        l,
+                        self.transpile_expr(right, state_var)
+                    ),
+                    BinaryOp::Lt => format!(
+                        "Value::Boolean({} < {})",
+                        l,
+                        self.transpile_expr(right, state_var)
+                    ),
+                    BinaryOp::Le => format!(
+                        "Value::Boolean({} <= {})",
+                        l,
+                        self.transpile_expr(right, state_var)
+                    ),
+                    BinaryOp::Gt => format!(
+                        "Value::Boolean({} > {})",
+                        l,
+                        self.transpile_expr(right, state_var)
+                    ),
+                    BinaryOp::Ge => format!(
+                        "Value::Boolean({} >= {})",
+                        l,
+                        self.transpile_expr(right, state_var)
+                    ),
+                    _ => {
+                        let r = self.transpile_expr(right, state_var);
+                        let op_str = match op {
+                            BinaryOp::Add => "+",
+                            BinaryOp::Sub => "-",
+                            BinaryOp::Mul => "*",
+                            BinaryOp::Div => "/",
+                            BinaryOp::Mod => "%",
+                            _ => unreachable!(),
+                        };
+                        format!(
+                            "match ({}, {}) {{ (Value::Number(a), Value::Number(b)) => Value::Number(a {} b), _ => return Err(CorvoError::r#type(\"Arithmetic error\")) }}",
+                            l, r, op_str
+                        )
+                    }
+                }
             }
             Expr::Unary { op, operand } => {
                 let v = self.transpile_expr(operand, state_var);
                 match op {
                     UnaryOp::Neg => format!("match {} {{ Value::Number(n) => Value::Number(-n), _ => return Err(CorvoError::r#type(\"Negation error\")) }}", v),
+                    UnaryOp::Not => format!("Value::Boolean(!{}.as_bool().unwrap_or(false))", v),
                 }
             }
             Expr::StringInterpolation { parts } => {

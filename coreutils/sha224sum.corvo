@@ -1,4 +1,4 @@
-# coreutils/sha224sum.corvo
+# coreutils/md5sum.corvo
 @spec = {
   "aliases": {
     "c": "check",
@@ -12,17 +12,24 @@
 @files = @parsed["positional"]
 @algorithm = "sha224"
 
-try {
-    assert_eq(list.is_empty(@files), true)
-    @hash = crypto.hash_stdin(@algorithm)
-    sys.echo("${@hash}  -")
-} fallback {
-    browse(@files, @idx, @f) {
-        try {
+if (list.is_empty(@files)) {
+   @files = ["-"]
+}
+
+browse(@files, @idx, @f) {
+    @_is_stdin = (@f == "-")
+    try {
+        @hash = ""
+        if (@_is_stdin) {
+            @hash = crypto.hash_stdin(@algorithm)
+        } else {
             @hash = crypto.hash_file(@algorithm, @f)
-            sys.echo("${@hash}  ${@f}")
-        } fallback {
-            sys.eprint("sha224sum: ${@f}: No such file or directory")
         }
+        
+        @disp = @f
+        if (@_is_stdin) { @disp = "-" }
+        sys.echo("${@hash}  ${@disp}")
+    } fallback {
+        sys.eprint("md5sum: ${@f}: No such file or directory")
     }
 }

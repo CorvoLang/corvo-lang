@@ -1,0 +1,30 @@
+# Print the resolved absolute file name.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: realpath [OPTION]... FILE...")
+  sys.echo("Print the resolved absolute file name.")
+  sys.echo("")
+  sys.echo("      --help     display this help and exit")
+  sys.echo("      --version  output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("realpath (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.is_empty(@pos)) {
+    sys.eprint("realpath: missing operand")
+    sys.eprint("Try 'realpath --help' for more information.")
+    sys.exit(1)
+  }
+  browse(@pos, @i, @path) {
+    sys.echo(fs.realpath(@path))
+  }
+}

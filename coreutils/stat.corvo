@@ -1,0 +1,41 @@
+# Display file or file system status.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: stat [OPTION]... FILE...")
+  sys.echo("Display file or file system status.")
+  sys.echo("")
+  sys.echo("  -L, --dereference     follow links")
+  sys.echo("  -f, --file-system     display file system status instead of file status")
+  sys.echo("  -c  --format=FORMAT   use the specified FORMAT instead of the default")
+  sys.echo("      --help            display this help and exit")
+  sys.echo("      --version         output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("stat (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.is_empty(@pos)) {
+    sys.eprint("stat: missing operand")
+    sys.eprint("Try 'stat --help' for more information.")
+    sys.exit(1)
+  }
+  browse(@pos, @idx, @path) {
+    try {
+      @s = fs.stat(@path)
+      sys.echo("  File: ${@path}")
+      sys.echo("  Size: ${number.to_string(@s["size"])}")
+      sys.echo("  Dir:  ${@s["is_dir"]}")
+      sys.echo("  Mode: ${@s["permissions"]}")
+    } fallback {
+      sys.eprint("stat: cannot stat '${@path}': No such file or directory")
+    }
+  }
+}

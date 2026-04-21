@@ -271,7 +271,10 @@ match(<expr>) {
 
 ### Core & System (`sys`, `os`, `math`)
 * `sys.echo(msg: string)`: Prints to stdout.
+* `sys.print(msg: string)`: Prints to stdout without newline.
+* `sys.printf(format: string, ...args)`: Formatted print. Supports `%s`, `%d`, `%f`, `%x`. Can take a list as a single argument for the format parameters.
 * `sys.read_line(prompt: string) -> string`: Reads user input from stdin.
+* `sys.read_all() -> string`: Reads all data from stdin until EOF.
 * `sys.sleep(ms: number)`: Pauses execution.
 * `sys.panic(msg: string)`: Terminates with a non-zero exit code.
 * `sys.exit(code?: number)`: Terminates with the given exit code (default `0`).
@@ -280,6 +283,8 @@ match(<expr>) {
 * `os.set_env(key: string, value: string)`
 * `os.exec(cmd: string, args: list) -> map`: Simple process execution without a shell. Returns `{"stdout": string, "stderr": string, "code": number}`. Use `os.exec` for direct process invocation when you have a command and its arguments as separate values and do not need shell features.
 * `os.info() -> map`: Returns `{"os": string, "arch": string, "hostname": string}`.
+* `os.username() -> string`: Returns current user login name.
+* `os.ttyname() -> string`: Returns terminal device path (Unix only).
 * `os.argv() -> list`: Arguments for the Corvo program (trailing tokens after the script when using `corvo file.corvo …`, or `std::env::args().skip(1)` for a compiled binary). Empty in the REPL and in `run_source` unless set via `RuntimeState::set_script_argv` / `run_source_with_script_argv`.
 * `args.parse(argv: list, config?: map) -> map`: Generic configurable argv parser. Returns `{"positional": list[string], "options": map, "plus"?: map, "at_servers"?: list}`. Supports GNU coreutils style (aliases, short clusters, long options `--k=v` or `--k v`, optional values, accumulate), dnsutils/dig style (`+flag`, `+noflag`, `+key=val`, `@server`), and usbutils style (colon-compound short values). See `CHEATSHEET.md` for the full config key reference.
 * `args.scan(argv: list) -> map`: Zero-config wrapper around `args.parse` for backward compatibility. Returns `{"positional": list[string], "options": map}`.
@@ -289,7 +294,8 @@ match(<expr>) {
 * `math.div(a: number, b: number) -> number`
 * `math.mod(a: number, b: number) -> number`
 * `math.max(a: number, b: number, ...numbers) -> number`
-* `math.human_bytes(bytes: number, si?: boolean) -> string`: Human-readable byte size (binary prefixes by default; `si: true` uses decimal SI prefixes).
+* `math.range(start: number, end: number, step?: number) -> list`: Generates a numerical sequence.
+* `math.human_bytes(bytes: number, si?: boolean) -> string`: Human-readable byte size.
 
 ### Time (`time`)
 * `time.format_local(seconds: number, nanoseconds?: number, format: string) -> string`: `strftime` in the local timezone (honours `TZ`).

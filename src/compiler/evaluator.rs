@@ -146,6 +146,18 @@ impl Evaluator {
                     name
                 )))
             }
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                let cond_val = self.eval_expr(condition, state)?;
+                if cond_val.as_bool().unwrap_or(false) {
+                    self.execute_block(then_branch, state)
+                } else {
+                    self.execute_block(else_branch, state)
+                }
+            }
             Stmt::ExprStmt { expr } => {
                 // Intercept special method calls that need mutable state access.
                 if let Expr::MethodCall {
@@ -662,28 +674,58 @@ impl Evaluator {
                             other.r#type()
                         ))),
                     },
+                    UnaryOp::Not => Ok(Value::Boolean(!v.as_bool().unwrap_or(false))),
                 }
             }
             Expr::Binary { op, left, right } => {
                 let l = self.eval_expr(left, state)?;
-                let r = self.eval_expr(right, state)?;
-                let (ln, rn) = match (l, r) {
-                    (Value::Number(a), Value::Number(b)) => (a, b),
-                    (a, b) => {
-                        return Err(CorvoError::r#type(format!(
-                            "Arithmetic expects numbers, got {} and {}",
-                            a.r#type(),
-                            b.r#type()
-                        )));
+                
+                // Short-circuiting for logical operators
+                if *op == BinaryOp::And {
+                    if !l.as_bool().unwrap_or(false) {
+                        return Ok(Value::Boolean(false));
                     }
-                };
-                let out = match op {
-                    BinaryOp::Add => ln + rn,
-                    BinaryOp::Sub => ln - rn,
-                    BinaryOp::Mul => ln * rn,
-                    BinaryOp::Div => ln / rn,
-                };
-                Ok(Value::Number(out))
+                    let r = self.eval_expr(right, state)?;
+                    return Ok(Value::Boolean(r.as_bool().unwrap_or(false)));
+                }
+                if *op == BinaryOp::Or {
+                    if l.as_bool().unwrap_or(false) {
+                        return Ok(Value::Boolean(true));
+                    }
+                    let r = self.eval_expr(right, state)?;
+                    return Ok(Value::Boolean(r.as_bool().unwrap_or(false)));
+                }
+
+                let r = self.eval_expr(right, state)?;
+                match op {
+                    BinaryOp::Eq => Ok(Value::Boolean(l == r)),
+                    BinaryOp::Neq => Ok(Value::Boolean(l != r)),
+                    BinaryOp::Lt => Ok(Value::Boolean(l < r)),
+                    BinaryOp::Le => Ok(Value::Boolean(l <= r)),
+                    BinaryOp::Gt => Ok(Value::Boolean(l > r)),
+                    BinaryOp::Ge => Ok(Value::Boolean(l >= r)),
+                    _ => {
+                        let (ln, rn) = match (l, r) {
+                            (Value::Number(a), Value::Number(b)) => (a, b),
+                            (a, b) => {
+                                return Err(CorvoError::r#type(format!(
+                                    "Arithmetic expects numbers, got {} and {}",
+                                    a.r#type(),
+                                    b.r#type()
+                                )));
+                            }
+                        };
+                        let out = match op {
+                            BinaryOp::Add => ln + rn,
+                            BinaryOp::Sub => ln - rn,
+                            BinaryOp::Mul => ln * rn,
+                            BinaryOp::Div => ln / rn,
+                            BinaryOp::Mod => ln % rn,
+                            _ => unreachable!(),
+                        };
+                        Ok(Value::Number(out))
+                    }
+                }
             }
             Expr::MethodCall {
                 target,
@@ -888,6 +930,22 @@ impl Evaluator {
                     return Err(CorvoError::assertion(format!("{} !> {}", a, b)));
                 }
             }
+            AssertKind::Ge => {
+                if values.len() != 2 {
+                    return Err(CorvoError::parsing(
+                        "assert_ge requires exactly 2 arguments",
+                    ));
+                }
+                let a = values[0]
+                    .as_number()
+                    .ok_or_else(|| CorvoError::r#type("assert_ge requires numbers"))?;
+                let b = values[1]
+                    .as_number()
+                    .ok_or_else(|| CorvoError::r#type("assert_ge requires numbers"))?;
+                if a < b {
+                    return Err(CorvoError::assertion(format!("{} !>= {}", a, b)));
+                }
+            }
             AssertKind::Lt => {
                 if values.len() != 2 {
                     return Err(CorvoError::parsing(
@@ -902,6 +960,22 @@ impl Evaluator {
                     .ok_or_else(|| CorvoError::r#type("assert_lt requires numbers"))?;
                 if a >= b {
                     return Err(CorvoError::assertion(format!("{} !< {}", a, b)));
+                }
+            }
+            AssertKind::Le => {
+                if values.len() != 2 {
+                    return Err(CorvoError::parsing(
+                        "assert_le requires exactly 2 arguments",
+                    ));
+                }
+                let a = values[0]
+                    .as_number()
+                    .ok_or_else(|| CorvoError::r#type("assert_le requires numbers"))?;
+                let b = values[1]
+                    .as_number()
+                    .ok_or_else(|| CorvoError::r#type("assert_le requires numbers"))?;
+                if a > b {
+                    return Err(CorvoError::assertion(format!("{} !<= {}", a, b)));
                 }
             }
             AssertKind::Match => {

@@ -1,0 +1,61 @@
+# Create the special file NAME of the given TYPE.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: mknod [OPTION]... NAME TYPE [MAJOR MINOR]")
+  sys.echo("Create the special file NAME of the given TYPE.")
+  sys.echo("")
+  sys.echo("  -m, --mode=MODE    set file permission bits to MODE, not a=rw - umask")
+  sys.echo("      --help         display this help and exit")
+  sys.echo("      --version      output version information and exit")
+  sys.echo("")
+  sys.echo("TYPE may be:")
+  sys.echo("  b      create a block (buffered) special file")
+  sys.echo("  c, u   create a character (unbuffered) special file")
+  sys.echo("  p      create a FIFO")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("mknod (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.len(@pos) < 2) {
+    sys.eprint("mknod: missing operand")
+    sys.eprint("Try 'mknod --help' for more information.")
+    sys.exit(1)
+  }
+
+  @name = list.get(@pos, 0)
+  @type_str = list.get(@pos, 1)
+  @major = number.parse(0, list.get(@pos, 2, "0"))
+  @minor = number.parse(0, list.get(@pos, 3, "0"))
+  
+  @mode = 0
+  match (@type_str) {
+    "p" => { @mode = 4516 }, # 0o010644 -> 4516
+    "c", "u" => { @mode = 8612 }, # 0o020644 -> 8612
+    "b" => { @mode = 25004 }, # 0o060644 -> 25004
+    _ => {
+      sys.eprint("mknod: invalid device type '${@type_str}'")
+      sys.exit(1)
+    }
+  }
+  
+  @dev = (@major * 256) + @minor
+  try {
+    fs.mknod(@name, @mode, @dev)
+  } fallback {
+    sys.eprint("mknod: cannot create special file '${@name}': Operation not permitted")
+    @exit_code = 1
+  }
+}
+
+if (@exit_code != 0) {
+  sys.exit(@exit_code)
+}

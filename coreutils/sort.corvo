@@ -1,0 +1,60 @@
+# coreutils/sort.corvo — Sort lines of text files
+@spec = {
+  "aliases": { "r": "reverse", "u": "unique", "n": "numeric" }
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: sort [OPTION]... [FILE]...")
+  sys.echo("Write sorted concatenation of all FILE(s) to standard output.")
+  sys.echo("")
+  sys.echo("  -n, --numeric-sort   compare according to string numerical value")
+  sys.echo("  -r, --reverse        reverse the result of comparisons")
+  sys.echo("  -u, --unique         report only the first of a sequence of equal lines")
+  sys.echo("      --help           display this help and exit")
+  sys.echo("      --version        output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("sort (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.is_empty(@paths)) {
+    @paths = ["-"]
+  }
+
+  @all_lines = []
+  browse(@paths, @i, @file) {
+    @content = ""
+    if (@file == "-") {
+      @content = sys.read_all()
+    } else {
+      @content = fs.read(@file)
+    }
+    @all_lines = list.concat(@all_lines, string.split(@content, "\n"))
+  }
+
+  # Filter out trailing empty
+  if (list.len(@all_lines) > 0 && string.is_empty(list.last(@all_lines))) {
+    @all_lines = list.slice(@all_lines, 0, list.len(@all_lines) - 1)
+  }
+
+  @sorted = list.sort(@all_lines)
+  if (@o.get("reverse", false)) {
+    @sorted = list.reverse(@sorted)
+  }
+  
+  if (@o.get("unique", false)) {
+    @sorted = list.unique(@sorted)
+  }
+
+  browse(@sorted, @i, @line) {
+    sys.echo(@line)
+  }
+}

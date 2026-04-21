@@ -1,0 +1,45 @@
+# Evaluate expressions.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: expr EXPRESSION")
+  sys.echo("  or:  expr OPTION")
+  sys.echo("Print the value of EXPRESSION to standard output.")
+  sys.echo("")
+  sys.echo("      --help     display this help and exit")
+  sys.echo("      --version  output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("expr (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.len(@pos) < 3) {
+    sys.exit(1)
+  }
+
+  @a_str = list.get(@pos, 0)
+  @op = list.get(@pos, 1)
+  @b_str = list.get(@pos, 2)
+  
+  try {
+    @a = number.parse(0, @a_str)
+    @b = number.parse(0, @b_str)
+    
+    match (@op) {
+      "+" => { sys.echo(number.to_string(@a + @b)) },
+      "-" => { sys.echo(number.to_string(@a - @b)) },
+      "*" => { sys.echo(number.to_string(@a * @b)) },
+      "/" => { sys.echo(number.to_string(math.div(@a, @b))) },
+      _   => { sys.exit(1) }
+    }
+  } fallback {
+    sys.exit(1)
+  }
+}

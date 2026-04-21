@@ -1,0 +1,58 @@
+# Print the prime factors of each specified integer NUMBER.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: factor [NUMBER]...")
+  sys.echo("Print the prime factors of each specified integer NUMBER.")
+  sys.echo("")
+  sys.echo("      --help     display this help and exit")
+  sys.echo("      --version  output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("factor (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  @factorize = procedure(@val, @start_d) {
+    try {
+      assert_gt(@val, 1)
+      @found = 0
+      @next_val = @val
+      @d = @start_d
+      
+      browse(math.range(@start_d, 100), @i, @test_d) {
+        try {
+          assert_eq(@found, 0)
+          assert_eq(math.mod(@val, @test_d), 0)
+          sys.print(" ${number.to_string(@test_d)}")
+          @next_val = math.div(@val, @test_d)
+          @d = @test_d
+          @found = 1
+        } fallback {}
+      }
+      
+      try {
+        assert_eq(@found, 1)
+        @factorize.call(@next_val, @d)
+      } fallback {
+         try {
+           assert_gt(@val, 1)
+           sys.print(" ${number.to_string(@val)}")
+         } fallback {}
+      }
+    } fallback {}
+  }
+
+  browse(@pos, @i, @n_str) {
+    @n = number.parse(@n_str)
+    sys.print("${@n_str}:")
+    @factorize.call(@n, 2)
+    sys.echo("")
+  }
+}

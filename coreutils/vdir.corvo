@@ -1,0 +1,813 @@
+# coreutils/vdir.corvo — GNU-compatible `vdir`
+# Run: `corvo coreutils/vdir.corvo [OPTION]... [FILE]...`
+# Equivalent to `ls -l -b`.
+
+# ── Argument-parser spec ─────────────────────────────────────────────────────
+@_ls_spec = {
+  "aliases": {
+    "a": "all",             "A": "almost_all",     "b": "escape",
+    "B": "ignore_backups",  "c": "time_change",    "C": "format_vertical",
+    "d": "directory",       "D": "dired",          "f": "unsorted",
+    "F": "classify",        "g": "no_owner",       "G": "no_group",
+    "h": "human_readable",  "H": "dereference_command_line",
+    "i": "inode",           "k": "kibibytes",      "l": "long",
+    "L": "dereference",     "m": "stream",         "n": "numeric_uid_gid",
+    "N": "literal",         "r": "reverse",        "R": "recursive",
+    "s": "blocks",          "S": "sort_size",      "t": "time_sort_modified",
+    "u": "time_access",     "U": "unsorted",       "v": "sort_version",
+    "x": "format_across",   "X": "sort_extension", "1": "one_per_line",
+    "Z": "selinux",
+    "almost_all": "almost_all",     "ignore_backups": "ignore_backups",
+    "no_group": "no_group",         "numeric_uid_gid": "numeric_uid_gid",
+    "dereference_command_line": "dereference_command_line",
+    "group_directories_first": "group_directories_first",
+    "dereference_command_line_symlink_to_dir": "dereference_command_line_symlink_to_dir",
+    "w": "width",
+    "T": "tabsize",
+    "I": "ignore"
+  },
+  "short_values": ["w", "T", "I"],
+  "long_values": [
+    "sort", "time_style", "format", "width", "tabsize",
+    "ignore", "hide", "indicator_style", "quoting_style",
+    "block_size", "time"
+  ],
+  "long_optional_values": ["color", "hyperlink"],
+  "accumulate": ["ignore", "hide"]
+}
+
+@parsed = args.parse(os.argv(), @_ls_spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+
+# vdir defaults: -l -b
+try {
+  assert_eq(@o.get("long", false), false)
+  @o["long"] = true
+} fallback {}
+try {
+  assert_eq(@o.get("escape", false), false)
+  @o["escape"] = true
+} fallback {}
+
+@cwd = os.getcwd()
+
+# ── Procedures ───────────────────────────────────────────────────────────────
+
+@default_to_dot_if_empty = procedure(@paths_in, @paths_out) {
+  @paths_out = @paths_in
+  try {
+    assert_eq(list.len(@paths_out), 0)
+    @paths_out = ["."]
+  } fallback {}
+}
+
+@get_entry_suffix = procedure(@entry, @classify_flag, @suf_out) {
+  @suf_out = ""
+  try {
+    assert_eq(@classify_flag, true)
+    try {
+      assert_eq(@entry["is_dir"], true)
+      @suf_out = "/"
+    } fallback {
+      try {
+        assert_eq(@entry["is_symlink"], true)
+        @suf_out = "@"
+      } fallback {
+        try {
+          assert_eq(@entry["is_executable"], true)
+          @suf_out = "*"
+        } fallback {}
+      }
+    }
+  } fallback {}
+}
+
+@get_size_string = procedure(@entry, @human_flag, @si_flag, @sz_out) {
+  @_ft = @entry.get("file_type_char", "-")
+  @_is_dir = @entry.get("is_dir", false)
+  try {
+    assert_eq(@_ft, "b")
+    @_maj = number.to_string(@entry.get("major", 0))
+    @_min = number.to_string(@entry.get("minor", 0))
+    @sz_out = "${@_maj}, ${@_min}"
+  } fallback {
+    try {
+      assert_eq(@_ft, "c")
+      @_maj = number.to_string(@entry.get("major", 0))
+      @_min = number.to_string(@entry.get("minor", 0))
+      @sz_out = "${@_maj}, ${@_min}"
+    } fallback {
+      @sz_out = number.to_string(@entry.get("size", 0))
+      try {
+        assert_eq(@human_flag, true)
+        try {
+          assert_eq(@_is_dir, true)
+          @sz_out = math.human_bytes(@entry.get("size", 0), false)
+        } fallback {
+          @sz_out = math.human_bytes(@entry.get("size", 0), @si_flag)
+        }
+      } fallback {}
+    }
+  }
+}
+
+@get_time_string = procedure(@entry, @time_access_flag, @time_change_flag, @fmt_str, @tstr_out) {
+  @_tsec = @entry.get("mtime_sec", 0)
+  @_tnsec = @entry.get("mtime_nsec", 0)
+  try {
+    assert_eq(@time_access_flag, true)
+    @_tsec = @entry.get("atime_sec", 0)
+    @_tnsec = @entry.get("atime_nsec", 0)
+  } fallback {}
+  try {
+    assert_eq(@time_change_flag, true)
+    @_tsec = @entry.get("ctime_sec", 0)
+    @_tnsec = @entry.get("ctime_nsec", 0)
+  } fallback {}
+  @tstr_out = time.format_local(@_tsec, @_tnsec, @fmt_str)
+}
+
+@print_total_blocks = procedure(@sorted_list, @human_flag) {
+  @_tb = 0
+  browse(@sorted_list, @_ptb, @_pee) {
+    @_tb += @_pee.get("blocks", 0)
+  }
+  @_tk = number.ceil(@_tb / 2)
+  try {
+    assert_eq(@human_flag, true)
+    sys.echo("total ${math.human_bytes(@_tk * 1024, false)}")
+  } fallback {
+    sys.echo("total ${@_tk}")
+  }
+}
+
+@_enrich_entry = procedure(@ee, @sk, @acc) {
+  @_nm = @ee["name"]
+  @_parts = string.split(@_nm, ".")
+  @_ext = ""
+  try {
+    assert_eq(list.len(@_parts), 1)
+  } fallback {
+    @_ext = list.get(@_parts, list.len(@_parts) - 1)
+  }
+  @_ee2 = @ee
+  @_ee2["extension"] = @_ext
+  @_ee2["_skey"] = @ee.get(@sk, 0)
+  @acc = list.push(@acc, @_ee2)
+}
+
+# ── Initialisation ───────────────────────────────────────────────────────────
+
+@default_to_dot_if_empty.call(@paths, @paths)
+
+@_ls_skip = false
+@_ls_exit_code = 0
+
+try {
+  assert_eq(@o.get("help", false), true)
+  sys.echo("Usage: vdir [OPTION]... [FILE]...")
+  sys.echo("List information about the FILEs (the current directory by default).")
+  sys.echo("vdir is equivalent to ls -l -b.")
+  @_ls_skip = true
+} fallback {}
+
+try {
+  assert_eq(@o.get("version", false), true)
+  sys.echo("vdir (Corvo coreutils) 0.1.0")
+  @_ls_skip = true
+} fallback {}
+
+# ── Flag extraction ───────────────────────────────────────────────────────────
+@follow = false
+try {
+  assert_eq(@_ls_skip, true)
+} fallback {
+  try {
+    assert_eq(@o.get("dereference_command_line", false), true)
+    @follow = true
+  } fallback {
+    try {
+      assert_eq(@o.get("dereference", false), true)
+      @follow = true
+    } fallback {}
+  }
+}
+
+@all        = @o.get("all",            false)
+@almost     = @o.get("almost_all",     false)
+@blocks     = @o.get("blocks",         false)
+@inode_col  = @o.get("inode",          false)
+@long       = @o.get("long",           false)
+@omit_group = @o.get("no_group",       false)
+@numeric_ids = @o.get("numeric_uid_gid", false)
+@classify   = @o.get("classify",       false)
+@human      = @o.get("human_readable", false)
+@si         = @o.get("si",             false)
+@reverse    = @o.get("reverse",        false)
+@recursive  = @o.get("recursive",      false)
+@dir_only   = @o.get("directory",      false)
+@stream     = @o.get("stream",         false)
+
+@fmt_C = @o.get("format_vertical", false)
+try {
+  assert_eq(@o.get("format", ""), "vertical")
+  @fmt_C = true
+} fallback {}
+try {
+  assert_eq(@o.get("one_per_line", false), true)
+  @fmt_C = false
+} fallback {}
+
+@term_w = 80
+@ww = @o.get("width", "")
+try {
+  assert_eq(string.is_empty(string.trim(@ww)), true)
+} fallback {
+  @term_w = number.parse(0, @ww)
+}
+
+@hides   = @o.get("hide",   list.new())
+@ignores = @o.get("ignore", list.new())
+
+@sort_key = "name"
+try {
+  assert_eq(@o["time_sort_modified"], true)
+  try {
+    assert_eq(@o["time_change"], true)
+    @sort_key = "ctime_sec"
+  } fallback {
+    try {
+      assert_eq(@o["time_access"], true)
+      @sort_key = "atime_sec"
+    } fallback {
+      @sort_key = "mtime_sec"
+    }
+  }
+} fallback {}
+
+try {
+  assert_eq(@o.get("sort_size", false), true)
+  @sort_key = "size"
+} fallback {}
+
+try {
+  assert_eq(@o.get("sort_extension", false), true)
+  @sort_key = "extension"
+} fallback {}
+
+@sort_key = match(@o.get("sort", "")) {
+  "size" => "size",
+  "time" => "mtime_sec",
+  "extension" => "extension",
+  "version" => "version",
+  "none" => "none",
+  _ => @sort_key
+}
+
+@unsorted = @o.get("unsorted", false)
+@_sorting_active = true
+try {
+  assert_eq(@unsorted, true)
+  @_sorting_active = false
+} fallback {}
+try {
+  assert_eq(@sort_key, "none")
+  @_sorting_active = false
+} fallback {}
+
+@time_style = @o.get("time_style", "")
+try {
+  assert_eq(string.is_empty(string.trim(@time_style)), true)
+  @time_style = os.get_env("TIME_STYLE", "locale")
+} fallback {}
+
+@tfmt = match(@time_style) {
+  "long-iso" => "%Y-%m-%d %H:%M",
+  "full-iso" => "%Y-%m-%d %H:%M:%S %z",
+  "iso" => "%Y-%m-%d",
+  _ => "%b %e %H:%M"
+}
+
+@need_hdr = false
+try {
+  assert_eq(@_ls_skip, false)
+  try {
+    assert_eq(list.len(@paths), 1)
+  } fallback {
+    @need_hdr = true
+  }
+} fallback {}
+
+@work = @paths
+@rec_first = true
+
+loop {
+  try {
+    assert_eq(@_ls_skip, true)
+    terminate
+  } fallback {}
+
+  try {
+    assert_eq(list.len(@work), 0)
+    terminate
+  } fallback {}
+
+  @pth = list.get(@work, 0)
+  @work = list.slice(@work, 1, list.len(@work))
+
+  @meta = fs.read_meta(@pth, @follow)
+  @is_dir = @meta["is_dir"]
+  @from_dir_read = false
+
+  @entries = []
+  try {
+    assert_eq(@is_dir, true)
+    try {
+      assert_eq(@dir_only, true)
+      @_dm = @meta
+      @_dm["name"] = @pth
+      @entries = list.push(@entries, @_dm)
+    } fallback {
+      @entries = fs.read_dir_meta(@pth, @follow)
+      @from_dir_read = true
+    }
+  } fallback {
+    @_fm = @meta
+    @_fm["name"] = @pth
+    @entries = list.push(@entries, @_fm)
+  }
+
+  try {
+    assert_eq(@all, true)
+    assert_eq(@from_dir_read, true)
+    @md1 = fs.read_meta(@pth, @follow)
+    @md1["name"] = "."
+    @md1["path"] = @pth
+    @entries2 = list.new()
+    @entries2 = list.push(@entries2, @md1)
+    @parp = fs.path_parent(@pth)
+    try {
+      assert_eq(string.is_empty(@parp), true)
+    } fallback {
+      @md2 = fs.read_meta(@parp, @follow)
+      @md2["name"] = ".."
+      @md2["path"] = @parp
+      @entries2 = list.push(@entries2, @md2)
+    }
+    browse(@entries, @_ed, @e) {
+      @entries2 = list.push(@entries2, @e)
+    }
+    @entries = @entries2
+  } fallback {}
+
+  @filtered = []
+  browse(@entries, @_ei, @ee) {
+    @nm = @ee["name"]
+    try {
+      assert_eq(@dir_only, true)
+      @filtered = list.push(@filtered, ee)
+    } fallback {
+      @drop = false
+      try {
+        assert_eq(@all, true)
+        @drop = false
+      } fallback {
+        try {
+          assert_eq(@almost, true)
+          try {
+            assert_eq(@nm, ".")
+            @drop = true
+          } fallback {}
+          try {
+            assert_eq(@nm, "..")
+            @drop = true
+          } fallback {}
+        } fallback {
+          try {
+            assert_eq(string.starts_with(@nm, "."), true)
+            @drop = true
+          } fallback {
+            @drop = false
+          }
+        }
+      }
+      try {
+        assert_eq(@drop, true)
+      } fallback {
+        try {
+          assert_eq(@o["ignore_backups"], true)
+          assert_eq(string.ends_with(@nm, "~"), true)
+        } fallback {
+          @filtered = list.push(@filtered, ee)
+        }
+      }
+    }
+  }
+
+  @filtered2 = []
+  browse(@filtered, @_f2, @ee) {
+    @nm2 = @ee["name"]
+    @skip_h = false
+    browse(@hides, @_hp, @pat) {
+      try {
+        assert_eq(string.fnmatch(@nm2, @pat), true)
+        @skip_h = true
+      } fallback {}
+    }
+    try {
+      assert_eq(@skip_h, true)
+    } fallback {
+      @skip_i = false
+      browse(@ignores, @_ip, @ipat) {
+        try {
+          assert_eq(string.fnmatch(@nm2, @ipat), true)
+          @skip_i = true
+        } fallback {}
+      }
+      try {
+        assert_eq(@skip_i, true)
+      } fallback {
+        @filtered2 = list.push(@filtered2, ee)
+      }
+    }
+  }
+  @filtered = @filtered2
+
+  @prepared = list.new()
+  try {
+    assert_eq(@_sorting_active, true)
+    # Note: async_browse requires list.enrich_entry callback which is defined as Procedure
+    # In ls.corvo it is @_enrich_entry.
+    async_browse(@filtered, @_enrich_entry, @ee, shared @sort_key, shared @prepared)
+  } fallback {
+    browse(@filtered, @_pj, @ee) {
+      @_enrich_entry.call(@ee, @sort_key, @prepared)
+    }
+  }
+
+  @sort_desc_default = false
+  try {
+    assert_eq(@sort_key, "size")
+    @sort_desc_default = true
+  } fallback {}
+  try {
+    assert_eq(@sort_key, "mtime_sec")
+    @sort_desc_default = true
+  } fallback {}
+  try {
+    assert_eq(@sort_key, "atime_sec")
+    @sort_desc_default = true
+  } fallback {}
+  try {
+    assert_eq(@sort_key, "ctime_sec")
+    @sort_desc_default = true
+  } fallback {}
+
+  @eff_reverse = @reverse
+  try {
+    assert_eq(@sort_desc_default, true)
+    try {
+      assert_eq(@reverse, true)
+      @eff_reverse = false
+    } fallback {
+      @eff_reverse = true
+    }
+  } fallback {}
+
+  @sorted = @prepared
+  try {
+    assert_eq(@unsorted, true)
+  } fallback {
+    try {
+      assert_eq(@sort_key, "none")
+    } fallback {
+      try {
+        assert_eq(@sort_key, "version")
+        @names = []
+        browse(@prepared, @_a, @ee) {
+          @names = list.push(@names, @ee["name"])
+        }
+        @ord = list.sort_version(@names)
+        @sorted = []
+        browse(@ord, @_b, @nn) {
+          browse(@prepared, @_c, @ee) {
+            try {
+              assert_eq(@ee["name"], @nn)
+              @sorted = list.push(@sorted, @ee)
+            } fallback {}
+          }
+        }
+      } fallback {
+        try {
+          assert_eq(@sort_key, "extension")
+          @sorted = list.sort_maps_by_key(@prepared, "extension", @eff_reverse, "name")
+        } fallback {
+          try {
+            assert_eq(@sort_key, "name")
+            @sorted = list.sort_maps_by_key(@prepared, "name", @eff_reverse)
+          } fallback {
+            try {
+              assert_eq(@sort_key, "size")
+              @sorted = list.sort_maps_by_key(@prepared, "size", @eff_reverse, "name")
+            } fallback {
+              try {
+                assert_eq(@sort_key, "mtime_sec")
+                @sorted = list.sort_maps_by_key(@prepared, "mtime_sec", @eff_reverse, "name", "mtime_nsec")
+              } fallback {
+                try {
+                  assert_eq(@sort_key, "atime_sec")
+                  @sorted = list.sort_maps_by_key(@prepared, "atime_sec", @eff_reverse, "name", "atime_nsec")
+                } fallback {
+                  try {
+                    assert_eq(@sort_key, "ctime_sec")
+                    @sorted = list.sort_maps_by_key(@prepared, "ctime_sec", @eff_reverse, "name", "ctime_nsec")
+                  } fallback {
+                    @sorted = list.sort_maps_by_key(@prepared, @sort_key, @eff_reverse, "name")
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  try {
+    assert_eq(@recursive, true)
+    assert_eq(@from_dir_read, true)
+    try {
+      assert_eq(@rec_first, true)
+      @rec_first = false
+    } fallback {
+      sys.echo("")
+    }
+    @rel = fs.path_relative(@cwd, @pth)
+    @hpre = @rel
+    try {
+      assert_eq(@hpre, ".")
+    } fallback {
+      try {
+        assert_eq(string.starts_with(@hpre, "./"), true)
+      } fallback {
+        @hpre = "./${@hpre}"
+      }
+    }
+    sys.echo("${@hpre}:")
+  } fallback {}
+
+  try {
+    assert_eq(@need_hdr, true)
+    assert_eq(@is_dir, true)
+    assert_eq(@dir_only, false)
+    try {
+      assert_eq(@recursive, true)
+    } fallback {
+      sys.echo("${@pth}:")
+    }
+  } fallback {}
+
+  try {
+    assert_eq(@long, true)
+    assert_eq(@from_dir_read, true)
+    @print_total_blocks.call(@sorted, @human)
+  } fallback {}
+
+  try {
+    assert_eq(@blocks, true)
+    assert_eq(@long, false)
+    assert_eq(@from_dir_read, true)
+    @print_total_blocks.call(@sorted, @human)
+  } fallback {}
+
+  @max_ino_s = 1
+  try {
+    assert_eq(@long, false)
+    assert_eq(@inode_col, true)
+    browse(@sorted, @_ix, @ee) {
+      @ixs = number.to_string(@ee.get("inode", 0))
+      @max_ino_s = math.max(@max_ino_s, string.len(@ixs))
+    }
+  } fallback {}
+
+  @max_blk_s = 1
+  try {
+    assert_eq(@long, false)
+    assert_eq(@blocks, true)
+    browse(@sorted, @_bx, @ee) {
+      @bw = @ee.get("blocks", 0)
+      @bsw = number.to_string(number.floor(@bw / 2))
+      @max_blk_s = math.max(@max_blk_s, string.len(@bsw))
+    }
+  } fallback {}
+
+  @max_ino = 0
+  @max_blk = 0
+  @max_nl = 0
+  @max_u = 0
+  @max_g = 0
+  @max_sz = 0
+  @max_tm = 0
+  @szm = ""
+  @tstr_m = ""
+  try {
+    assert_eq(@long, true)
+    browse(@sorted, @_mw, @ee) {
+      try {
+        assert_eq(@inode_col, true)
+        @iw = number.to_string(@ee.get("inode", 0))
+        @max_ino = math.max(@max_ino, string.len(@iw))
+      } fallback {}
+
+      try {
+        assert_eq(@blocks, true)
+        @bw = @ee.get("blocks", 0)
+        @bsw = number.to_string(number.floor(@bw / 2))
+        @max_blk = math.max(@max_blk, string.len(@bsw))
+      } fallback {}
+
+      @nlm = number.to_string(@ee.get("nlink", 1))
+      @max_nl = math.max(@max_nl, string.len(@nlm))
+
+      @uum = @ee.get("user", "")
+      @ggm = @ee.get("group", "")
+      try {
+        assert_eq(@numeric_ids, true)
+        @uum = number.to_string(@ee.get("uid", 0))
+        @ggm = number.to_string(@ee.get("gid", 0))
+      } fallback {}
+      try {
+        assert_eq(@omit_group, true)
+        @ggm = ""
+      } fallback {}
+
+      @max_u = math.max(@max_u, string.len(@uum))
+      try {
+        assert_eq(@omit_group, false)
+        @max_g = math.max(@max_g, string.len(@ggm))
+      } fallback {}
+
+      @_em = @ee
+      @get_size_string.call(@_em, @human, @si, @szm)
+      @max_sz = math.max(@max_sz, string.len(@szm))
+
+      @_ta = @o.get("time_access", false)
+      @_tc = @o.get("time_change", false)
+      @get_time_string.call(@_em, @_ta, @_tc, @tfmt, @tstr_m)
+      @max_tm = math.max(@max_tm, string.len(@tstr_m))
+    }
+  } fallback {}
+
+  @max_nl = math.max(@max_nl, 1)
+  @max_u = math.max(@max_u, 1)
+  @max_sz = math.max(@max_sz, 1)
+  @max_tm = math.max(@max_tm, 1)
+  try {
+    assert_eq(@omit_group, false)
+    @max_g = math.max(@max_g, 1)
+  } fallback {}
+  try {
+    assert_eq(@inode_col, true)
+    @max_ino = math.max(@max_ino, 1)
+  } fallback {}
+  try {
+    assert_eq(@blocks, true)
+    @max_blk = math.max(@max_blk, 1)
+  } fallback {}
+
+  @suf = ""
+
+  try {
+    assert_eq(@stream, true)
+    @_stream_line = ""
+    @_stream_first = true
+    browse(@sorted, @_so, @ee) {
+      @nm = @ee["name"]
+      @_e = @ee
+      @get_entry_suffix.call(@_e, @classify, @suf)
+      @_item = "${@nm}${@suf}"
+      try {
+        assert_eq(@_stream_first, true)
+        @_stream_line = @_item
+        @_stream_first = false
+      } fallback {
+        try {
+          assert_le(string.len(@_stream_line) + string.len(@_item) + 2, @term_w)
+          @_stream_line = "${@_stream_line}, ${@_item}"
+        } fallback {
+          sys.echo(@_stream_line)
+          @_stream_line = @_item
+        }
+      }
+    }
+    sys.echo(@_stream_line)
+  } fallback {
+    try {
+      assert_eq(@fmt_C, true)
+      @names = []
+      browse(@sorted, @_cn, @ee) {
+        @nm = @ee["name"]
+        @_e = @ee
+        @get_entry_suffix.call(@_e, @classify, @suf)
+        @names = list.push(@names, "${@nm}${@suf}")
+      }
+      sys.echo(list.columnate(@names, @term_w))
+    } fallback {
+      browse(@sorted, @_on, @ee) {
+        @nm = @ee["name"]
+        @_e = @ee
+        @get_entry_suffix.call(@_e, @classify, @suf)
+
+        try {
+          assert_eq(@long, true)
+          @pstr = @ee.get("permissions_str", "----------")
+          @nlink = string.pad_start(number.to_string(@ee.get("nlink", 1)), @max_nl, " ")
+          @user = string.pad_end(@ee.get("user", ""), @max_u, " ")
+          @group = string.pad_end(@ee.get("group", ""), @max_g, " ")
+          try {
+            assert_eq(@numeric_ids, true)
+            @user = string.pad_start(number.to_string(@ee.get("uid", 0)), @max_u, " ")
+            @group = string.pad_start(number.to_string(@ee.get("gid", 0)), @max_g, " ")
+          } fallback {}
+
+          @get_size_string.call(@_e, @human, @si, @sz)
+          @sz_s = string.pad_start(@sz, @max_sz, " ")
+
+          @_ta = @o.get("time_access", false)
+          @_tc = @o.get("time_change", false)
+          @get_time_string.call(@_e, @_ta, @_tc, @tfmt, @tm)
+          @tm_s = string.pad_start(@tm, @max_tm, " ")
+
+          @_link_target = ""
+          try {
+            assert_eq(@ee["is_symlink"], true)
+            @_lt = fs.read_link(@ee["path"])
+            @_link_target = " -> ${_lt}"
+          } fallback {}
+
+          @_prefix = ""
+          try {
+            assert_eq(@inode_col, true)
+            @_iw = string.pad_start(number.to_string(@ee.get("inode", 0)), @max_ino, " ")
+            @_prefix = "${@_iw} "
+          } fallback {}
+
+          try {
+            assert_eq(@blocks, true)
+            @_bw = @ee.get("blocks", 0)
+            @_bsw = string.pad_start(number.to_string(number.floor(@_bw / 2)), @max_blk, " ")
+            @_prefix = "${@_prefix}${@_bsw} "
+          } fallback {}
+
+          try {
+            assert_eq(@omit_group, true)
+            sys.echo("${@_prefix}${@pstr} ${@nlink} ${@user} ${@sz_s} ${@tm_s} ${@nm}${@suf}${@_link_target}")
+          } fallback {
+            sys.echo("${@_prefix}${@pstr} ${@nlink} ${@user} ${@group} ${@sz_s} ${@tm_s} ${@nm}${@suf}${@_link_target}")
+          }
+        } fallback {
+          @_prefix = ""
+          try {
+            assert_eq(@inode_col, true)
+            @_iw = string.pad_start(number.to_string(@ee.get("inode", 0)), @max_ino_s, " ")
+            @_prefix = "${@_iw} "
+          } fallback {}
+
+          try {
+            assert_eq(@blocks, true)
+            @_bw = @ee.get("blocks", 0)
+            @_bsw = string.pad_start(number.to_string(number.floor(@_bw / 2)), @max_blk_s, " ")
+            @_prefix = "${@_prefix}${@_bsw} "
+          } fallback {}
+
+          sys.echo("${@_prefix}${@nm}${@suf}")
+        }
+      }
+    }
+  }
+
+  try {
+    assert_eq(@recursive, true)
+    assert_eq(@from_dir_read, true)
+    @_subdirs = []
+    browse(@sorted, @_rb, @ee) {
+      try {
+        assert_eq(@ee["is_dir"], true)
+        @_nm = @ee["name"]
+        try {
+          assert_eq(@_nm, ".")
+        } fallback {
+          try {
+            assert_eq(@_nm, "..")
+          } fallback {
+            @_subdirs = list.push(@_subdirs, @ee["path"])
+          }
+        }
+      } fallback {}
+    }
+    @work = list.concat(@_subdirs, @work)
+  } fallback {}
+}
+
+sys.exit(@_ls_exit_code)

@@ -1,0 +1,88 @@
+# coreutils/ln.corvo — GNU-compatible `ln`
+# Run: `corvo coreutils/ln.corvo -- [OPTION]... TARGET LINK_NAME`
+
+# ── Argument-parser spec ──────────────────────────────────────────────────────
+@_ln_spec = {
+  "aliases": {
+    "s": "symbolic",
+    "f": "force",
+    "v": "verbose",
+    "symbolic": "symbolic",
+    "force": "force",
+    "verbose": "verbose"
+  }
+}
+
+@parsed = args.parse(os.argv(), @_ln_spec)
+@o = @parsed["options"]
+@operands = @parsed["positional"]
+
+@skip_main = false
+@exit_code = 0
+
+# ── Handle --help ─────────────────────────────────────────────────────────────
+if (@o.get("help", false)) {
+  sys.echo("Usage: ln [OPTION]... TARGET LINK_NAME")
+  sys.echo("Create a link named LINK_NAME to TARGET.")
+  sys.echo("")
+  sys.echo("  -s, --symbolic              make symbolic links instead of hard links")
+  sys.echo("  -f, --force                 remove existing destination files")
+  sys.echo("  -v, --verbose               print name of each linked file")
+  sys.echo("      --help               display this help and exit")
+  sys.echo("      --version            output version information and exit")
+  @skip_main = true
+}
+
+# ── Handle --version ──────────────────────────────────────────────────────────
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("ln (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+# ── Main processing ───────────────────────────────────────────────────────────
+if (!@skip_main) {
+  @symbolic = @o.get("symbolic", false)
+  @force = @o.get("force", false)
+  @verbose = @o.get("verbose", false)
+
+  if (list.len(@operands) < 2) {
+    sys.eprint("ln: missing operand")
+    @exit_code = 1
+    @skip_main = true
+  }
+}
+
+if (!@skip_main) {
+  @target = list.get(@operands, 0)
+  @link_name = list.get(@operands, 1)
+
+  if (@force && fs.exists(@link_name)) {
+    try {
+      fs.delete(@link_name)
+    } fallback {}
+  }
+
+  if (@symbolic) {
+    try {
+      fs.symlink(@target, @link_name)
+      if (@verbose) {
+        sys.echo("'${@link_name}' -> '${@target}'")
+      }
+    } fallback {
+      sys.eprint("ln: failed to create symbolic link '${@link_name}': Operation not permitted")
+      @exit_code = 1
+    }
+  } else {
+    try {
+      fs.link(@target, @link_name)
+      if (@verbose) {
+        sys.echo("'${@link_name}' => '${@target}'")
+      }
+    } fallback {
+      sys.eprint("ln: failed to create hard link '${@link_name}': Operation not permitted")
+      @exit_code = 1
+    }
+  }
+}
+
+sys.exit(@exit_code)

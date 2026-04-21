@@ -1,0 +1,31 @@
+# Create named pipes (FIFOs) with the given NAMEs.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: mkfifo [OPTION]... NAME...")
+  sys.echo("Create named pipes (FIFOs) with the given NAMEs.")
+  sys.echo("")
+  sys.echo("  -m, --mode=MODE    set file permission bits to MODE, not a=rw - umask")
+  sys.echo("      --help         display this help and exit")
+  sys.echo("      --version      output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("mkfifo (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.is_empty(@pos)) {
+    sys.eprint("mkfifo: missing operand")
+    sys.eprint("Try 'mkfifo --help' for more information.")
+    sys.exit(1)
+  }
+  browse(@pos, @i, @name) {
+    fs.mkfifo(@name, 420) # 0o644 -> 420
+  }
+}

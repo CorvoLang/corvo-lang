@@ -1,0 +1,103 @@
+# coreutils/tsort.corvo — GNU-compatible `tsort`
+# Run: `corvo coreutils/tsort.corvo [FILE]`
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: tsort [OPTION] [FILE]")
+  sys.echo("Write totally ordered list consistent with the partial ordering in FILE.")
+  sys.echo("")
+  sys.echo("      --help     display this help and exit")
+  sys.echo("      --version  output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("tsort (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  @p = @paths.get(0, "-")
+  @content = ""
+  if (@p == "-") {
+    @content = sys.read_all()
+  } else {
+    @content = fs.read(@p)
+  }
+
+  @words = []
+  @current_word = ""
+  @content_chars = string.chars(@content)
+  browse(@content_chars, @_ci, @c) {
+    if (@c == " " || @c == "\b" || @c == "\t" || @c == "\n" || @c == "\r") {
+      if (!string.is_empty(@current_word)) {
+        @words = list.push(@words, @current_word)
+        @current_word = ""
+      }
+    } else {
+      @current_word = string.concat(@current_word, @c)
+    }
+  }
+  if (!string.is_empty(@current_word)) {
+    @words = list.push(@words, @current_word)
+  }
+  @filtered = @words
+
+  @adj = {}
+  @in_degree = {}
+  @nodes = []
+
+  @i = 0
+  loop {
+    if (@i >= list.len(@filtered)) { terminate }
+    @u = list.get(@filtered, @i)
+    @v = list.get(@filtered, @i + 1)
+    @i += 2
+    
+    if (!list.contains(@nodes, @u)) { @nodes = list.push(@nodes, @u) }
+    if (!list.contains(@nodes, @v)) { @nodes = list.push(@nodes, @v) }
+    
+    if (@u == @v) { continue }
+    
+    @neighbors = @adj.get(@u, [])
+    if (!list.contains(@neighbors, @v)) {
+      @adj[@u] = list.push(@neighbors, @v)
+      @in_degree[@v] = @in_degree.get(@v, 0) + 1
+    }
+  }
+
+  @queue = []
+  browse(@nodes, @_ni, @n) {
+    if (@in_degree.get(@n, 0) == 0) {
+      @queue = list.push(@queue, @n)
+    }
+  }
+
+  @result = []
+  loop {
+    if (list.len(@queue) == 0) { terminate }
+    @u = list.first(@queue)
+    @queue = list.slice(@queue, 1, list.len(@queue))
+    @result = list.push(@result, @u)
+    
+    @neighbors = @adj.get(@u, [])
+    browse(@neighbors, @_ni, @v) {
+      @in_degree[@v] = @in_degree[@v] - 1
+      if (@in_degree[@v] == 0) {
+        @queue = list.push(@queue, @v)
+      }
+    }
+  }
+
+  browse(@result, @_ri, @n) {
+    sys.echo(@n)
+  }
+
+  if (list.len(@result) < list.len(@nodes)) {
+    sys.eprint("tsort: cycle detected")
+    sys.exit(1)
+  }
+}

@@ -29,6 +29,9 @@ sys.echo("After trim:  '${string.trim(@padded)}'")
 @replaced = string.replace(@s, "World", "Corvo")
 sys.echo(@replaced)
 
+@section.call("=== string.replace_first ===")
+sys.echo(string.replace_first("banana", "a", "o"))
+
 @section.call("=== string.split ===")
 @csv_line = "one,two,three,four"
 @parts = string.split(@csv_line, ",")
@@ -38,13 +41,26 @@ sys.echo("Split '${@csv_line}' by ',': ${list.join(@parts, " | ")}")
 sys.echo("Contains 'World': ${string.contains(@s, "World")}")
 sys.echo("Contains 'Python': ${string.contains(@s, "Python")}")
 
-@section.call("=== string.starts_with ===")
+@section.call("=== string.starts_with / string.ends_with ===")
 sys.echo("Starts with 'Hello': ${string.starts_with(@s, "Hello")}")
-sys.echo("Starts with 'World': ${string.starts_with(@s, "World")}")
-
-@section.call("=== string.ends_with ===")
 sys.echo("Ends with '!': ${string.ends_with(@s, "!")}")
-sys.echo("Ends with 'Hello': ${string.ends_with(@s, "Hello")}")
+
+@section.call("=== string.substring / string.byte_slice ===")
+sys.echo("Substring [0..5]: ${string.substring(@s, 0, 5)}")
+sys.echo("Byte slice [7..12]: ${string.byte_slice(@s, 7, 12)}")
+
+@section.call("=== string.index_of / string.last_index_of ===")
+@haystack = "banana"
+sys.echo("Index of 'a' in '${@haystack}': ${string.index_of(@haystack, "a")}")
+sys.echo("Last index of 'a' in '${@haystack}': ${string.last_index_of(@haystack, "a")}")
+
+@section.call("=== string.char_at / string.chars ===")
+sys.echo("Char at 7: ${string.char_at(@s, 7)}")
+sys.echo("Chars: ${list.join(string.chars("abc"), ", ")}")
+
+@section.call("=== string.repeat / string.count ===")
+sys.echo("Repeat 'abc' x3: ${string.repeat("abc", 3)}")
+sys.echo("Count 'a' in 'banana': ${string.count("banana", "a")}")
 
 @section.call("=== string.reverse ===")
 sys.echo("Reversed: ${string.reverse(@s)}")
@@ -52,3 +68,18 @@ sys.echo("Reversed: ${string.reverse(@s)}")
 @section.call("=== string.is_empty ===")
 sys.echo("Is '' empty: ${string.is_empty("")}")
 sys.echo("Is 'hi' empty: ${string.is_empty("hi")}")
+
+@section.call("=== string.pad_start / string.pad_end ===")
+sys.echo("Pad start '42' (5, '0'): ${string.pad_start("42", 5, "0")}")
+sys.echo("Pad end '42' (5, '.'): ${string.pad_end("42", 5, ".")}")
+
+@section.call("=== Encoding / Decoding ===")
+@raw = "Corvo Language"
+@b64 = string.base64_encode(@raw)
+sys.echo("Base64: ${@b64} -> ${string.base64_decode(@b64)}")
+
+@hex = string.hex_encode(@raw)
+sys.echo("Hex: ${@hex} -> ${string.hex_decode(@hex)}")
+
+@b32 = string.base32_encode(@raw)
+sys.echo("Base32: ${@b32} -> ${string.base32_decode(@b32)}")

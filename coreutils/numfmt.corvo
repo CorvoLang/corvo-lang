@@ -1,0 +1,66 @@
+# coreutils/numfmt.corvo — GNU-compatible `numfmt`
+# Run: `corvo coreutils/numfmt.corvo [OPTION]... [NUMBER]...`
+@spec = {
+  "aliases": { "d": "delimiter", "p": "padding" },
+  "short_values": ["d", "p"],
+  "long_values": ["to", "from", "suffix", "padding"]
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@nums = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: numfmt [OPTION]... [NUMBER]...")
+  sys.echo("Reformat NUMBER(s), or numbers from standard input if none are specified.")
+  sys.echo("")
+  sys.echo("  --to=UNIT          auto-scale output numbers to UNITs; see UNIT below")
+  sys.echo("  --padding=N        pad the output to N characters; positive N will")
+  sys.echo("                       right-align, negative N will left-align")
+  sys.echo("      --help         display this help and exit")
+  sys.echo("      --version      output version information and exit")
+  sys.echo("")
+  sys.echo("UNITs are: none, si, iec, iec-i")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("numfmt (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  @to = @o.get("to", "none")
+  @padding = number.parse(0, @o.get("padding", "0"))
+
+  @format = procedure(@val, @mode) {
+    @n = number.parse(0, @val)
+    @res = ""
+    if (@mode == "si") {
+      @res = math.human_bytes(@n, true)
+    } else {
+      if (@mode == "iec" || @mode == "iec-i") {
+        @res = math.human_bytes(@n, false)
+      } else {
+        @res = number.to_string(@n)
+      }
+    }
+    return @res
+  }
+
+  if (list.len(@nums) == 0) {
+    @content = sys.read_all()
+    @lines = string.split(@content, "\n")
+    browse(@lines, @_li, @line) {
+      if (!string.is_empty(string.trim(@line))) {
+        @f = @format.call(string.trim(@line), @to)
+        sys.echo(string.pad_start(@f, @padding, " "))
+      }
+    }
+  } else {
+    browse(@nums, @_ni, @n) {
+      @f = @format.call(@n, @to)
+      sys.echo(string.pad_start(@f, @padding, " "))
+    }
+  }
+}

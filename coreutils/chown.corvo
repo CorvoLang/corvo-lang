@@ -2,6 +2,7 @@
 # Run: `corvo coreutils/chown.corvo -- [OPTION]... [OWNER][:[GROUP]] FILE...`
 # Or:  `corvo coreutils/chown.corvo -- [OPTION]... --reference=RFILE FILE...`
 
+# ── Argument-parser spec ──────────────────────────────────────────────────────
 @_chown_spec = {
   "aliases": {
     "R": "recursive",
@@ -20,8 +21,8 @@
 @exit_code = 0
 @neg_one = -1
 
-try {
-  assert_eq(@o.get("help", false), true)
+# ── Handle --help ─────────────────────────────────────────────────────────────
+if (@o.get("help", false)) {
   sys.echo("Usage: chown [OPTION]... [OWNER][:[GROUP]] FILE...")
   sys.echo("  or:  chown [OPTION]... --reference=RFILE FILE...")
   sys.echo("")
@@ -32,80 +33,60 @@ try {
   sys.echo("      --help display this help and exit")
   sys.echo("      --version            output version information and exit")
   @skip_main = true
-} fallback {}
+}
 
-try {
-  assert_eq(@o.get("version", false), true)
+# ── Handle --version ──────────────────────────────────────────────────────────
+if (!@skip_main && @o.get("version", false)) {
   sys.echo("chown (Corvo coreutils) 0.1.0")
   @skip_main = true
-} fallback {}
+}
 
+# ── Flag extraction ───────────────────────────────────────────────────────────
 @recursive       = false
 @no_dereference  = false
 @reference       = @o.get("reference", "")
 @follow          = true
 
-try {
-  assert_eq(@skip_main, true)
-} fallback {
+if (!@skip_main) {
   @recursive = @o.get("recursive", false)
   @no_dereference = @o.get("no_dereference", false)
-  @follow = true
-  try {
-    assert_eq(@no_dereference, true)
-    @follow = false
-  } fallback {}
+  @follow = !@no_dereference
 
-  try {
-    assert_eq(string.is_empty(@reference), false)
-    try {
-      assert_eq(list.len(@operands), 0)
+  if (!string.is_empty(@reference)) {
+    if (list.is_empty(@operands)) {
       sys.eprint("chown: missing operand after 'reference'")
       sys.eprint("Try 'chown --help' for more information.")
       @exit_code = 1
       @skip_main = true
-    } fallback {}
-  } fallback {
-    try {
-      assert_lt(list.len(@operands), 2)
+    }
+  } else {
+    if (list.len(@operands) < 2) {
       sys.eprint("chown: missing operand")
       sys.eprint("Try 'chown --help' for more information.")
       @exit_code = 1
       @skip_main = true
-    } fallback {}
+    }
   }
 }
 
 @owner_spec = ""
 @files = list.new()
 
-try {
-  assert_eq(@skip_main, true)
-} fallback {
-  try {
-    assert_eq(string.is_empty(@reference), false)
+if (!@skip_main) {
+  if (!string.is_empty(@reference)) {
     @files = @operands
-  } fallback {
+  } else {
     @owner_spec = list.get(@operands, 0)
     @files = list.slice(@operands, 1, list.len(@operands))
   }
 }
 
-@_all_digits = procedure(@_s, @_ok) {
-  @_ok = re.match(/^[0-9]+$/, @_s)
-}
-
 @_uid_from = procedure(@_name, @uid_out) {
   @uid_out = @neg_one
-  try {
-    assert_eq(string.is_empty(@_name), true)
-  } fallback {
-    @digits = false
-    @_all_digits.call(@_name, @digits)
-    try {
-      assert_eq(@digits, true)
+  if (!string.is_empty(@_name)) {
+    if (re.match(/^[0-9]+$/, @_name)) {
       @uid_out = number.parse(0, @_name)
-    } fallback {
+    } else {
       @uid_out = os.user_id(@_name)
     }
   }
@@ -113,15 +94,10 @@ try {
 
 @_gid_from = procedure(@_name, @gid_out) {
   @gid_out = @neg_one
-  try {
-    assert_eq(string.is_empty(@_name), true)
-  } fallback {
-    @digits = false
-    @_all_digits.call(@_name, @digits)
-    try {
-      assert_eq(@digits, true)
+  if (!string.is_empty(@_name)) {
+    if (re.match(/^[0-9]+$/, @_name)) {
       @gid_out = number.parse(0, @_name)
-    } fallback {
+    } else {
       @gid_out = os.group_id(@_name)
     }
   }
@@ -130,11 +106,8 @@ try {
 @uid = @neg_one
 @gid = @neg_one
 
-try {
-  assert_eq(@skip_main, true)
-} fallback {
-  try {
-    assert_eq(string.is_empty(@reference), false)
+if (!@skip_main) {
+  if (!string.is_empty(@reference)) {
     try {
       @meta = fs.read_meta(@reference, true)
       @uid = map.get(@meta, "uid", @neg_one)
@@ -144,10 +117,9 @@ try {
       @exit_code = 1
       @skip_main = true
     }
-  } fallback {
-    try {
-      assert_eq(string.starts_with(@owner_spec, ":"), true)
-      @gpart = string.substring(@owner_spec, 1, string.len(@owner_spec))
+  } else {
+    if (string.starts_with(@owner_spec, ":")) {
+      @gpart = string.substring(@owner_spec, 1)
       try {
         @_gid_from.call(@gpart, @gid)
       } fallback {
@@ -155,10 +127,9 @@ try {
         @exit_code = 1
         @skip_main = true
       }
-    } fallback {
+    } else {
       @colon = string.index_of(@owner_spec, ":", 0)
-      try {
-        assert_eq(@colon, @neg_one)
+      if (@colon == @neg_one) {
         try {
           @_uid_from.call(@owner_spec, @uid)
         } fallback {
@@ -166,11 +137,10 @@ try {
           @exit_code = 1
           @skip_main = true
         }
-      } fallback {
+      } else {
         @u = string.substring(@owner_spec, 0, @colon)
-        @g = string.substring(@owner_spec, @colon + 1, string.len(@owner_spec))
-        try {
-          assert_eq(string.is_empty(@u), false)
+        @g = string.substring(@owner_spec, @colon + 1)
+        if (!string.is_empty(@u)) {
           try {
             @_uid_from.call(@u, @uid)
           } fallback {
@@ -178,9 +148,8 @@ try {
             @exit_code = 1
             @skip_main = true
           }
-        } fallback {}
-        try {
-          assert_eq(string.is_empty(@g), false)
+        }
+        if (!@skip_main && !string.is_empty(@g)) {
           try {
             @_gid_from.call(@g, @gid)
           } fallback {
@@ -188,7 +157,7 @@ try {
             @exit_code = 1
             @skip_main = true
           }
-        } fallback {}
+        }
       }
     }
   }
@@ -201,24 +170,19 @@ try {
     sys.eprint("chown: changing ownership of '${@_p}': Operation not permitted")
     @ec = 1
   }
-  try {
-    assert_eq(@_rec, false)
-  } fallback {
+  if (@_rec) {
     @dm = fs.read_meta(@_p, @_fol)
-    try {
-      assert_eq(map.get(@dm, "is_dir", false), true)
+    if (map.get(@dm, "is_dir", false)) {
       @kids = fs.read_dir_meta(@_p, @_fol)
       browse(@kids, @_ki, @e) {
         @child = map.get(@e, "path", "")
         @_chown_path.call(@child, @_u, @_g, @_fol, @_rec, @ec)
       }
-    } fallback {}
+    }
   }
 }
 
-try {
-  assert_eq(@skip_main, true)
-} fallback {
+if (!@skip_main) {
   browse(@files, @_fi, @_fp) {
     @_chown_path.call(@_fp, @uid, @gid, @follow, @recursive, @exit_code)
   }

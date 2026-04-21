@@ -1,0 +1,95 @@
+# coreutils/csplit.corvo — GNU-compatible `csplit`
+# Run: `corvo coreutils/csplit.corvo [OPTION]... FILE PATTERN...`
+@spec = {
+  "aliases": { "f": "prefix", "n": "digits" },
+  "short_values": ["f", "n"],
+  "long_values": ["prefix", "digits", "suffix-format"]
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: csplit [OPTION]... FILE PATTERN...")
+  sys.echo("Output pieces of FILE separated by PATTERN(s) to files 'xx00', 'xx01', ...,")
+  sys.echo("and output byte counts of each piece to standard output.")
+  sys.echo("")
+  sys.echo("  -f, --prefix=PREFIX        use PREFIX instead of 'xx'")
+  sys.echo("  -n, --digits=DIGITS        use specified number of digits instead of 2")
+  sys.echo("      --help                 display this help and exit")
+  sys.echo("      --version              output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("csplit (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.len(@paths) < 2) {
+    sys.eprint("csplit: missing operand")
+    sys.eprint("Try 'csplit --help' for more information.")
+    sys.exit(1)
+  }
+
+  @file = list.get(@paths, 0)
+  @patterns = list.slice(@paths, 1, list.len(@paths))
+
+  @content = ""
+  if (@file == "-") {
+    @content = sys.read_all()
+  } else {
+    @content = fs.read(@file)
+  }
+  @lines = string.split(@content, "\n")
+
+  @prefix = @o.get("prefix", "xx")
+  @digits = number.parse(2, @o.get("digits", "2"))
+
+  @curr_line = 0
+  @part = 0
+
+  browse(@patterns, @_pi, @pat) {
+    @chunk = []
+    @found = false
+    
+    if (string.starts_with(@pat, "/")) {
+      # Regex pattern: /regex/
+      @regex_pat = string.substring(@pat, 1, string.len(@pat) - 1)
+      loop {
+        if (@curr_line >= list.len(@lines)) { terminate }
+        @line = list.get(@lines, @curr_line)
+        if (re.match(@line, @regex_pat)) {
+          @found = true
+          terminate
+        }
+        @chunk = list.push(@chunk, @line)
+        @curr_line += 1
+      }
+    } else {
+      # Line number
+      @target = number.parse(0, @pat)
+      loop {
+        if (@curr_line >= @target || @curr_line >= list.len(@lines)) { terminate }
+        @chunk = list.push(@chunk, list.get(@lines, @curr_line))
+        @curr_line += 1
+      }
+      @found = true
+    }
+
+    @fname = "${@prefix}${string.pad_start(number.to_string(@part), @digits, \"0\")}"
+    fs.write(@fname, list.join(@chunk, "\n"))
+    sys.echo(number.to_string(string.len(list.join(@chunk, "\n"))))
+    @part += 1
+  }
+
+  # Write remainder
+  if (@curr_line < list.len(@lines)) {
+    @chunk = list.slice(@lines, @curr_line, list.len(@lines))
+    @fname = "${@prefix}${string.pad_start(number.to_string(@part), @digits, \"0\")}"
+    fs.write(@fname, list.join(@chunk, "\n"))
+    sys.echo(number.to_string(string.len(list.join(@chunk, "\n"))))
+  }
+}

@@ -256,6 +256,12 @@ pub fn call_string_method(name: &str, args: &[Value]) -> CorvoResult<Value> {
             ))
         }
         "trim_start" => Ok(Value::String(target.trim_start().to_string())),
+        "repeat" => {
+            let count = args.get(1).and_then(|v| v.as_number()).ok_or_else(|| {
+                CorvoError::invalid_argument("string.repeat requires a count (number)")
+            })? as usize;
+            Ok(Value::String(target.repeat(count)))
+        }
         "trim_end" => Ok(Value::String(target.trim_end().to_string())),
         "substring" => {
             // string.substring(s, start, end?) — Unicode-character-aware slice.
@@ -301,6 +307,24 @@ pub fn call_string_method(name: &str, args: &[Value]) -> CorvoResult<Value> {
                 None => Ok(Value::Number(-1.0)),
             }
         }
+        "last_index_of" => {
+            // string.last_index_of(s, needle) — last char-index of needle, or -1.
+            let needle = args
+                .get(1)
+                .and_then(|v| v.as_string())
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            if needle.is_empty() {
+                return Ok(Value::Number(target.chars().count() as f64));
+            }
+            match target.rfind(needle) {
+                Some(byte_pos) => {
+                    let char_idx = target[..byte_pos].chars().count();
+                    Ok(Value::Number(char_idx as f64))
+                }
+                None => Ok(Value::Number(-1.0)),
+            }
+        }
         "char_at" => {
             // string.char_at(s, index) — Unicode character at index, or error if out of range.
             let idx = args.get(1).and_then(|v| v.as_number()).ok_or_else(|| {
@@ -313,13 +337,6 @@ pub fn call_string_method(name: &str, args: &[Value]) -> CorvoResult<Value> {
                 .ok_or_else(|| {
                     CorvoError::runtime("string.char_at: index out of bounds".to_string())
                 })
-        }
-        "repeat" => {
-            // string.repeat(s, count) — repeat the string count times.
-            let n = args.get(1).and_then(|v| v.as_number()).ok_or_else(|| {
-                CorvoError::invalid_argument("string.repeat requires a count (number)")
-            })? as usize;
-            Ok(Value::String(target.repeat(n)))
         }
         "replace_first" => {
             // string.replace_first(s, old, new) — replace only the first occurrence.
@@ -589,6 +606,17 @@ pub fn call_list_method(name: &str, args: &[Value]) -> CorvoResult<Value> {
             new_list[index] = value;
             Ok(Value::List(new_list))
         }
+        "concat" => {
+            let mut new_list = target.clone();
+            for arg in args.iter().skip(1) {
+                if let Value::List(inner) = arg {
+                    new_list.extend(inner.iter().cloned());
+                } else {
+                    new_list.push(arg.clone());
+                }
+            }
+            Ok(Value::List(new_list))
+        }
         "first" => target
             .first()
             .cloned()
@@ -598,15 +626,15 @@ pub fn call_list_method(name: &str, args: &[Value]) -> CorvoResult<Value> {
             .cloned()
             .ok_or_else(|| CorvoError::runtime("List is empty".to_string())),
         "len" => Ok(Value::Number(target.len() as f64)),
-        "is_empty" => Ok(Value::Boolean(target.is_empty())),
-        "contains" => {
-            let item = args.get(1).cloned().unwrap_or(Value::Null);
-            Ok(Value::Boolean(target.contains(&item)))
-        }
         "reverse" => {
             let mut new_list = target.clone();
             new_list.reverse();
             Ok(Value::List(new_list))
+        }
+        "is_empty" => Ok(Value::Boolean(target.is_empty())),
+        "contains" => {
+            let item = args.get(1).cloned().unwrap_or(Value::Null);
+            Ok(Value::Boolean(target.contains(&item)))
         }
         "join" => {
             let delimiter = args

@@ -1,0 +1,81 @@
+# coreutils/paste.corvo — GNU-compatible `paste`
+# Run: `corvo coreutils/paste.corvo [OPTION]... [FILE]...`
+@spec = {
+  "aliases": { "d": "delimiters", "s": "serial" },
+  "short_values": ["d"],
+  "long_values": ["delimiters"]
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: paste [OPTION]... [FILE]...")
+  sys.echo("Write lines consisting of the sequentially corresponding lines from")
+  sys.echo("each FILE, separated by TABs, to standard output.")
+  sys.echo("")
+  sys.echo("  -d, --delimiters=LIST   reuse characters from LIST instead of TABs")
+  sys.echo("  -s, --serial            paste one file at a time instead of in parallel")
+  sys.echo("      --help              display this help and exit")
+  sys.echo("      --version           output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("paste (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.len(@paths) == 0) {
+    @paths = ["-"]
+  }
+
+  @delim = @o.get("delimiters", "\t")
+  @serial = @o.get("serial", false)
+
+  if (@serial) {
+    browse(@paths, @_pi, @p) {
+      if (@p == "-") {
+        @content = sys.read_all()
+      } else {
+        @content = fs.read(@p)
+      }
+      @lines = string.split(@content, "\n")
+      sys.echo(list.join(@lines, @delim))
+    }
+  } else {
+    @all_files = []
+    browse(@paths, @_pi, @p) {
+      if (@p == "-") {
+        @all_files = list.push(@all_files, string.split(sys.read_all(), "\n"))
+      } else {
+        @all_files = list.push(@all_files, string.split(fs.read(@p), "\n"))
+      }
+    }
+    
+    @max_lines = 0
+    browse(@all_files, @_fi, @fl) {
+      @max_lines = math.max(@max_lines, list.len(@fl))
+    }
+    
+    @i = 0
+    loop {
+      if (@i >= @max_lines) { terminate }
+      @out = ""
+      @first = true
+      browse(@all_files, @_fi, @fl) {
+        if (!@first) { @out = "${@out}${@delim}" }
+        @line = list.get(@fl, @i)
+        try {
+          assert_neq(@line, null)
+          @out = "${@out}${@line}"
+        } fallback {}
+        @first = false
+      }
+      sys.echo(@out)
+      @i += 1
+    }
+  }
+}

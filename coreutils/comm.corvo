@@ -1,0 +1,129 @@
+# coreutils/comm.corvo — GNU-compatible `comm`
+# Run: `corvo coreutils/comm.corvo [OPTION]... FILE1 FILE2`
+@spec = {
+  "aliases": { "1": "suppress_1", "2": "suppress_2", "3": "suppress_3", "i": "ignore_case" },
+  "long_values": ["output-delimiter"]
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: comm [OPTION]... FILE1 FILE2")
+  sys.echo("Compare sorted files FILE1 and FILE2 line by line.")
+  sys.echo("")
+  sys.echo("  -1                      suppress column 1 (lines unique to FILE1)")
+  sys.echo("  -2                      suppress column 2 (lines unique to FILE2)")
+  sys.echo("  -3                      suppress column 3 (lines that appear in both files)")
+  sys.echo("  --output-delimiter=STR  separate columns with STR")
+  sys.echo("  -i, --ignore-case       ignore differences in case when comparing")
+  sys.echo("      --help              display this help and exit")
+  sys.echo("      --version           output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("comm (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.len(@paths) != 2) {
+    sys.eprint("comm: missing operand")
+    sys.eprint("Try 'comm --help' for more information.")
+    sys.exit(1)
+  }
+
+  @f1 = list.get(@paths, 0)
+  @f2 = list.get(@paths, 1)
+
+  @_read = procedure(@p, @lines_out) {
+    @c = ""
+    if (@p == "-") {
+      @c = sys.read_all()
+    } else {
+      @c = fs.read(@p)
+    }
+    @lines_out = string.split(@c, "\n")
+    try {
+      if (string.is_empty(list.last(@lines_out))) {
+         @lines_out = list.slice(@lines_out, 0, list.len(@lines_out) - 1)
+      }
+    } fallback {}
+  }
+
+  @lines1 = []
+  @_read.call(@f1, @lines1)
+  @lines2 = []
+  @_read.call(@f2, @lines2)
+
+  @s1 = 0
+  @s2 = 0
+  @delim = @o.get("output-delimiter", "\t")
+
+  @sup1 = @o.get("suppress_1", false)
+  @sup2 = @o.get("suppress_2", false)
+  @sup3 = @o.get("suppress_3", false)
+  @ignore_case = @o.get("ignore_case", false)
+
+  loop {
+    @l1_exists = (@s1 < list.len(@lines1))
+    @l2_exists = (@s2 < list.len(@lines2))
+
+    if (!@l1_exists) {
+      if (!@l2_exists) { terminate }
+      @line2 = list.get(@lines2, @s2)
+      if (!@sup2) {
+        @out = ""
+        if (!@sup1) { @out = "${@out}${@delim}" }
+        sys.echo("${@out}${@line2}")
+      }
+      @s2 = @s2 + 1
+      continue
+    }
+    if (!@l2_exists) {
+      @line1 = list.get(@lines1, @s1)
+      if (!@sup1) {
+        sys.echo(@line1)
+      }
+      @s1 = @s1 + 1
+      continue
+    }
+
+    @line1 = list.get(@lines1, @s1)
+    @line2 = list.get(@lines2, @s2)
+
+    @c1 = @line1
+    @c2 = @line2
+    if (@ignore_case) {
+      @c1 = string.to_lower(@c1)
+      @c2 = string.to_lower(@c2)
+    }
+
+    if (@c1 == @c2) {
+      if (!@sup3) {
+        @out = ""
+        if (!@sup1) { @out = "${@out}${@delim}" }
+        if (!@sup2) { @out = "${@out}${@delim}" }
+        sys.echo("${@out}${@line1}")
+      }
+      @s1 = @s1 + 1
+      @s2 = @s2 + 1
+    } else {
+      if (@c1 < @c2) {
+        if (!@sup1) {
+          sys.echo(@line1)
+        }
+        @s1 = @s1 + 1
+      } else {
+        if (!@sup2) {
+          @out = ""
+          if (!@sup1) { @out = "${@out}${@delim}" }
+          sys.echo("${@out}${@line2}")
+        }
+        @s2 = @s2 + 1
+      }
+    }
+  }
+}

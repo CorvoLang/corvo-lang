@@ -1,0 +1,83 @@
+# coreutils/shuf.corvo — GNU-compatible `shuf`
+# Run: `corvo coreutils/shuf.corvo [OPTION]... [FILE]`
+@spec = {
+  "aliases": { "n": "head-count", "o": "output", "i": "input-range" },
+  "short_values": ["n", "o", "i"],
+  "long_values": ["head-count", "output", "input-range"]
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: shuf [OPTION]... [FILE]")
+  sys.echo("  or:  shuf -i LO-HI [OPTION]...")
+  sys.echo("Write a random permutation of the input lines to standard output.")
+  sys.echo("")
+  sys.echo("  -i, --input-range=LO-HI  treat each number LO through HI as an input line")
+  sys.echo("  -n, --head-count=COUNT   output at most COUNT lines")
+  sys.echo("  -o, --output=FILE        write result to FILE instead of standard output")
+  sys.echo("      --help               display this help and exit")
+  sys.echo("      --version            output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("shuf (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  @lines = []
+  @range = @o.get("input-range", "")
+  if (!string.is_empty(@range)) {
+    @parts = string.split(@range, "-")
+    @low = number.parse(0, list.get(@parts, 0, "0"))
+    @high = number.parse(0, list.get(@parts, 1, "0"))
+    @i = @low
+    loop {
+      if (@i > @high) { terminate }
+      @lines = list.push(@lines, number.to_string(@i))
+      @i += 1
+    }
+  } else {
+    @p = list.get(@paths, 0, "-")
+    @content = ""
+    if (@p == "-") {
+      @content = sys.read_all()
+    } else {
+      @content = fs.read(@p)
+    }
+    @lines = string.split(@content, "\n")
+    if (list.len(@lines) > 0 && string.is_empty(list.last(@lines))) {
+      @lines = list.slice(@lines, 0, list.len(@lines) - 1)
+    }
+  }
+
+  @len = list.len(@lines)
+  if (@len > 1) {
+    @i = 0
+    loop {
+      if (@i >= @len - 1) { terminate }
+      @j = math.floor(math.random() * (@len - @i)) + @i
+      @tmp = list.get(@lines, @i)
+      @lines = list.set(@lines, @i, list.get(@lines, @j))
+      @lines = list.set(@lines, @j, @tmp)
+      @i += 1
+    }
+  }
+
+  @count = @len
+  @nc = @o.get("head-count", "")
+  if (!string.is_empty(@nc)) {
+    @count = math.min(@count, number.parse(@count, @nc))
+  }
+
+  @i = 0
+  loop {
+    if (@i >= @count) { terminate }
+    sys.echo(list.get(@lines, @i))
+    @i += 1
+  }
+}

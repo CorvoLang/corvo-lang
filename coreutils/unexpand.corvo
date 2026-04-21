@@ -1,0 +1,92 @@
+# coreutils/unexpand.corvo — GNU-compatible `unexpand`
+# Run: `corvo coreutils/unexpand.corvo [OPTION]... [FILE]...`
+@_unexpand_spec = {
+  "aliases": {
+    "a": "all",
+    "t": "tabs"
+  },
+  "short_values": ["t"],
+  "long_values": ["tabs"]
+}
+@parsed = args.parse(os.argv(), @_unexpand_spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: unexpand [OPTION]... [FILE]...")
+  sys.echo("Convert spaces in each FILE to tabs, writing to standard output.")
+  sys.echo("")
+  sys.echo("  -a, --all           convert all blanks, instead of just initial blanks")
+  sys.echo("  -t, --tabs=N        have tabs N characters apart instead of 8")
+  sys.echo("      --help          display this help and exit")
+  sys.echo("      --version       output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("unexpand (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.len(@paths) == 0) {
+    @paths = ["-"]
+  }
+
+  @all = @o.get("all", false)
+  @tab_size = 8
+  try {
+    @_t = @o.get("tabs", "8")
+    @tab_size = number.parse(@_t)
+  } fallback {}
+
+  browse(@paths, @_pi, @path) {
+    @content = ""
+    if (@path == "-") {
+      @content = sys.read_all()
+    } else {
+      @content = fs.read(@path)
+    }
+    @lines = string.split(@content, "\n")
+    
+    browse(@lines, @_li, @line) {
+      @out = ""
+      @space_count = 0
+      @col = 0
+      @in_initial = true
+      @chars = string.chars(@line)
+      
+      browse(@chars, @_ci, @ch) {
+        if (@ch == " ") {
+          @space_count += 1
+          @col += 1
+          if ((@col % @tab_size) == 0) {
+              if (@space_count > 1 && (@all || @in_initial)) {
+                 @out = "${@out}\t"
+                 @space_count = 0
+              } else {
+                 @_rep = string.repeat(" ", @space_count)
+                 @out = "${@out}${@_rep}"
+                 @space_count = 0
+              }
+          }
+        } else {
+          if (@space_count > 0) {
+            @_rep = string.repeat(" ", @space_count)
+            @out = "${@out}${@_rep}"
+            @space_count = 0
+          }
+          @out = "${@out}${@ch}"
+          @col += 1
+          @in_initial = false
+        }
+      }
+      if (@space_count > 0) {
+        @_rep = string.repeat(" ", @space_count)
+        @out = "${@out}${@_rep}"
+      }
+      sys.echo(@out)
+    }
+  }
+}

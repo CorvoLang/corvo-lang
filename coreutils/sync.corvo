@@ -1,0 +1,13 @@
+# Force changed blocks to disk, update the super block.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+if (@o.get("help", false)) {
+  sys.echo("Usage: sync [OPTION] [FILE]...")
+  sys.echo("Force changed blocks to disk, update the super block.")
+  sys.exit(0)
+}
+if (@o.get("version", false)) {
+  sys.echo("sync (Corvo coreutils) 0.1.0")
+  sys.exit(0)
+}
+sys.sync()

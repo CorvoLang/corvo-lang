@@ -1,0 +1,38 @@
+# Read from standard input and write to standard output and files.
+@parsed = args.parse(os.argv(), { "aliases": { "a": "append" } })
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: tee [OPTION]... [FILE]...")
+  sys.echo("Copy standard input to each FILE, and also to standard output.")
+  sys.echo("")
+  sys.echo("  -a, --append        append to the given FILEs, do not overwrite")
+  sys.echo("      --help          display this help and exit")
+  sys.echo("      --version       output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("tee (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  @append = @o.get("append", false)
+  @content = sys.read_all()
+  sys.print(@content)
+
+  browse(@pos, @idx, @f) {
+    try {
+      if (@append) {
+        fs.append(@f, @content)
+      } else {
+        fs.write(@f, @content)
+      }
+    } fallback {
+      sys.eprint("tee: ${@f}: Permission denied")
+    }
+  }
+}

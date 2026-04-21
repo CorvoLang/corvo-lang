@@ -2,6 +2,7 @@
 # Run: `corvo coreutils/chmod.corvo -- [OPTION]... MODE[,MODE]... FILE...`
 # Or:  `corvo coreutils/chmod.corvo -- [OPTION]... --reference=RFILE FILE...`
 
+# ── Argument-parser spec ──────────────────────────────────────────────────────
 @_chmod_spec = {
   "aliases": {
     "R": "recursive",
@@ -24,8 +25,8 @@
 @skip_main = false
 @exit_code = 0
 
-try {
-  assert_eq(@o.get("help", false), true)
+# ── Handle --help ─────────────────────────────────────────────────────────────
+if (@o.get("help", false)) {
   sys.echo("Usage: chmod [OPTION]... MODE[,MODE]... FILE...")
   sys.echo("  or:  chmod [OPTION]... --reference=RFILE FILE...")
   sys.echo("")
@@ -37,54 +38,47 @@ try {
   sys.echo("      --help              display this help and exit")
   sys.echo("      --version           output version information and exit")
   @skip_main = true
-} fallback {}
+}
 
-try {
-  assert_eq(@o.get("version", false), true)
+# ── Handle --version ──────────────────────────────────────────────────────────
+if (!@skip_main && @o.get("version", false)) {
   sys.echo("chmod (Corvo coreutils) 0.1.0")
   @skip_main = true
-} fallback {}
+}
 
+# ── Flag extraction ───────────────────────────────────────────────────────────
 @recursive = false
 @quiet     = false
 @reference = @o.get("reference", "")
 
-try {
-  assert_eq(@skip_main, true)
-} fallback {
+if (!@skip_main) {
   @recursive = @o.get("recursive", false)
   @quiet     = @o.get("quiet", false)
 
-  try {
-    assert_eq(string.is_empty(@reference), false)
-    try {
-      assert_eq(list.len(@operands), 0)
+  if (!string.is_empty(@reference)) {
+    if (list.is_empty(@operands)) {
       sys.eprint("chmod: missing operand after 'reference'")
       sys.eprint("Try 'chmod --help' for more information.")
       @exit_code = 1
       @skip_main = true
-    } fallback {}
-  } fallback {
-    try {
-      assert_lt(list.len(@operands), 2)
+    }
+  } else {
+    if (list.len(@operands) < 2) {
       sys.eprint("chmod: missing operand")
       sys.eprint("Try 'chmod --help' for more information.")
       @exit_code = 1
       @skip_main = true
-    } fallback {}
+    }
   }
 }
 
 @mode_arg = ""
 @files = list.new()
 
-try {
-  assert_eq(@skip_main, true)
-} fallback {
-  try {
-    assert_eq(string.is_empty(@reference), false)
+if (!@skip_main) {
+  if (!string.is_empty(@reference)) {
     @files = @operands
-  } fallback {
+  } else {
     @mode_arg = list.get(@operands, 0)
     @files = list.slice(@operands, 1, list.len(@operands))
   }
@@ -92,28 +86,23 @@ try {
 
 @_chmod_one = procedure(@_path, @_mstr, @_mnum, @_use_num, @_rec) {
   try {
-    try {
-      assert_eq(@_use_num, true)
+    if (@_use_num) {
       fs.chmod(@_path, @_mnum, @_rec)
-    } fallback {
+    } else {
       fs.chmod(@_path, @_mstr, @_rec)
     }
   } fallback {
-    try {
-      assert_eq(@quiet, false)
+    if (!@quiet) {
       sys.eprint("chmod: changing permissions of '${@_path}': Operation not permitted")
-    } fallback {}
+    }
     @exit_code = 1
   }
 }
 
-try {
-  assert_eq(@skip_main, true)
-} fallback {
+if (!@skip_main) {
   @use_num = false
   @mode_num = 0.0
-  try {
-    assert_eq(string.is_empty(@reference), false)
+  if (!string.is_empty(@reference)) {
     try {
       @use_num = true
       @mode_num = map.get(fs.read_meta(@reference, true), "mode", 0.0)
@@ -122,11 +111,9 @@ try {
       @exit_code = 1
       @skip_main = true
     }
-  } fallback {}
+  }
 
-  try {
-    assert_eq(@skip_main, true)
-  } fallback {
+  if (!@skip_main) {
     browse(@files, @_fi, @_fp) {
       @_chmod_one.call(@_fp, @mode_arg, @mode_num, @use_num, @recursive)
     }

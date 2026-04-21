@@ -1,0 +1,95 @@
+# coreutils/join.corvo — GNU-compatible `join`
+# Run: `corvo coreutils/join.corvo [OPTION]... FILE1 FILE2`
+@spec = {
+  "aliases": { "a": "filenum", "v": "suppress", "j": "field", "t": "delimiter", "i": "ignore-case" },
+  "short_values": ["a", "v", "j", "t", "1", "2"],
+  "long_values": ["delimiter"]
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: join [OPTION]... FILE1 FILE2")
+  sys.echo("For each pair of input lines with identical join fields, write a line to")
+  sys.echo("standard output.  The default join field is the first, delimited")
+  sys.echo("by blanks.")
+  sys.echo("")
+  sys.echo("  -i, --ignore-case     ignore differences in case when comparing fields")
+  sys.echo("  -j FIELD              equivalent to '-1 FIELD -2 FIELD'")
+  sys.echo("  -t CHAR               use CHAR as input and output field separator")
+  sys.echo("  -1 FIELD              join on this FIELD of file 1")
+  sys.echo("  -2 FIELD              join on this FIELD of file 2")
+  sys.echo("      --help            display this help and exit")
+  sys.echo("      --version         output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("join (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  if (list.len(@paths) != 2) {
+    sys.eprint("join: missing operand")
+    sys.eprint("Try 'join --help' for more information.")
+    sys.exit(1)
+  }
+
+  @f1 = list.get(@paths, 0)
+  @f2 = list.get(@paths, 1)
+
+  @_read = procedure(@p, @lines_out) {
+    @c = ""
+    if (@p == "-") {
+      @c = sys.read_all()
+    } else {
+      @c = fs.read(@p)
+    }
+    @lines_out = string.split(@c, "\n")
+    try {
+      if (string.is_empty(list.last(@lines_out))) {
+         @lines_out = list.slice(@lines_out, 0, list.len(@lines_out) - 1)
+      }
+    } fallback {}
+  }
+
+  @lines1 = []
+  @_read.call(@f1, @lines1)
+  @lines2 = []
+  @_read.call(@f2, @lines2)
+
+  @delim = @o.get("delimiter", " ")
+  @j1 = number.parse(1, @o.get("1", @o.get("field", "1")))
+  @j2 = number.parse(1, @o.get("2", @o.get("field", "1")))
+
+  @map2 = {}
+  browse(@lines2, @_li, @line) {
+    if (string.is_empty(string.trim(@line))) { continue }
+    @parts = string.split(@line, @delim)
+    @key = list.get(@parts, @j2 - 1)
+    @map2[@key] = @line
+  }
+
+  browse(@lines1, @_li, @line) {
+    if (string.is_empty(string.trim(@line))) { continue }
+    @parts = string.split(@line, @delim)
+    @key = list.get(@parts, @j1 - 1)
+    
+    try {
+      @match = @map2[@key]
+      @mparts = string.split(@match, @delim)
+      @others = []
+      @i = 0
+      browse(@mparts, @_mi, @mp) {
+        if (@i != @j2 - 1) {
+          @others = list.push(@others, @mp)
+        }
+        @i = @i + 1
+      }
+      sys.echo("${@line}${@delim}${list.join(@others, @delim)}")
+    } fallback {}
+  }
+}

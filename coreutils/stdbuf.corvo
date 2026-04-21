@@ -1,0 +1,35 @@
+# Run COMMAND, with modified buffering operations for its standard streams.
+@parsed = args.parse(os.argv(), { "aliases": { "i": "input", "o": "output", "e": "error" } })
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: stdbuf OPTION... COMMAND")
+  sys.echo("Run COMMAND, with modified buffering operations for its standard streams.")
+  sys.echo("")
+  sys.echo("  -i, --input=MODE   adjust standard input stream buffering")
+  sys.echo("  -o, --output=MODE  adjust standard output stream buffering")
+  sys.echo("  -e, --error=MODE   adjust standard error stream buffering")
+  sys.echo("      --help         display this help and exit")
+  sys.echo("      --version      output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("stdbuf (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  try {
+    assert_gt(list.len(@pos), 0)
+    # Buffering modification not yet supported natively in sys.exec
+    @res = sys.exec(@pos)
+    sys.exit(@res["code"])
+  } fallback {
+    sys.eprint("stdbuf: missing operand")
+    sys.eprint("Try 'stdbuf --help' for more information.")
+    sys.exit(1)
+  }
+}

@@ -1,0 +1,89 @@
+# Check file types and compare values.
+@pos = args.scan(os.argv())["positional"]
+@len = list.len(@pos)
+
+if (@len == 1) {
+  @arg = list.get(@pos, 0)
+  if (@arg == "--help") {
+    sys.echo("Usage: test EXPRESSION")
+    sys.echo("  or:  test")
+    sys.echo("  or:  [ EXPRESSION ]")
+    sys.echo("  or:  [ ]")
+    sys.echo("  or:  [ OPTION")
+    sys.echo("Exit with a status of 0 (true) or 1 (false) depending on the evaluation of EXPRESSION.")
+    sys.echo("")
+    sys.echo("      --help     display this help and exit")
+    sys.echo("      --version  output version information and exit")
+    sys.exit(0)
+  }
+}
+
+# Remove trailing ']' if called as '['
+if (@len > 0 && list.get(@pos, @len - 1) == "]") {
+  @pos = list.slice(@pos, 0, @len - 1)
+  @len = list.len(@pos)
+}
+
+@res = false
+
+if (@len > 0) {
+  if (@len >= 3) {
+    # Binary operators (e.g. "a" = "b", 1 -eq 2)
+    @left = list.get(@pos, 0)
+    @op = list.get(@pos, 1)
+    @right = list.get(@pos, 2)
+    
+    match (@op) {
+      "=" => { @res = (@left == @right) },
+      "!=" => { @res = (@left != @right) },
+      "-eq" => { try { @res = (number.parse(0, @left) == number.parse(0, @right)) } fallback { @res = false } },
+      "-ne" => { try { @res = (number.parse(0, @left) != number.parse(0, @right)) } fallback { @res = false } },
+      "-gt" => { try { @res = (number.parse(0, @left) > number.parse(0, @right)) } fallback { @res = false } },
+      "-ge" => { try { @res = (number.parse(0, @left) >= number.parse(0, @right)) } fallback { @res = false } },
+      "-lt" => { try { @res = (number.parse(0, @left) < number.parse(0, @right)) } fallback { @res = false } },
+      "-le" => { try { @res = (number.parse(0, @left) <= number.parse(0, @right)) } fallback { @res = false } },
+      _ => { @res = false }
+    }
+  } else {
+    if (@len >= 2) {
+      # Unary operators (e.g. -f file, -z string)
+      @op = list.get(@pos, 0)
+      @arg = list.get(@pos, 1)
+      
+      match (@op) {
+        "-e" => { @res = fs.exists(@arg) },
+        "-f" => { 
+          try { 
+            @s = fs.stat(@arg)
+            @res = (map.get(@s, "is_dir", false) == false)
+          } fallback { @res = false }
+        },
+        "-d" => {
+          try {
+            @s = fs.stat(@arg)
+            @res = (map.get(@s, "is_dir", false) == true)
+          } fallback { @res = false }
+        },
+        "-s" => {
+          try {
+            @s = fs.stat(@arg)
+            @res = (map.get(@s, "size", 0) > 0)
+          } fallback { @res = false }
+        },
+        "-z" => { @res = string.is_empty(@arg) },
+        "-n" => { @res = !string.is_empty(@arg) },
+        _ => { @res = false }
+      }
+    } else {
+      # Single argument case: [ string ]
+      @arg = list.get(@pos, 0)
+      @res = !string.is_empty(@arg)
+    }
+  }
+}
+
+if (@res) {
+  sys.exit(0)
+} else {
+  sys.exit(1)
+}

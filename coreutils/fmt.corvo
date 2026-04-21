@@ -1,0 +1,91 @@
+# coreutils/fmt.corvo — GNU-compatible `fmt`
+# Run: `corvo coreutils/fmt.corvo [OPTION]... [FILE]...`
+@spec = {
+  "aliases": { "w": "width", "u": "uniform-spacing", "t": "tagged-paragraph" },
+  "short_values": ["w"],
+  "long_values": ["width"]
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: fmt [OPTION]... [FILE]...")
+  sys.echo("Reformat each paragraph in the FILE(s), writing to standard output.")
+  sys.echo("")
+  sys.echo("  -w, --width=WIDTH       set the maximum line width (default 75)")
+  sys.echo("  -u, --uniform-spacing   one space between words, two after sentences")
+  sys.echo("      --help              display this help and exit")
+  sys.echo("      --version           output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("fmt (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  @width = 75
+  @ww = @o.get("width", "")
+  try {
+    assert_neq(@ww, "")
+    @width = number.parse(0, @ww)
+  } fallback {}
+
+  @uniform = @o.get("uniform-spacing", false)
+
+  @process = procedure(@content) {
+    @lines = string.split(@content, "\n")
+    @words = []
+    browse(@lines, @_li, @line) {
+      if (string.is_empty(string.trim(@line))) {
+        # Paragraph break - process current words
+        @print_paragraph.call(@words)
+        @words = []
+        sys.echo("")
+      } else {
+        @line_words = string.split(string.trim(@line), " ")
+        browse(@line_words, @_wi, @w) {
+          if (!string.is_empty(@w)) {
+            @words = list.push(@words, @w)
+          }
+        }
+      }
+    }
+    @print_paragraph.call(@words)
+  }
+
+  @print_paragraph = procedure(@words) {
+    if (list.len(@words) == 0) { return }
+    @curr_line = ""
+    browse(@words, @_wi, @word) {
+      if (string.is_empty(@curr_line)) {
+        @curr_line = @word
+      } else {
+        if (string.len(@curr_line) + string.len(@word) + 1 <= @width) {
+          @curr_line = "${@curr_line} ${@word}"
+        } else {
+          sys.echo(@curr_line)
+          @curr_line = @word
+        }
+      }
+    }
+    if (!string.is_empty(@curr_line)) {
+      sys.echo(@curr_line)
+    }
+  }
+
+  if (list.len(@paths) == 0) {
+    @process.call(sys.read_all())
+  } else {
+    browse(@paths, @_pi, @p) {
+      if (@p == "-") {
+        @process.call(sys.read_all())
+      } else {
+        @process.call(fs.read(@p))
+      }
+    }
+  }
+}

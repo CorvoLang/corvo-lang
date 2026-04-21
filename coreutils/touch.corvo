@@ -1,0 +1,46 @@
+# coreutils/touch.corvo — GNU-compatible `touch`
+# Run: `corvo coreutils/touch.corvo -- [OPTION]... FILE...`
+
+# ── Argument-parser spec ──────────────────────────────────────────────────────
+@_touch_spec = {
+  "aliases": {
+    "c": "no_create",
+    "no_create": "no_create"
+  }
+}
+
+@parsed = args.parse(os.argv(), @_touch_spec)
+@o = @parsed["options"]
+@operands = @parsed["positional"]
+
+@skip_main = false
+
+# ── Handle --help ─────────────────────────────────────────────────────────────
+if (@o.get("help", false)) {
+  sys.echo("Usage: touch [OPTION]... FILE...")
+  sys.echo("Update the access and modification times of each FILE to the current time.")
+  sys.echo("")
+  sys.echo("  -c, --no-create          do not create any files")
+  sys.echo("      --help               display this help and exit")
+  @skip_main = true
+}
+
+# ── Main processing ───────────────────────────────────────────────────────────
+if (!@skip_main) {
+  @no_create = @o.get("no_create", false)
+  
+  browse(@operands, @i, @file) {
+    if (fs.exists(@file)) {
+      # In Corvo, appending empty string updates timestamp if file exists
+      try {
+        fs.append(@file, "")
+      } fallback {}
+    } else {
+      if (!@no_create) {
+        try {
+          fs.write(@file, "")
+        } fallback {}
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+# Run COMMAND, ignoring hangup signals.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: nohup COMMAND [ARG]...")
+  sys.echo("  or:  nohup OPTION")
+  sys.echo("Run COMMAND, ignoring hangup signals.")
+  sys.echo("")
+  sys.echo("      --help     display this help and exit")
+  sys.echo("      --version  output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("nohup (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  try {
+    assert_gt(list.len(@pos), 0)
+    # Note: In a real nohup we'd ignore SIGHUP.
+    @res = sys.exec(@pos)
+    sys.exit(@res["code"])
+  } fallback {
+    sys.eprint("nohup: missing operand")
+    sys.eprint("Try 'nohup --help' for more information.")
+    sys.exit(1)
+  }
+}

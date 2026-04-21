@@ -1,0 +1,24 @@
+# Format and print data.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+if (@o.get("help", false)) {
+  sys.echo("Usage: printf FORMAT [ARGUMENT]...")
+  sys.echo("  or:  printf OPTION")
+  sys.echo("Format and print ARGUMENT(s) according to FORMAT.")
+  sys.echo("")
+  sys.echo("      --help     display this help and exit")
+  sys.echo("      --version  output version information and exit")
+  sys.exit(0)
+}
+if (@o.get("version", false)) {
+  sys.echo("printf (Corvo coreutils) 0.1.0")
+  sys.exit(0)
+}
+try {
+  @fmt = list.get(@pos, 0)
+  @argv_list = list.slice(@pos, 1)
+  sys.printf(@fmt, @argv_list)
+} fallback {
+  sys.exit(1)
+}

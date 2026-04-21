@@ -1,0 +1,20 @@
+# Print who is logged in.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+if (@o.get("help", false)) {
+  sys.echo("Usage: who [OPTION]... [ FILE | ARG1 ARG2 ]")
+  sys.echo("Print information about users who are currently logged in.")
+  sys.echo("")
+  sys.echo("      --help     display this help and exit")
+  sys.echo("      --version  output version information and exit")
+  sys.exit(0)
+}
+if (@o.get("version", false)) {
+  sys.echo("who (Corvo coreutils) 0.1.0")
+  sys.exit(0)
+}
+browse(os.users(), @i, @u) {
+    # Format: user \t line \t time (host)
+    @t = time.format_local(@u["time"], 0, "%Y-%m-%d %H:%M")
+    sys.echo("${@u["user"]}\t${@u["line"]}\t${@t} (${@u["host"]})")
+}

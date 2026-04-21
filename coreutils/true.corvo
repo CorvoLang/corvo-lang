@@ -1,0 +1,13 @@
+# Do nothing, successfully.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+if (@o.get("help", false)) {
+  sys.echo("Usage: true")
+  sys.echo("Exit with a status code indicating success.")
+  sys.exit(0)
+}
+if (@o.get("version", false)) {
+  sys.echo("true (Corvo coreutils) 0.1.0")
+  sys.exit(0)
+}
+sys.exit(0)

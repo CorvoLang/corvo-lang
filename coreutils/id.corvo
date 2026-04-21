@@ -1,0 +1,27 @@
+# Print user and group information for the current user.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+if (@o.get("help", false)) {
+  sys.echo("Usage: id [OPTION]... [USER]")
+  sys.echo("Print user and group information for each specified USER,")
+  sys.echo("or (with no USER) for the current process.")
+  sys.echo("")
+  sys.echo("  -u, --user     print only the effective user ID")
+  sys.echo("  -g, --group    print only the effective group ID")
+  sys.echo("  -G, --groups   print all group IDs")
+  sys.echo("  -n, --name     print a name instead of a number, for -ugG")
+  sys.echo("      --help     display this help and exit")
+  sys.echo("      --version  output version information and exit")
+  sys.exit(0)
+}
+if (@o.get("version", false)) {
+  sys.echo("id (Corvo coreutils) 0.1.0")
+  sys.exit(0)
+}
+
+@u = os.username()
+@uid = os.user_id(@u)
+@gid = os.group_id(@u)
+@groups = os.groups()
+
+sys.echo("uid=${number.to_string(@uid)}(${@u}) gid=${number.to_string(@gid)}(${@u}) groups=${list.join(@groups, ",")}")

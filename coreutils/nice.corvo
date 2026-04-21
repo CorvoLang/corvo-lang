@@ -1,0 +1,43 @@
+# Run COMMAND with modified scheduling priority.
+@spec = {
+  "aliases": { "n": "adjustment" },
+  "short_values": ["n"],
+  "long_values": ["adjustment"]
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@pos = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: nice [OPTION] [COMMAND [ARG]...]")
+  sys.echo("Run COMMAND with modified scheduling priority.")
+  sys.echo("With no COMMAND, print the current scheduling priority.")
+  sys.echo("")
+  sys.echo("  -n, --adjustment=N   add integer N to the niceness (default 10)")
+  sys.echo("      --help           display this help and exit")
+  sys.echo("      --version        output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("nice (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  @inc = 10
+  try {
+    @inc = number.parse(@o.get("adjustment", "10"))
+  } fallback {}
+
+  if (list.len(@pos) > 0) {
+    sys.nice(@inc)
+    @res = sys.exec(@pos)
+    sys.exit(@res["code"])
+  } else {
+    # No command: in a real system we'd get the current priority.
+    # For now we'll just echo 0.
+    sys.echo("0")
+  }
+}

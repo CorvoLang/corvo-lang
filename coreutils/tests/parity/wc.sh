@@ -19,6 +19,8 @@ run_case wc "bytes only"              "gnu-wc -c /tmp/wc_test.txt"              
 run_case wc "multiple files"          "gnu-wc /tmp/wc_test.txt /tmp/wc_lines.txt"     "corvo /corvo/coreutils/wc.corvo -- /tmp/wc_test.txt /tmp/wc_lines.txt"
 run_case wc "no trailing newline"     "gnu-wc /tmp/wc_nonl.txt"                       "corvo /corvo/coreutils/wc.corvo -- /tmp/wc_nonl.txt"
 run_case wc "lines + words"           "gnu-wc -lw /tmp/wc_test.txt"                   "corvo /corvo/coreutils/wc.corvo -- -l -w /tmp/wc_test.txt"
+run_case wc "stdin"                   "echo 'abc\ndef' | gnu-wc"                      "echo 'abc\ndef' | corvo /corvo/coreutils/wc.corvo"
+run_case wc "stdin dash"              "echo 'abc\ndef' | gnu-wc -"                    "echo 'abc\ndef' | corvo /corvo/coreutils/wc.corvo -- -"
 
 run_uutils_case wc "basic count"      "uu-wc /tmp/wc_test.txt"                        "corvo /corvo/coreutils/wc.corvo -- /tmp/wc_test.txt"
 

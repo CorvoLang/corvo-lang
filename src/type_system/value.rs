@@ -131,6 +131,19 @@ impl PartialEq for Value {
     }
 }
 
+impl PartialOrd for Value {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (Self::String(a), Self::String(b)) => a.partial_cmp(b),
+            (Self::Number(a), Self::Number(b)) => a.partial_cmp(b),
+            (Self::Boolean(a), Self::Boolean(b)) => a.partial_cmp(b),
+            (Self::List(a), Self::List(b)) => a.partial_cmp(b),
+            (Self::Null, Self::Null) => Some(std::cmp::Ordering::Equal),
+            (a, b) => a.to_string().partial_cmp(&b.to_string()),
+        }
+    }
+}
+
 impl Serialize for Value {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {

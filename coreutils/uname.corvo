@@ -1,0 +1,42 @@
+# Print certain system information.
+@parsed = args.parse(os.argv(), { "aliases": { "a": "all", "s": "kernel-name", "n": "nodename", "r": "kernel-release", "v": "kernel-version", "m": "machine" } })
+@o = @parsed["options"]
+if (@o.get("help", false)) {
+  sys.echo("Usage: uname [OPTION]...")
+  sys.echo("Print certain system information.  With no OPTION, same as -s.")
+  sys.echo("")
+  sys.echo("  -a, --all                print all information, in the following order:")
+  sys.echo("  -s, --kernel-name        print the kernel name")
+  sys.echo("  -n, --nodename           print the network node hostname")
+  sys.echo("  -r, --kernel-release     print the kernel release")
+  sys.echo("  -v, --kernel-version     print the kernel version")
+  sys.echo("  -m, --machine            print the machine hardware name")
+  sys.echo("      --help               display this help and exit")
+  sys.echo("      --version            output version information and exit")
+  sys.exit(0)
+}
+if (@o.get("version", false)) {
+  sys.echo("uname (Corvo coreutils) 0.1.0")
+  sys.exit(0)
+}
+
+@info = os.info()
+@parts = list.new()
+
+if (@o.get("all", false)) {
+  @parts = list.push(@parts, @info["os"])
+  @parts = list.push(@parts, @info["hostname"])
+  @parts = list.push(@parts, "0.0.0") # release dummy
+  @parts = list.push(@parts, "unknown") # version dummy
+  @parts = list.push(@parts, @info["arch"])
+} else {
+  if (map.is_empty(@o)) {
+    @parts = list.push(@parts, @info["os"])
+  } else {
+    if (@o.get("kernel-name", false)) { @parts = list.push(@parts, @info["os"]) }
+    if (@o.get("nodename", false)) { @parts = list.push(@parts, @info["hostname"]) }
+    if (@o.get("machine", false)) { @parts = list.push(@parts, @info["arch"]) }
+  }
+}
+
+sys.echo(list.join(@parts, " "))

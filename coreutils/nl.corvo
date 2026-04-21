@@ -1,0 +1,61 @@
+# coreutils/nl.corvo — GNU-compatible `nl`
+# Run: `corvo coreutils/nl.corvo [OPTION]... [FILE]...`
+@spec = {
+  "aliases": { "v": "starting-line-number", "i": "line-increment", "s": "separator", "w": "width" },
+  "short_values": ["v", "i", "s", "w"],
+  "long_values": ["starting-line-number", "line-increment", "separator", "width"]
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: nl [OPTION]... [FILE]...")
+  sys.echo("Write each FILE to standard output, with line numbers added.")
+  sys.echo("")
+  sys.echo("  -i, --line-increment=NUMBER     line number increment at each line")
+  sys.echo("  -s, --separator=STRING          add STRING after (possible) line number")
+  sys.echo("  -v, --starting-line-number=NUMBER  first line number on each logical page")
+  sys.echo("  -w, --width=NUMBER              number of columns for line numbers")
+  sys.echo("      --help                      display this help and exit")
+  sys.echo("      --version                   output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("nl (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  @line_num = number.parse(1, @o.get("starting-line-number", "1"))
+  @inc = number.parse(1, @o.get("line-increment", "1"))
+  @sep = @o.get("separator", "\t")
+  @width = number.parse(6, @o.get("width", "6"))
+
+  @process = procedure(@content) {
+    @lines = string.split(@content, "\n")
+    browse(@lines, @_li, @line) {
+      if (string.is_empty(string.trim(@line))) {
+        sys.echo("")
+      } else {
+        @num_s = string.pad_start(number.to_string(@line_num), @width, " ")
+        sys.echo("${@num_s}${@sep}${@line}")
+        @line_num += @inc
+      }
+    }
+  }
+
+  if (list.len(@paths) == 0) {
+    @process.call(sys.read_all())
+  } else {
+    browse(@paths, @_pi, @p) {
+      if (@p == "-") {
+        @process.call(sys.read_all())
+      } else {
+        @process.call(fs.read(@p))
+      }
+    }
+  }
+}

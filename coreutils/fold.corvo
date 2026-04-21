@@ -1,0 +1,79 @@
+# coreutils/fold.corvo — GNU-compatible `fold`
+# Run: `corvo coreutils/fold.corvo [OPTION]... [FILE]...`
+@spec = {
+  "aliases": { "w": "width", "s": "spaces", "b": "bytes" },
+  "short_values": ["w"],
+  "long_values": ["width"]
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: fold [OPTION]... [FILE]...")
+  sys.echo("Wrap input lines in each FILE (standard input by default), writing to")
+  sys.echo("standard output.")
+  sys.echo("")
+  sys.echo("  -b, --bytes         count bytes rather than columns")
+  sys.echo("  -s, --spaces        break at spaces")
+  sys.echo("  -w, --width=WIDTH   use WIDTH columns instead of 80")
+  sys.echo("      --help          display this help and exit")
+  sys.echo("      --version       output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("fold (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  @width = 80
+  @ww = @o.get("width", "")
+  try {
+    assert_neq(@ww, "")
+    @width = number.parse(0, @ww)
+  } fallback {}
+
+  @at_spaces = @o.get("spaces", false)
+
+  @process = procedure(@content) {
+    @lines = string.split(@content, "\n")
+    browse(@lines, @_li, @line) {
+      @rem = @line
+      loop {
+        if (string.len(@rem) <= @width) {
+          sys.echo(@rem)
+          terminate
+        }
+        
+        @break_at = @width
+        if (@at_spaces) {
+          # Find last space before or at width
+          @sub = string.substring(@rem, 0, @width + 1)
+          @last_s = string.last_index_of(@sub, " ")
+          if (@last_s >= 0) {
+            @break_at = @last_s + 1
+          }
+        }
+        
+        sys.echo(string.substring(@rem, 0, @break_at))
+        @rem = string.substring(@rem, @break_at, string.len(@rem))
+        if (string.is_empty(@rem)) { terminate }
+      }
+    }
+  }
+
+  if (list.len(@paths) == 0) {
+    @process.call(sys.read_all())
+  } else {
+    browse(@paths, @_pi, @p) {
+      if (@p == "-") {
+        @process.call(sys.read_all())
+      } else {
+        @process.call(fs.read(@p))
+      }
+    }
+  }
+}

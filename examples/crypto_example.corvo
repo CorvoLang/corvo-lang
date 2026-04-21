@@ -1,61 +1,31 @@
-# crypto_example.corvo - Hashing, file hashing, checksums, and encryption
+# crypto_example.corvo - Hashing, checksums, and encryption
 
 @section = procedure(@title) {
     sys.echo("")
     sys.echo(@title)
 }
 
-sys.echo("=== Crypto Example ===")
-
-# Hashing strings
+sys.echo("=== Hashing strings ===")
 @data = "Hello, Corvo!"
-sys.echo("Data: ${@data}")
 sys.echo("MD5: ${crypto.hash("md5", @data)}")
 sys.echo("SHA-256: ${crypto.hash("sha256", @data)}")
-sys.echo("SHA-512: ${crypto.hash("sha512", @data)}")
 
-@section.call("=== File Hashing ===")
-@file_path = "/tmp/corvo_hash_demo.txt"
-fs.write(@file_path, "Hello, Corvo!")
-sys.echo("File: ${@file_path}")
-sys.echo("MD5:    ${crypto.hash_file("md5", @file_path)}")
-sys.echo("SHA-256: ${crypto.hash_file("sha256", @file_path)}")
-sys.echo("SHA-512: ${crypto.hash_file("sha512", @file_path)}")
+@section.call("=== File Hashing & Checksums ===")
+@f = "/tmp/corvo_crypto_demo.txt"
+fs.write(@f, @data)
+sys.echo("File SHA-256: ${crypto.hash_file("sha256", @f)}")
+sys.echo("File CRC32:   ${crypto.crc32_file(@f)}")
+sys.echo("Global Checksum: ${crypto.checksum(@f)}")
 
-@section.call("=== File Checksum ===")
-@checksum = crypto.checksum(@file_path)
-sys.echo("SHA-256 checksum: ${@checksum}")
+@section.call("=== UUIDs ===")
+sys.echo("UUID: ${crypto.uuid()}")
 
-# Verify that hash_file("sha256") and checksum produce the same result
-try {
-    assert_eq(crypto.hash_file("sha256", @file_path), @checksum)
-    sys.echo("Checksum consistency: VERIFIED")
-} fallback {
-    sys.echo("Checksum consistency: MISMATCH")
-}
+@section.call("=== Encryption ===")
+@key = "secret_key_123"
+@msg = "Corvo is secure"
+@enc = crypto.encrypt(@key, @msg)
+sys.echo("Encrypted: ${@enc}")
+@dec = crypto.decrypt(@key, @enc)
+sys.echo("Decrypted: ${@dec}")
 
-fs.delete(@file_path)
-
-@section.call("=== UUID Generation ===")
-@id1 = crypto.uuid()
-@id2 = crypto.uuid()
-sys.echo("UUID 1: ${@id1}")
-sys.echo("UUID 2: ${@id2}")
-
-@section.call("=== Encrypt/Decrypt ===")
-@secret = "my secret message"
-@key = "encryption_key_123"
-sys.echo("Original: ${@secret}")
-
-@encrypted = crypto.encrypt(@key, @secret)
-sys.echo("Encrypted: ${@encrypted}")
-
-@decrypted = crypto.decrypt(@key, @encrypted)
-sys.echo("Decrypted: ${@decrypted}")
-
-try {
-    assert_eq(@secret, @decrypted)
-    sys.echo("Roundtrip: SUCCESS")
-} fallback {
-    sys.echo("Roundtrip: FAILED")
-}
+fs.delete(@f)

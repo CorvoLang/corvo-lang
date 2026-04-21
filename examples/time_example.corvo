@@ -1,0 +1,25 @@
+# time_example.corvo - Time and Date functions
+
+@section = procedure(@title) {
+    sys.echo("")
+    sys.echo(@title)
+}
+
+sys.echo("=== Current Time ===")
+@now = time.unix_now()
+sys.echo("Unix Timestamp: ${@now}")
+
+@section.call("=== Formatting ===")
+sys.echo("Local: ${time.format_local(@now, 0, "%Y-%m-%d %H:%M:%S")}")
+sys.echo("UTC:   ${time.format_utc(@now, 0, "%Y-%m-%d %H:%M:%S")}")
+
+@section.call("=== Parsing ===")
+@d_str = "2024-01-01 12:00:00"
+@parsed = time.parse_date(@d_str, "%Y-%m-%d %H:%M:%S")
+sys.echo("Parsed '${@d_str}': ${@parsed}")
+
+@section.call("=== Boot Time ===")
+@boot = time.boot_time()
+sys.echo("System Boot Time: ${time.format_local(@boot, 0, "%Y-%m-%d %H:%M:%S")}")
+@uptime = @now - @boot
+sys.echo("Calculated Uptime: ${number.to_string(@uptime)} seconds")

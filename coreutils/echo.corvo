@@ -1,0 +1,16 @@
+# Display a line of text.
+@parsed = args.scan(os.argv())
+@pos = @parsed["positional"]
+if (list.len(@pos) == 1) {
+  if (list.get(@pos, 0) == "--help") {
+    sys.echo("Usage: echo [SHORT-OPTION]... [STRING]...")
+    sys.echo("  or:  echo LONG-OPTION")
+    sys.echo("Echo the STRING(s) to standard output.")
+    sys.echo("")
+    sys.echo("  -n             do not output the trailing newline")
+    sys.echo("      --help     display this help and exit")
+    sys.echo("      --version  output version information and exit")
+    sys.exit(0)
+  }
+}
+sys.echo(list.join(@pos, " "))

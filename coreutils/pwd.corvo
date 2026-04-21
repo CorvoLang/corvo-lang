@@ -1,0 +1,18 @@
+# Print the name of the current working directory.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+if (@o.get("help", false)) {
+  sys.echo("Usage: pwd [OPTION]...")
+  sys.echo("Print the full filename of the current working directory.")
+  sys.echo("")
+  sys.echo("  -L, --logical      use PWD from environment, even if it contains symlinks")
+  sys.echo("  -P, --physical     avoid all symlinks")
+  sys.echo("      --help         display this help and exit")
+  sys.echo("      --version      output version information and exit")
+  sys.exit(0)
+}
+if (@o.get("version", false)) {
+  sys.echo("pwd (Corvo coreutils) 0.1.0")
+  sys.exit(0)
+}
+sys.echo(os.getcwd())

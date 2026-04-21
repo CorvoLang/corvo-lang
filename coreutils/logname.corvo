@@ -1,0 +1,13 @@
+# Print the user's login name.
+@parsed = args.parse(os.argv(), {})
+@o = @parsed["options"]
+if (@o.get("help", false)) {
+  sys.echo("Usage: logname")
+  sys.echo("Print the user's login name.")
+  sys.exit(0)
+}
+if (@o.get("version", false)) {
+  sys.echo("logname (Corvo coreutils) 0.1.0")
+  sys.exit(0)
+}
+sys.echo(os.username())

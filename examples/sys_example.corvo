@@ -1,36 +1,46 @@
-# sys_example.corvo - System I/O functions
+# sys_example.corvo - System I/O and Process Management
 
 @section = procedure(@title) {
     sys.echo("")
     sys.echo(@title)
 }
 
-sys.echo("=== sys.echo ===")
-sys.echo("Hello from sys.echo!")
-sys.echo("Supports string interpolation: ${string.concat("foo", "bar")}")
+sys.echo("=== Output ===")
+sys.echo("sys.echo adds a newline")
+sys.print("sys.print does not add a newline. ")
+sys.echo("See?")
+sys.eprint("sys.eprint writes to standard error.")
 
-@section.call("=== sys.sleep ===")
-sys.echo("Sleeping for 100ms...")
-sys.sleep(100)
-sys.echo("Awake!")
+@section.call("=== Formatting ===")
+sys.printf("Hello, %s! You have %d notifications.\n", "Corvo", 5)
 
-@section.call("=== sys.exec ===")
-@result = sys.exec(["echo", "hello from sys.exec"])
-sys.echo("stdout: ${map.get(@result, "stdout")}")
-sys.echo("exit code: ${map.get(@result, "code")}")
+@section.call("=== Terminal Check ===")
+sys.echo("STDIN is a TTY: ${sys.stdin_isatty()}")
+sys.echo("STDOUT is a TTY: ${sys.stdout_isatty()}")
 
-@ls_result = sys.exec(["ls", "-1", "/tmp"])
-sys.echo("exit code from ls: ${map.get(@ls_result, "code")}")
-
-@section.call("=== sys.panic ===")
+@section.call("=== Process Control ===")
+sys.echo("Current priority increment: sys.nice(0)")
 try {
-    sys.panic("something went wrong")
+  sys.nice(1)
+  sys.echo("Nice value incremented")
 } fallback {
-    sys.echo("sys.panic triggered the fallback as expected")
+  sys.echo("Could not change nice value (likely permission or OS limit)")
 }
+sys.echo("Syncing filesystems...")
+sys.sync()
+sys.echo("Sync complete.")
 
-# sys.read_line - read a line from stdin (interactive; skipped in this demo)
-# @input = sys.read_line("Enter your name: ")
-# sys.echo("You typed: ${@input}")
-@section.call("=== sys.read_line ===")
-sys.echo("(sys.read_line requires interactive input — see comment above)")
+@section.call("=== Command Execution (Direct) ===")
+@res = sys.exec(["echo", "hello from list-based exec"])
+sys.echo("stdout: ${string.trim(map.get(@res, "stdout"))}")
+
+@section.call("=== Input ===")
+sys.echo("sys.read_all() reads everything from stdin until EOF.")
+sys.echo("sys.read_line() reads one line.")
+
+@section.call("=== Error Handling ===")
+try {
+    sys.panic("controlled panic")
+} fallback {
+    sys.echo("Caught panic in fallback block")
+}

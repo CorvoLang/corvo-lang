@@ -1,0 +1,73 @@
+# coreutils/mktemp.corvo — GNU-compatible `mktemp`
+# Run: `corvo coreutils/mktemp.corvo [OPTION]... [TEMPLATE]`
+@spec = {
+  "aliases": {
+    "d": "directory",
+    "u": "dry-run",
+    "q": "quiet",
+    "p": "tmpdir",
+    "t": "tmpdir_legacy"
+  },
+  "short_values": ["p"],
+  "long_values": ["tmpdir", "suffix"]
+}
+@parsed = args.parse(os.argv(), @spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@skip_main = false
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: mktemp [OPTION]... [TEMPLATE]")
+  sys.echo("Create a temporary file or directory, safely, and print its name.")
+  sys.echo("TEMPLATE must contain at least 3 consecutive 'X's in last component.")
+  sys.echo("If TEMPLATE is not specified, use tmp.XXXXXXXXXX.")
+  sys.echo("")
+  sys.echo("  -d, --directory      create a directory instead of a file")
+  sys.echo("  -u, --dry-run        do not create anything; merely print a name (unsafe)")
+  sys.echo("  -q, --quiet          suppress diagnostics about file-creation failure")
+  sys.echo("  -p, --tmpdir[=DIR]   interpret TEMPLATE relative to DIR; if DIR is not")
+  sys.echo("                         specified, use $TMPDIR if set, else /tmp.  With")
+  sys.echo("                         this option, TEMPLATE must not be an absolute name;")
+  sys.echo("      --suffix=SUFF    append SUFF to TEMPLATE; SUFF must not contain a slash.")
+  sys.echo("      --help           display this help and exit")
+  sys.echo("      --version        output version information and exit")
+  @skip_main = true
+}
+
+if (!@skip_main && @o.get("version", false)) {
+  sys.echo("mktemp (Corvo coreutils) 0.1.0")
+  @skip_main = true
+}
+
+if (!@skip_main) {
+  @template = @paths.get(0, "tmp.XXXXXX")
+  @is_dir = @o.get("directory", false)
+  @dry_run = @o.get("dry-run", false)
+  @quiet = @o.get("quiet", false)
+  @base_dir = @o.get("tmpdir", "")
+  @suffix = @o.get("suffix", "")
+
+  # Handle legacy -t: if provided, use it as a directory prefix.
+  if (@o.get("tmpdir_legacy", false)) {
+    @base_dir = os.get_env("TMPDIR", "/tmp")
+  }
+
+  try {
+    if (@dry_run) {
+      @_rand = "DRYRUN"
+      @_out = @template
+      if (string.contains(@_out, "XXXXXX")) {
+         @_out = string.replace(@_out, "XXXXXX", @_rand)
+      }
+      sys.echo(@_out)
+    } else {
+      @result = fs.mktemp(@template, @is_dir, @base_dir, @suffix)
+      sys.echo(@result)
+    }
+  } fallback {
+    if (!@quiet) {
+      sys.eprint("mktemp: failed to create file or directory")
+    }
+    sys.exit(1)
+  }
+}
