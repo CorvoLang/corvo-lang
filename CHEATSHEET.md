@@ -149,9 +149,11 @@ Functions are grouped by module. Parameter names in `[brackets]` are optional.
 
 | Function | Parameters | Returns | Description |
 |---|---|---|---|
-| `crypto.hash` | `algorithm: string, data: string` | `string` | Hash a string (`md5`, `sha256`, `sha512`) |
+| `crypto.hash` | `algorithm: string, data: string` | `string` | Hash a string (`md5`, `sha1`, `sha224`, `sha256`, `sha384`, `sha512`, `blake2b`) |
 | `crypto.hash_file` | `algorithm: string, path: string` | `string` | Hash the contents of a file |
+| `crypto.hash_stdin` | `algorithm: string` | `string` | Read all bytes from stdin and hash them |
 | `crypto.checksum` | `path: string` | `string` | SHA-256 checksum of a file |
+| `crypto.crc32_file` | `path: string` | `map{crc, size}` | Compute CRC-32 for a file (GNU cksum compatible) |
 | `crypto.encrypt` | `secret: string, value: string` | `string` | XOR-encrypt and base64-encode |
 | `crypto.decrypt` | `secret: string, value: string` | `string` | Base64-decode and XOR-decrypt |
 | `crypto.uuid` | *(none)* | `string` | Generate a UUID v4 |

@@ -1,0 +1,2 @@
+@hash = crypto.hash("md5", "hello")
+sys.echo(@hash)

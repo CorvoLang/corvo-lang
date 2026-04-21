@@ -296,10 +296,12 @@ match(<expr>) {
 * `time.unix_now() -> number`: Seconds since the Unix epoch.
 
 ### Hashing & Encryption (`crypto`)
-* `crypto.hash(algorithm: string, data: string) -> string` (Supports "md5", "sha256", "sha512")
-* `crypto.hash_file(algorithm: string, path: string) -> string` (Hashes a file's contents; supports "md5", "sha256", "sha512")
+* `crypto.hash(algorithm: string, data: string) -> string` (Supports "md5", "sha1", "sha224", "sha256", "sha384", "sha512", "blake2b")
+* `crypto.hash_file(algorithm: string, path: string) -> string` (Hashes a file's contents; supports "md5", "sha1", "sha224", "sha256", "sha384", "sha512", "blake2b")
+* `crypto.hash_stdin(algorithm: string) -> string` (Reads all bytes from stdin and hashes them)
 * `crypto.checksum(path: string) -> string` (SHA-256 checksum of a file; returns 64-char hex string)
-* `crypto.encrypt(data: string, key: string) -> string` (AES-GCM)
+* `crypto.crc32_file(path: string) -> map` (Compute CRC-32 and size for a file)
+* `crypto.encrypt(data: string, key: string) -> string` (AES-GCM or XOR based on context)
 * `crypto.decrypt(data: string, key: string) -> string`
 * `crypto.uuid() -> string` (Generates a UUIDv4)
 
@@ -354,10 +356,12 @@ match(<expr>) {
 * `template.render_file(path: string, data: map) -> string`: Load a Handlebars template from the file at `path` and render it with `data`.
 
 ### Security & Crypto (`crypto`)
-* `crypto.hash(algorithm: string, data: string) -> string` (Supports "md5", "sha256", "sha512")
-* `crypto.hash_file(algorithm: string, path: string) -> string` (Hashes a file's contents; supports "md5", "sha256", "sha512")
-* `crypto.checksum(path: string) -> string` (SHA-256 checksum of a file; returns 64-char hex string)
-* `crypto.encrypt(data: string, key: string) -> string` (AES-GCM)
+* `crypto.hash(algorithm: string, data: string) -> string` (Supports "md5", "sha1", "sha224", "sha256", "sha384", "sha512", "blake2b")
+* `crypto.hash_file(algorithm: string, path: string) -> string` (Hashes a file's contents; supports same algorithms as `crypto.hash`)
+* `crypto.hash_stdin(algorithm: string) -> string` (Reads all bytes from stdin and hashes them)
+* `crypto.checksum(path: string) -> string` (SHA-256 checksum of a file)
+* `crypto.crc32_file(path: string) -> map` (Compute CRC-32 for a file)
+* `crypto.encrypt(data: string, key: string) -> string`
 * `crypto.decrypt(data: string, key: string) -> string`
 * `crypto.uuid() -> string` (Generates a UUIDv4)
 

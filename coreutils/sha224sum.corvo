@@ -1,0 +1,28 @@
+# coreutils/sha224sum.corvo
+@spec = {
+  "aliases": {
+    "c": "check",
+    "b": "binary",
+    "t": "text",
+    "w": "warn",
+    "tag": "tag"
+  }
+}
+@parsed = args.parse(os.argv(), @spec)
+@files = @parsed["positional"]
+@algorithm = "sha224"
+
+try {
+    assert_eq(list.is_empty(@files), true)
+    @hash = crypto.hash_stdin(@algorithm)
+    sys.echo("${@hash}  -")
+} fallback {
+    browse(@files, @idx, @f) {
+        try {
+            @hash = crypto.hash_file(@algorithm, @f)
+            sys.echo("${@hash}  ${@f}")
+        } fallback {
+            sys.eprint("sha224sum: ${@f}: No such file or directory")
+        }
+    }
+}

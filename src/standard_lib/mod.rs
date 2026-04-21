@@ -107,6 +107,7 @@ pub fn call(
 
         "crypto.hash" => crypto::hash(args, named_args),
         "crypto.hash_file" => crypto::hash_file(args, named_args),
+        "crypto.hash_stdin" => crypto::hash_stdin(args, named_args),
         "crypto.checksum" => crypto::checksum(args, named_args),
         "crypto.crc32_file" => crypto::crc32_file(args, named_args),
         "crypto.encrypt" => crypto::encrypt(args, named_args),

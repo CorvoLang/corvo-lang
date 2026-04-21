@@ -400,6 +400,7 @@ pub const KNOWN_FUNCTIONS: &[&str] = &[
     // crypto
     "crypto.hash",
     "crypto.hash_file",
+    "crypto.hash_stdin",
     "crypto.checksum",
     "crypto.crc32_file",
     "crypto.encrypt",
