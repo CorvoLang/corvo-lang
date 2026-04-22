@@ -679,7 +679,7 @@ impl Evaluator {
             }
             Expr::Binary { op, left, right } => {
                 let l = self.eval_expr(left, state)?;
-                
+
                 // Short-circuiting for logical operators
                 if *op == BinaryOp::And {
                     if !l.as_bool().unwrap_or(false) {

@@ -526,9 +526,8 @@ impl<'a> Lexer<'a> {
                 while !self.is_at_end() && self.peek().is_ascii_hexdigit() {
                     hex.push(self.advance());
                 }
-                let num = u64::from_str_radix(&hex, 16).map_err(|_| {
-                    CorvoError::lexing(format!("Invalid hex number: 0x{}", hex))
-                })?;
+                let num = u64::from_str_radix(&hex, 16)
+                    .map_err(|_| CorvoError::lexing(format!("Invalid hex number: 0x{}", hex)))?;
                 return Ok(Token::number(num as f64, start, self.pos));
             } else if next == 'o' || next == 'O' {
                 self.advance(); // consume '0'

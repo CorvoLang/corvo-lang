@@ -223,13 +223,14 @@ pub fn truncate(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoRe
     let size = args
         .get(1)
         .and_then(|v| v.as_number())
-        .ok_or_else(|| CorvoError::invalid_argument("fs.truncate requires a size"))? as u64;
+        .ok_or_else(|| CorvoError::invalid_argument("fs.truncate requires a size"))?
+        as u64;
 
     let f = fs::OpenOptions::new()
         .write(true)
         .open(path)
         .map_err(|e| CorvoError::file_system(e.to_string()))?;
-    
+
     f.set_len(size)
         .map(|_| Value::Boolean(true))
         .map_err(|e| CorvoError::file_system(e.to_string()))
@@ -429,10 +430,14 @@ pub fn mkfifo(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResu
     #[cfg(unix)]
     {
         use std::ffi::CString;
-        let c_path = CString::new(path.as_str()).map_err(|e| CorvoError::invalid_argument(e.to_string()))?;
+        let c_path =
+            CString::new(path.as_str()).map_err(|e| CorvoError::invalid_argument(e.to_string()))?;
         unsafe {
             if libc::mkfifo(c_path.as_ptr(), mode as libc::mode_t) != 0 {
-                return Err(CorvoError::io(format!("mkfifo failed: {}", std::io::Error::last_os_error())));
+                return Err(CorvoError::io(format!(
+                    "mkfifo failed: {}",
+                    std::io::Error::last_os_error()
+                )));
             }
         }
         Ok(Value::Boolean(true))
@@ -453,20 +458,22 @@ pub fn mknod(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
     let mode = args
         .get(1)
         .and_then(|v| v.as_number())
-        .ok_or_else(|| CorvoError::invalid_argument("fs.mknod requires a mode"))? as u32;
+        .ok_or_else(|| CorvoError::invalid_argument("fs.mknod requires a mode"))?
+        as u32;
 
-    let dev = args
-        .get(2)
-        .and_then(|v| v.as_number())
-        .unwrap_or(0.0) as u64;
+    let dev = args.get(2).and_then(|v| v.as_number()).unwrap_or(0.0) as u64;
 
     #[cfg(unix)]
     {
         use std::ffi::CString;
-        let c_path = CString::new(path.as_str()).map_err(|e| CorvoError::invalid_argument(e.to_string()))?;
+        let c_path =
+            CString::new(path.as_str()).map_err(|e| CorvoError::invalid_argument(e.to_string()))?;
         unsafe {
             if libc::mknod(c_path.as_ptr(), mode as libc::mode_t, dev as libc::dev_t) != 0 {
-                return Err(CorvoError::io(format!("mknod failed: {}", std::io::Error::last_os_error())));
+                return Err(CorvoError::io(format!(
+                    "mknod failed: {}",
+                    std::io::Error::last_os_error()
+                )));
             }
         }
         Ok(Value::Boolean(true))
@@ -500,26 +507,30 @@ pub fn mktemp(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResu
         .and_then(|v| v.as_string())
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
-    let suffix = args.get(3).and_then(|v| v.as_string()).cloned().unwrap_or_default();
+    let suffix = args
+        .get(3)
+        .and_then(|v| v.as_string())
+        .cloned()
+        .unwrap_or_default();
 
     let mut rng = rand::thread_rng();
-    
+
     // Replace XXXXXX in template
     let parts: Vec<&str> = template.split("XXXXXX").collect();
     if parts.len() < 2 {
-         return Err(CorvoError::runtime("fs.mktemp: template must contain 'XXXXXX'"));
+        return Err(CorvoError::runtime(
+            "fs.mktemp: template must contain 'XXXXXX'",
+        ));
     }
-    
-    // We only replace the FIRST occurrence in GNU mktemp? 
+
+    // We only replace the FIRST occurrence in GNU mktemp?
     // Actually GNU mktemp replaces the sequence of X's at the end.
     // If multiple blocks of X's exist, it's usually the last set.
-    
+
     let mut name = template.to_string();
     if let Some(pos) = name.rfind("XXXXXX") {
-        let rand_s: String = (0..6)
-            .map(|_| rng.sample(Alphanumeric) as char)
-            .collect();
-        name.replace_range(pos..pos+6, &rand_s);
+        let rand_s: String = (0..6).map(|_| rng.sample(Alphanumeric) as char).collect();
+        name.replace_range(pos..pos + 6, &rand_s);
     }
     name.push_str(&suffix);
 
@@ -545,12 +556,15 @@ pub fn read_hex(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoRe
     let size = args.get(2).and_then(|v| v.as_number()).unwrap_or(0.0) as usize;
 
     let mut f = fs::File::open(path).map_err(|e| CorvoError::file_system(e.to_string()))?;
-    f.seek(SeekFrom::Start(offset)).map_err(|e| CorvoError::file_system(e.to_string()))?;
-    
+    f.seek(SeekFrom::Start(offset))
+        .map_err(|e| CorvoError::file_system(e.to_string()))?;
+
     let mut buf = vec![0u8; size];
-    let n = f.read(&mut buf).map_err(|e| CorvoError::file_system(e.to_string()))?;
+    let n = f
+        .read(&mut buf)
+        .map_err(|e| CorvoError::file_system(e.to_string()))?;
     buf.truncate(n);
-    
+
     let hex_s: String = buf.iter().map(|b| format!("{:02x}", b)).collect();
     Ok(Value::String(hex_s))
 }
@@ -570,7 +584,7 @@ pub fn write_hex(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoR
     let mut bytes = Vec::new();
     for i in (0..hex_data.len()).step_by(2) {
         if i + 2 <= hex_data.len() {
-            if let Ok(b) = u8::from_str_radix(&hex_data[i..i+2], 16) {
+            if let Ok(b) = u8::from_str_radix(&hex_data[i..i + 2], 16) {
                 bytes.push(b);
             }
         }
@@ -582,10 +596,12 @@ pub fn write_hex(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoR
         .truncate(false)
         .open(path)
         .map_err(|e| CorvoError::file_system(e.to_string()))?;
-    
-    f.seek(SeekFrom::Start(offset)).map_err(|e| CorvoError::file_system(e.to_string()))?;
-    f.write_all(&bytes).map_err(|e| CorvoError::file_system(e.to_string()))?;
-    
+
+    f.seek(SeekFrom::Start(offset))
+        .map_err(|e| CorvoError::file_system(e.to_string()))?;
+    f.write_all(&bytes)
+        .map_err(|e| CorvoError::file_system(e.to_string()))?;
+
     Ok(Value::Boolean(true))
 }
 

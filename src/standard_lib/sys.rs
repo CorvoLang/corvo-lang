@@ -30,7 +30,7 @@ pub fn printf(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResu
     let mut result = String::new();
     let mut arg_idx = 1;
     let mut chars = format.chars().peekable();
-    
+
     #[allow(unused_assignments)]
     let mut list_args_backing: Vec<Value> = Vec::new();
     let format_args = if args.len() == 2 {
@@ -153,7 +153,9 @@ pub fn read_line(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoR
 
 pub fn read_all(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     if !args.is_empty() {
-        return Err(CorvoError::invalid_argument("sys.read_all takes no arguments"));
+        return Err(CorvoError::invalid_argument(
+            "sys.read_all takes no arguments",
+        ));
     }
     let mut input = String::new();
     std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
@@ -163,7 +165,9 @@ pub fn read_all(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoRe
 
 pub fn stdin_isatty(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     if !args.is_empty() {
-        return Err(CorvoError::invalid_argument("sys.stdin_isatty takes no arguments"));
+        return Err(CorvoError::invalid_argument(
+            "sys.stdin_isatty takes no arguments",
+        ));
     }
     use std::io::IsTerminal;
     Ok(Value::Boolean(std::io::stdin().is_terminal()))
@@ -171,7 +175,9 @@ pub fn stdin_isatty(args: &[Value], _named_args: &HashMap<String, Value>) -> Cor
 
 pub fn stdout_isatty(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     if !args.is_empty() {
-        return Err(CorvoError::invalid_argument("sys.stdout_isatty takes no arguments"));
+        return Err(CorvoError::invalid_argument(
+            "sys.stdout_isatty takes no arguments",
+        ));
     }
     use std::io::IsTerminal;
     Ok(Value::Boolean(std::io::stdout().is_terminal()))
@@ -262,7 +268,11 @@ pub fn exec(args: &[Value], named_args: &HashMap<String, Value>) -> CorvoResult<
                 if fd < 0 {
                     return Err(std::io::Error::last_os_error());
                 }
-                let res = libc::write(fd, ctx_bytes.as_ptr() as *const libc::c_void, ctx_bytes.len());
+                let res = libc::write(
+                    fd,
+                    ctx_bytes.as_ptr() as *const libc::c_void,
+                    ctx_bytes.len(),
+                );
                 libc::close(fd);
                 if res < 0 {
                     return Err(std::io::Error::last_os_error());
@@ -370,14 +380,21 @@ pub fn chroot(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResu
     #[cfg(unix)]
     {
         use std::ffi::CString;
-        let c_path = CString::new(path.as_str()).map_err(|e| CorvoError::invalid_argument(e.to_string()))?;
+        let c_path =
+            CString::new(path.as_str()).map_err(|e| CorvoError::invalid_argument(e.to_string()))?;
         unsafe {
             if libc::chroot(c_path.as_ptr()) != 0 {
-                return Err(CorvoError::io(format!("chroot failed: {}", std::io::Error::last_os_error())));
+                return Err(CorvoError::io(format!(
+                    "chroot failed: {}",
+                    std::io::Error::last_os_error()
+                )));
             }
             let root = CString::new("/").unwrap();
             if libc::chdir(root.as_ptr()) != 0 {
-                return Err(CorvoError::io(format!("chdir / failed: {}", std::io::Error::last_os_error())));
+                return Err(CorvoError::io(format!(
+                    "chdir / failed: {}",
+                    std::io::Error::last_os_error()
+                )));
             }
         }
         Ok(Value::Boolean(true))
@@ -408,16 +425,19 @@ pub fn nice(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult
             {
                 *libc::__errno_location() = 0;
             }
-            
+
             let _ = libc::nice(inc as libc::c_int);
-            
+
             #[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd"))]
             let err = *libc::__error();
             #[cfg(target_os = "linux")]
             let err = *libc::__errno_location();
 
             if err != 0 {
-                return Err(CorvoError::io(format!("nice failed: {}", std::io::Error::from_raw_os_error(err))));
+                return Err(CorvoError::io(format!(
+                    "nice failed: {}",
+                    std::io::Error::from_raw_os_error(err)
+                )));
             }
         }
         Ok(Value::Boolean(true))
@@ -430,7 +450,9 @@ pub fn nice(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult
 pub fn sync(_args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     #[cfg(unix)]
     {
-        unsafe { libc::sync(); }
+        unsafe {
+            libc::sync();
+        }
         Ok(Value::Boolean(true))
     }
     #[cfg(not(unix))]

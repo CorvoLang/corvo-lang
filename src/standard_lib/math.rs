@@ -272,7 +272,6 @@ pub fn parse_size(args: &[Value], _named_args: &HashMap<String, Value>) -> Corvo
     Ok(Value::Number(val * multiplier))
 }
 
-
 /// Generate a list of numbers from start (inclusive) to end (exclusive).
 /// Args: `end` (range [0, end)), or `start`, `end`, or `start`, `end`, `step`.
 pub fn range(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
@@ -312,7 +311,9 @@ pub fn range(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
     };
 
     if step == 0.0 {
-        return Err(CorvoError::invalid_argument("math.range step cannot be zero"));
+        return Err(CorvoError::invalid_argument(
+            "math.range step cannot be zero",
+        ));
     }
 
     let mut result = Vec::new();

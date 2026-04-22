@@ -93,9 +93,13 @@ pub fn getcwd(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResu
 
 pub fn temp_dir(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     if !args.is_empty() {
-        return Err(CorvoError::invalid_argument("os.temp_dir takes no arguments"));
+        return Err(CorvoError::invalid_argument(
+            "os.temp_dir takes no arguments",
+        ));
     }
-    Ok(Value::String(std::env::temp_dir().to_string_lossy().to_string()))
+    Ok(Value::String(
+        std::env::temp_dir().to_string_lossy().to_string(),
+    ))
 }
 
 pub fn info(_args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
@@ -186,13 +190,25 @@ pub fn df(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<V
         let mut stats: libc::statvfs = unsafe { std::mem::zeroed() };
         unsafe {
             if libc::statvfs(c_path.as_ptr(), &mut stats) != 0 {
-                return Err(CorvoError::io(format!("statvfs failed: {}", std::io::Error::last_os_error())));
+                return Err(CorvoError::io(format!(
+                    "statvfs failed: {}",
+                    std::io::Error::last_os_error()
+                )));
             }
         }
         let mut m = HashMap::new();
-        m.insert("total".to_string(), Value::Number((stats.f_blocks as f64) * (stats.f_frsize as f64)));
-        m.insert("free".to_string(), Value::Number((stats.f_bfree as f64) * (stats.f_frsize as f64)));
-        m.insert("available".to_string(), Value::Number((stats.f_bavail as f64) * (stats.f_frsize as f64)));
+        m.insert(
+            "total".to_string(),
+            Value::Number((stats.f_blocks as f64) * (stats.f_frsize as f64)),
+        );
+        m.insert(
+            "free".to_string(),
+            Value::Number((stats.f_bfree as f64) * (stats.f_frsize as f64)),
+        );
+        m.insert(
+            "available".to_string(),
+            Value::Number((stats.f_bavail as f64) * (stats.f_frsize as f64)),
+        );
         m.insert("bsize".to_string(), Value::Number(stats.f_frsize as f64));
         m.insert("blocks".to_string(), Value::Number(stats.f_blocks as f64));
         m.insert("bfree".to_string(), Value::Number(stats.f_bfree as f64));
@@ -381,9 +397,10 @@ pub fn users(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
                     // Helper to convert fixed-size char arrays to String
                     let to_string = |bytes: &[libc::c_char]| {
                         let len = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
-                        String::from_utf8_lossy(
-                            std::slice::from_raw_parts(bytes.as_ptr() as *const u8, len),
-                        )
+                        String::from_utf8_lossy(std::slice::from_raw_parts(
+                            bytes.as_ptr() as *const u8,
+                            len,
+                        ))
                         .to_string()
                     };
 
@@ -477,7 +494,9 @@ pub fn group_id(_args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoR
 /// Get the current user's login name.
 pub fn username(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     if !args.is_empty() {
-        return Err(CorvoError::invalid_argument("os.username takes no arguments"));
+        return Err(CorvoError::invalid_argument(
+            "os.username takes no arguments",
+        ));
     }
 
     #[cfg(unix)]
@@ -494,7 +513,7 @@ pub fn username(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoRe
         Ok(Value::String(
             std::env::var("USERNAME")
                 .or_else(|_| std::env::var("USER"))
-                .unwrap_or_else(|_| "unknown".to_string())
+                .unwrap_or_else(|_| "unknown".to_string()),
         ))
     }
 }
@@ -504,7 +523,9 @@ pub fn username(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoRe
 #[cfg(unix)]
 pub fn tty_get_mode(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     if !args.is_empty() {
-        return Err(CorvoError::invalid_argument("os.tty_get_mode takes no arguments"));
+        return Err(CorvoError::invalid_argument(
+            "os.tty_get_mode takes no arguments",
+        ));
     }
     let fd = 0; // stdin
     unsafe {
@@ -525,7 +546,10 @@ pub fn tty_get_mode(args: &[Value], _named_args: &HashMap<String, Value>) -> Cor
 /// Set terminal settings (mode).
 #[cfg(unix)]
 pub fn tty_set_mode(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
-    let mode = args.first().and_then(|v| v.as_map()).ok_or_else(|| CorvoError::invalid_argument("os.tty_set_mode requires a map"))?;
+    let mode = args
+        .first()
+        .and_then(|v| v.as_map())
+        .ok_or_else(|| CorvoError::invalid_argument("os.tty_set_mode requires a map"))?;
     let fd = 0; // stdin
     unsafe {
         let mut termios = std::mem::MaybeUninit::<libc::termios>::uninit();
@@ -533,11 +557,19 @@ pub fn tty_set_mode(args: &[Value], _named_args: &HashMap<String, Value>) -> Cor
             return Err(CorvoError::runtime("failed to get tty attributes"));
         }
         let mut termios = termios.assume_init();
-        
-        if let Some(v) = mode.get("iflag").and_then(|v| v.as_number()) { termios.c_iflag = v as libc::tcflag_t; }
-        if let Some(v) = mode.get("oflag").and_then(|v| v.as_number()) { termios.c_oflag = v as libc::tcflag_t; }
-        if let Some(v) = mode.get("cflag").and_then(|v| v.as_number()) { termios.c_cflag = v as libc::tcflag_t; }
-        if let Some(v) = mode.get("lflag").and_then(|v| v.as_number()) { termios.c_lflag = v as libc::tcflag_t; }
+
+        if let Some(v) = mode.get("iflag").and_then(|v| v.as_number()) {
+            termios.c_iflag = v as libc::tcflag_t;
+        }
+        if let Some(v) = mode.get("oflag").and_then(|v| v.as_number()) {
+            termios.c_oflag = v as libc::tcflag_t;
+        }
+        if let Some(v) = mode.get("cflag").and_then(|v| v.as_number()) {
+            termios.c_cflag = v as libc::tcflag_t;
+        }
+        if let Some(v) = mode.get("lflag").and_then(|v| v.as_number()) {
+            termios.c_lflag = v as libc::tcflag_t;
+        }
 
         if libc::tcsetattr(fd, libc::TCSANOW, &termios) != 0 {
             return Err(CorvoError::runtime("failed to set tty attributes"));
@@ -548,19 +580,25 @@ pub fn tty_set_mode(args: &[Value], _named_args: &HashMap<String, Value>) -> Cor
 
 #[cfg(not(unix))]
 pub fn tty_get_mode(_args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
-    Err(CorvoError::runtime("os.tty_get_mode is only supported on Unix"))
+    Err(CorvoError::runtime(
+        "os.tty_get_mode is only supported on Unix",
+    ))
 }
 
 #[cfg(not(unix))]
 pub fn tty_set_mode(_args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
-    Err(CorvoError::runtime("os.tty_set_mode is only supported on Unix"))
+    Err(CorvoError::runtime(
+        "os.tty_set_mode is only supported on Unix",
+    ))
 }
 
 /// Get the name of the terminal connected to standard input.
 #[cfg(unix)]
 pub fn ttyname(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     if !args.is_empty() {
-        return Err(CorvoError::invalid_argument("os.ttyname takes no arguments"));
+        return Err(CorvoError::invalid_argument(
+            "os.ttyname takes no arguments",
+        ));
     }
     let fd = 0; // stdin
     unsafe {
