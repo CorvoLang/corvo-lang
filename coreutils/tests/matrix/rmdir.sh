@@ -87,6 +87,7 @@ fi
 # Verbose (-v): same path so output matches
 mkdir -p "$_MTD/vtest_rmdir"
 gnu-rmdir -v "$_MTD/vtest_rmdir" > /tmp/rmdir_m_gnu_v.out 2>/dev/null || true
+sed -i 's/^gnu-rmdir/rmdir/' /tmp/rmdir_m_gnu_v.out
 mkdir -p "$_MTD/vtest_rmdir"
 corvo /corvo/coreutils/rmdir.corvo -- -v "$_MTD/vtest_rmdir" > /tmp/rmdir_m_corvo_v.out 2>/dev/null || true
 if diff -q /tmp/rmdir_m_gnu_v.out /tmp/rmdir_m_corvo_v.out >/dev/null 2>&1; then
