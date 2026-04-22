@@ -53,7 +53,7 @@ if (!@skip_main) {
   @last_ch = ""
 
   browse(@chars, @_ci, @ch) {
-    @idx = list.index_of(@s1_chars, @ch)
+    @idx = list.find(@s1_chars, @ch)
 
     if (@idx != -1) {
       if (!@delete) {
@@ -76,5 +76,5 @@ if (!@skip_main) {
     }
   }
 
-  sys.print(string.join(@output_parts, ""))
+  sys.print(list.join(@output_parts, ""))
 }

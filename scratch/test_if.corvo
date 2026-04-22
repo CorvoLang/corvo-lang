@@ -1,0 +1,17 @@
+@test = procedure() {
+  @suf_out = ""
+  if (true) {
+    if (false) {
+      @suf_out = "/"
+    } else {
+      if (false) {
+        @suf_out = "@"
+      } else {
+        if (true) {
+          @suf_out = "*"
+        }
+      }
+    }
+  }
+}
+@test.call()

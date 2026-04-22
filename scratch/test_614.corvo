@@ -70,16 +70,18 @@
   @_ft = @entry.get("file_type_char", "-")
   @_is_dir = @entry.get("is_dir", false)
   
-  if (@_ft == "b") {
-    @_maj = number.to_string(@entry.get("major", 0))
-    @_min = number.to_string(@entry.get("minor", 0))
-    @sz_out = "${@_maj}, ${@_min}"
-  } else {
-    if (@_ft == "c") {
+  match (@_ft) {
+    "b" => {
       @_maj = number.to_string(@entry.get("major", 0))
       @_min = number.to_string(@entry.get("minor", 0))
       @sz_out = "${@_maj}, ${@_min}"
-    } else {
+    },
+    "c" => {
+      @_maj = number.to_string(@entry.get("major", 0))
+      @_min = number.to_string(@entry.get("minor", 0))
+      @sz_out = "${@_maj}, ${@_min}"
+    },
+    _ => {
       if (@human_flag) {
         if (@_is_dir) {
           @sz_out = math.human_bytes(@entry.get("size", 0), false)
@@ -390,14 +392,14 @@ loop {
           }
         }
       } else {
-        @sorted = match (@sort_key) {
-          "extension" => list.sort_maps_by_key(@prepared, "extension", @eff_reverse, "name"),
-          "name" => list.sort_maps_by_key(@prepared, "name", @eff_reverse),
-          "size" => list.sort_maps_by_key(@prepared, "size", @eff_reverse, "name"),
-          "mtime_sec" => list.sort_maps_by_key(@prepared, "mtime_sec", @eff_reverse, "name", "mtime_nsec"),
-          "atime_sec" => list.sort_maps_by_key(@prepared, "atime_sec", @eff_reverse, "name", "atime_nsec"),
-          "ctime_sec" => list.sort_maps_by_key(@prepared, "ctime_sec", @eff_reverse, "name", "ctime_nsec"),
-          _ => list.sort_maps_by_key(@prepared, @sort_key, @eff_reverse, "name")
+        match (@sort_key) {
+          "extension" => { @sorted = list.sort_maps_by_key(@prepared, "extension", @eff_reverse, "name") },
+          "name" => { @sorted = list.sort_maps_by_key(@prepared, "name", @eff_reverse) },
+          "size" => { @sorted = list.sort_maps_by_key(@prepared, "size", @eff_reverse, "name") },
+          "mtime_sec" => { @sorted = list.sort_maps_by_key(@prepared, "mtime_sec", @eff_reverse, "name", "mtime_nsec") },
+          "atime_sec" => { @sorted = list.sort_maps_by_key(@prepared, "atime_sec", @eff_reverse, "name", "atime_nsec") },
+          "ctime_sec" => { @sorted = list.sort_maps_by_key(@prepared, "ctime_sec", @eff_reverse, "name", "ctime_nsec") },
+          _ => { @sorted = list.sort_maps_by_key(@prepared, @sort_key, @eff_reverse, "name") }
         }
       }
   }
@@ -547,13 +549,11 @@ loop {
             @group = string.pad_start(number.to_string(@ee.get("gid", 0)), @max_g, " ")
           }
 
-          @sz = ""
           @get_size_string.call(@_e, @human, @si, @sz)
           @sz_s = string.pad_start(@sz, @max_sz, " ")
 
           @_ta = @o.get("time_access", false)
           @_tc = @o.get("time_change", false)
-          @tm = ""
           @get_time_string.call(@_e, @_ta, @_tc, @tfmt, @tm)
           @tm_s = string.pad_start(@tm, @max_tm, " ")
 

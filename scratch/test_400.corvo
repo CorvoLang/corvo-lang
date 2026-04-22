@@ -70,16 +70,18 @@
   @_ft = @entry.get("file_type_char", "-")
   @_is_dir = @entry.get("is_dir", false)
   
-  if (@_ft == "b") {
-    @_maj = number.to_string(@entry.get("major", 0))
-    @_min = number.to_string(@entry.get("minor", 0))
-    @sz_out = "${@_maj}, ${@_min}"
-  } else {
-    if (@_ft == "c") {
+  match (@_ft) {
+    "b" => {
       @_maj = number.to_string(@entry.get("major", 0))
       @_min = number.to_string(@entry.get("minor", 0))
       @sz_out = "${@_maj}, ${@_min}"
-    } else {
+    },
+    "c" => {
+      @_maj = number.to_string(@entry.get("major", 0))
+      @_min = number.to_string(@entry.get("minor", 0))
+      @sz_out = "${@_maj}, ${@_min}"
+    },
+    _ => {
       if (@human_flag) {
         if (@_is_dir) {
           @sz_out = math.human_bytes(@entry.get("size", 0), false)
@@ -390,224 +392,9 @@ loop {
           }
         }
       } else {
-        @sorted = match (@sort_key) {
-          "extension" => list.sort_maps_by_key(@prepared, "extension", @eff_reverse, "name"),
-          "name" => list.sort_maps_by_key(@prepared, "name", @eff_reverse),
-          "size" => list.sort_maps_by_key(@prepared, "size", @eff_reverse, "name"),
-          "mtime_sec" => list.sort_maps_by_key(@prepared, "mtime_sec", @eff_reverse, "name", "mtime_nsec"),
-          "atime_sec" => list.sort_maps_by_key(@prepared, "atime_sec", @eff_reverse, "name", "atime_nsec"),
-          "ctime_sec" => list.sort_maps_by_key(@prepared, "ctime_sec", @eff_reverse, "name", "ctime_nsec"),
-          _ => list.sort_maps_by_key(@prepared, @sort_key, @eff_reverse, "name")
-        }
-      }
-  }
-
-  if (@recursive && @from_dir_read) {
-    if (@rec_first) {
-      @rec_first = false
-    } else {
-      sys.echo("")
-    }
-    @rel = fs.path_relative(@cwd, @pth)
-    @hpre = @rel
-    if (@hpre == ".") {
-       # keep as is or handled below
-    } else {
-      if (!string.starts_with(@hpre, "./")) {
-        @hpre = "./${@hpre}"
-      }
-    }
-    sys.echo("${@hpre}:")
-  }
-
-  if (@need_hdr && @is_dir && !@dir_only && !@recursive) {
-    sys.echo("${@pth}:")
-  }
-
-  if (@from_dir_read && (@long || @blocks)) {
-    @print_total_blocks.call(@sorted, @human)
-  }
-
-  @max_ino_s = 1
-  if (!@long && @inode_col) {
-    browse(@sorted, @_ix, @ee) {
-      @ixs = number.to_string(@ee.get("inode", 0))
-      @max_ino_s = math.max(@max_ino_s, string.len(@ixs))
-    }
-  }
-
-  @max_blk_s = 1
-  if (!@long && @blocks) {
-    browse(@sorted, @_bx, @ee) {
-      @bw = @ee.get("blocks", 0)
-      @bsw = number.to_string(number.floor(@bw / 2))
-      @max_blk_s = math.max(@max_blk_s, string.len(@bsw))
-    }
-  }
-
-  @max_ino = 0
-  @max_blk = 0
-  @max_nl = 0
-  @max_u = 0
-  @max_g = 0
-  @max_sz = 0
-  @max_tm = 0
-  @szm = ""
-  @tstr_m = ""
-  if (@long) {
-    browse(@sorted, @_mw, @ee) {
-      if (@inode_col) {
-        @iw = number.to_string(@ee.get("inode", 0))
-        @max_ino = math.max(@max_ino, string.len(@iw))
-      }
-      if (@blocks) {
-        @bw = @ee.get("blocks", 0)
-        @bsw = number.to_string(number.floor(@bw / 2))
-        @max_blk = math.max(@max_blk, string.len(@bsw))
-      }
-      @nlm = number.to_string(@ee.get("nlink", 1))
-      @max_nl = math.max(@max_nl, string.len(@nlm))
-
-      @uum = @ee.get("user", "")
-      @ggm = @ee.get("group", "")
-      if (@numeric_ids) {
-        @uum = number.to_string(@ee.get("uid", 0))
-        @ggm = number.to_string(@ee.get("gid", 0))
-      }
-      if (@omit_group) { @ggm = "" }
-
-      @max_u = math.max(@max_u, string.len(@uum))
-      if (!@omit_group) { @max_g = math.max(@max_g, string.len(@ggm)) }
-
-      @_em = @ee
-      @get_size_string.call(@_em, @human, @si, @szm)
-      @max_sz = math.max(@max_sz, string.len(@szm))
-
-      @_ta = @o.get("time_access", false)
-      @_tc = @o.get("time_change", false)
-      @get_time_string.call(@_em, @_ta, @_tc, @tfmt, @tstr_m)
-      @max_tm = math.max(@max_tm, string.len(@tstr_m))
-    }
-  }
-
-  @max_nl = math.max(@max_nl, 1)
-  @max_u = math.max(@max_u, 1)
-  @max_sz = math.max(@max_sz, 1)
-  @max_tm = math.max(@max_tm, 1)
-  if (!@omit_group) { @max_g = math.max(@max_g, 1) }
-  if (@inode_col) { @max_ino = math.max(@max_ino, 1) }
-  if (@blocks) { @max_blk = math.max(@max_blk, 1) }
-
-  @suf = ""
-
-  if (@stream) {
-    @_stream_line = ""
-    @_stream_first = true
-    browse(@sorted, @_so, @ee) {
-      @nm = @ee["name"]
-      @_e = @ee
-      @get_entry_suffix.call(@_e, @classify, @suf)
-      @_item = "${@nm}${@suf}"
-      if (@_stream_first) {
-        @_stream_line = @_item
-        @_stream_first = false
-      } else {
-        if (string.len(@_stream_line) + string.len(@_item) + 2 <= @term_w) {
-          @_stream_line = "${@_stream_line}, ${@_item}"
-        } else {
-          sys.echo(@_stream_line)
-          @_stream_line = @_item
-        }
-      }
-    }
-    sys.echo(@_stream_line)
-  } else {
-    if (@fmt_C) {
-      @names = []
-      browse(@sorted, @_cn, @ee) {
-        @nm = @ee["name"]
-        @_e = @ee
-        @get_entry_suffix.call(@_e, @classify, @suf)
-        @names = list.push(@names, "${@nm}${@suf}")
-      }
-      sys.echo(list.columnate(@names, @term_w))
-    } else {
-      browse(@sorted, @_on, @ee) {
-        @nm = @ee["name"]
-        @_e = @ee
-        @get_entry_suffix.call(@_e, @classify, @suf)
-
-        if (@long) {
-          @pstr = @ee.get("permissions_str", "----------")
-          @nlink = string.pad_start(number.to_string(@ee.get("nlink", 1)), @max_nl, " ")
-          @user = string.pad_end(@ee.get("user", ""), @max_u, " ")
-          @group = string.pad_end(@ee.get("group", ""), @max_g, " ")
-          if (@numeric_ids) {
-            @user = string.pad_start(number.to_string(@ee.get("uid", 0)), @max_u, " ")
-            @group = string.pad_start(number.to_string(@ee.get("gid", 0)), @max_g, " ")
-          }
-
-          @sz = ""
-          @get_size_string.call(@_e, @human, @si, @sz)
-          @sz_s = string.pad_start(@sz, @max_sz, " ")
-
-          @_ta = @o.get("time_access", false)
-          @_tc = @o.get("time_change", false)
-          @tm = ""
-          @get_time_string.call(@_e, @_ta, @_tc, @tfmt, @tm)
-          @tm_s = string.pad_start(@tm, @max_tm, " ")
-
-          @_link_target = ""
-          if (@ee.get("is_symlink", false)) {
-            @_lt = fs.read_link(@ee["path"])
-            @_link_target = " -> ${_lt}"
-          }
-
-          @_prefix = ""
-          if (@inode_col) {
-            @_iw = string.pad_start(number.to_string(@ee.get("inode", 0)), @max_ino, " ")
-            @_prefix = "${@_iw} "
-          }
-          if (@blocks) {
-            @_bw = @ee.get("blocks", 0)
-            @_bsw = string.pad_start(number.to_string(number.floor(@_bw / 2)), @max_blk, " ")
-            @_prefix = "${@_prefix}${@_bsw} "
-          }
-
-          if (@omit_group) {
-            sys.echo("${@_prefix}${@pstr} ${@nlink} ${@user} ${@sz_s} ${@tm_s} ${@nm}${@suf}${@_link_target}")
-          } else {
-            sys.echo("${@_prefix}${@pstr} ${@nlink} ${@user} ${@group} ${@sz_s} ${@tm_s} ${@nm}${@suf}${@_link_target}")
-          }
-        } else {
-          @_prefix = ""
-          if (@inode_col) {
-            @_iw = string.pad_start(number.to_string(@ee.get("inode", 0)), @max_ino_s, " ")
-            @_prefix = "${@_iw} "
-          }
-          if (@blocks) {
-            @_bw = @ee.get("blocks", 0)
-            @_bsw = string.pad_start(number.to_string(number.floor(@_bw / 2)), @max_blk_s, " ")
-            @_prefix = "${@_prefix}${@_bsw} "
-          }
-          sys.echo("${@_prefix}${@nm}${@suf}")
-        }
-      }
-    }
-  }
-
-  if (@recursive && @from_dir_read) {
-    @_subdirs = []
-    browse(@sorted, @_rb, @ee) {
-      if (@ee.get("is_dir", false)) {
-        @_nm = @ee["name"]
-        if (@_nm != "." && @_nm != "..") {
-          @_subdirs = list.push(@_subdirs, @ee["path"])
-        }
-      }
-    }
-    @work = list.concat(@_subdirs, @work)
-  }
-}
-
-sys.exit(@_ls_exit_code)
+        match (@sort_key) {
+          "extension" => { @sorted = list.sort_maps_by_key(@prepared, "extension", @eff_reverse, "name") },
+          "name" => { @sorted = list.sort_maps_by_key(@prepared, "name", @eff_reverse) },
+          "size" => { @sorted = list.sort_maps_by_key(@prepared, "size", @eff_reverse, "name") },
+          "mtime_sec" => { @sorted = list.sort_maps_by_key(@prepared, "mtime_sec", @eff_reverse, "name", "mtime_nsec") },
+          "atime_sec" => { @sorted = list.sort_maps_by_key(@prepared, "atime_sec", @eff_reverse, "name", "atime_nsec") },

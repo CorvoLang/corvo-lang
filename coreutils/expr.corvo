@@ -33,11 +33,11 @@ if (!@skip_main) {
     @b = number.parse(0, @b_str)
     
     match (@op) {
-      "+" => { sys.echo(number.to_string(@a + @b)) },
-      "-" => { sys.echo(number.to_string(@a - @b)) },
-      "*" => { sys.echo(number.to_string(@a * @b)) },
-      "/" => { sys.echo(number.to_string(math.div(@a, @b))) },
-      _   => { sys.exit(1) }
+      "+" => sys.echo(number.to_string(@a + @b)),
+      "-" => sys.echo(number.to_string(@a - @b)),
+      "*" => sys.echo(number.to_string(@a * @b)),
+      "/" => sys.echo(number.to_string(math.div(@a, @b))),
+      _   => sys.exit(1)
     }
   } fallback {
     sys.exit(1)

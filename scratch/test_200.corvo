@@ -1,0 +1,200 @@
+# coreutils/ls.corvo — GNU-oriented `ls`
+# Run: `corvo coreutils/ls.corvo [OPTION]... [FILE]...`
+# For deterministic diffs vs GNU ls: `LC_ALL=C TZ=UTC` and `--time-style=long-iso`.
+
+# ── Argument-parser spec ─────────────────────────────────────────────────────
+@_ls_spec = {
+  "aliases": {
+    "a": "all",             "A": "almost_all",     "b": "escape",
+    "B": "ignore_backups",  "c": "time_change",    "C": "format_vertical",
+    "d": "directory",       "D": "dired",          "f": "unsorted",
+    "F": "classify",        "g": "no_owner",       "G": "no_group",
+    "h": "human_readable",  "H": "dereference_command_line",
+    "i": "inode",           "k": "kibibytes",      "l": "long",
+    "L": "dereference",     "m": "stream",         "n": "numeric_uid_gid",
+    "N": "literal",         "r": "reverse",        "R": "recursive",
+    "s": "blocks",          "S": "sort_size",      "t": "time_sort_modified",
+    "u": "time_access",     "U": "unsorted",       "v": "sort_version",
+    "x": "format_across",   "X": "sort_extension", "1": "one_per_line",
+    "Z": "selinux",
+    "almost_all": "almost_all",     "ignore_backups": "ignore_backups",
+    "no_group": "no_group",         "numeric_uid_gid": "numeric_uid_gid",
+    "dereference_command_line": "dereference_command_line",
+    "group_directories_first": "group_directories_first",
+    "dereference_command_line_symlink_to_dir": "dereference_command_line_symlink_to_dir",
+    "w": "width",
+    "T": "tabsize",
+    "I": "ignore"
+  },
+  "short_values": ["w", "T", "I"],
+  "long_values": [
+    "sort", "time_style", "format", "width", "tabsize",
+    "ignore", "hide", "indicator_style", "quoting_style",
+    "block_size", "time"
+  ],
+  "long_optional_values": ["color", "hyperlink"],
+  "accumulate": ["ignore", "hide"]
+}
+@parsed = args.parse(os.argv(), @_ls_spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@cwd = os.getcwd()
+
+# ── Procedures ───────────────────────────────────────────────────────────────
+
+@default_to_dot_if_empty = procedure(@paths_in, @paths_out) {
+  @paths_out = @paths_in
+  if (list.is_empty(@paths_out)) {
+    @paths_out = ["."]
+  }
+}
+
+@get_entry_suffix = procedure(@entry, @classify_flag, @suf_out) {
+  @suf_out = ""
+  if (@classify_flag) {
+    if (@entry.get("is_dir", false)) {
+      @suf_out = "/"
+    } else {
+      if (@entry.get("is_symlink", false)) {
+        @suf_out = "@"
+      } else {
+        if (@entry.get("is_executable", false)) {
+          @suf_out = "*"
+        }
+      }
+    }
+  }
+}
+
+@get_size_string = procedure(@entry, @human_flag, @si_flag, @sz_out) {
+  @_ft = @entry.get("file_type_char", "-")
+  @_is_dir = @entry.get("is_dir", false)
+  
+  match (@_ft) {
+    "b" => {
+      @_maj = number.to_string(@entry.get("major", 0))
+      @_min = number.to_string(@entry.get("minor", 0))
+      @sz_out = "${@_maj}, ${@_min}"
+    },
+    "c" => {
+      @_maj = number.to_string(@entry.get("major", 0))
+      @_min = number.to_string(@entry.get("minor", 0))
+      @sz_out = "${@_maj}, ${@_min}"
+    },
+    _ => {
+      if (@human_flag) {
+        if (@_is_dir) {
+          @sz_out = math.human_bytes(@entry.get("size", 0), false)
+        } else {
+          @sz_out = math.human_bytes(@entry.get("size", 0), @si_flag)
+        }
+      } else {
+        @sz_out = number.to_string(@entry.get("size", 0))
+      }
+    }
+  }
+}
+
+@get_time_string = procedure(@entry, @time_access_flag, @time_change_flag, @fmt_str, @tstr_out) {
+  @_tsec = @entry.get("mtime_sec", 0)
+  @_tnsec = @entry.get("mtime_nsec", 0)
+  if (@time_access_flag) {
+    @_tsec = @entry.get("atime_sec", 0)
+    @_tnsec = @entry.get("atime_nsec", 0)
+  } else {
+    if (@time_change_flag) {
+      @_tsec = @entry.get("ctime_sec", 0)
+      @_tnsec = @entry.get("ctime_nsec", 0)
+    }
+  }
+  @tstr_out = time.format_local(@_tsec, @_tnsec, @fmt_str)
+}
+
+@print_total_blocks = procedure(@sorted_list, @human_flag) {
+  @_tb = 0
+  browse(@sorted_list, @_ptb, @_pee) {
+    @_tb += @_pee.get("blocks", 0)
+  }
+  @_tk = number.ceil(@_tb / 2)
+  if (@human_flag) {
+    sys.echo("total ${math.human_bytes(@_tk * 1024, false)}")
+  } else {
+    sys.echo("total ${@_tk}")
+  }
+}
+
+@_enrich_entry = procedure(@ee, @sk, @acc) {
+  @_nm = @ee["name"]
+  @_parts = string.split(@_nm, ".")
+  @_ext = ""
+  if (list.len(@_parts) > 1) {
+    @_ext = list.get(@_parts, list.len(@_parts) - 1)
+  }
+  @_ee2 = @ee
+  @_ee2["extension"] = @_ext
+  @_ee2["_skey"] = @ee.get(@sk, 0)
+  @acc = list.push(@acc, @_ee2)
+}
+
+# ── Initialisation ───────────────────────────────────────────────────────────
+@default_to_dot_if_empty.call(@paths, @paths)
+
+@_ls_skip = false
+@_ls_exit_code = 0
+
+if (@o.get("help", false)) {
+  sys.echo("Usage: ls [OPTION]... [FILE]...")
+  @_ls_skip = true
+}
+
+if (!@_ls_skip && @o.get("version", false)) {
+  sys.echo("ls (Corvo coreutils) 0.1.0")
+  @_ls_skip = true
+}
+
+if (!@_ls_skip && @o.get("dired", false)) {
+  sys.echo("ls.corvo: --dired is not implemented")
+  @_ls_exit_code = 2
+  @_ls_skip = true
+}
+
+# ── Flag extraction ───────────────────────────────────────────────────────────
+@follow = false
+if (!@_ls_skip) {
+  if (@o.get("dereference_command_line", false) || @o.get("dereference", false)) {
+    @follow = true
+  }
+}
+
+@all        = @o.get("all",            false)
+@almost     = @o.get("almost_all",     false)
+@blocks     = @o.get("blocks",         false)
+@inode_col  = @o.get("inode",          false)
+@long       = @o.get("long",           false)
+@omit_group = @o.get("no_group",       false)
+@numeric_ids = @o.get("numeric_uid_gid", false)
+@classify   = @o.get("classify",       false)
+@human      = @o.get("human_readable", false)
+@si         = @o.get("si",             false)
+@reverse    = @o.get("reverse",        false)
+@recursive  = @o.get("recursive",      false)
+@dir_only   = @o.get("directory",      false)
+@stream     = @o.get("stream",         false)
+
+@fmt_C = @o.get("format_vertical", false)
+if (@o.get("format", "") == "vertical") {
+  @fmt_C = true
+}
+if (@o.get("one_per_line", false)) {
+  @fmt_C = false
+}
+
+@term_w = 80
+@ww = @o.get("width", "")
+if (!string.is_empty(string.trim(@ww))) {
+  @term_w = number.parse(0, @ww)
+}
+
+@hides   = @o.get("hide",   list.new())
+@ignores = @o.get("ignore", list.new())
+

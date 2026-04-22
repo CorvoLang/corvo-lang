@@ -1,0 +1,96 @@
+# coreutils/ls.corvo — GNU-oriented `ls`
+# Run: `corvo coreutils/ls.corvo [OPTION]... [FILE]...`
+# For deterministic diffs vs GNU ls: `LC_ALL=C TZ=UTC` and `--time-style=long-iso`.
+
+# ── Argument-parser spec ─────────────────────────────────────────────────────
+@_ls_spec = {
+  "aliases": {
+    "a": "all",             "A": "almost_all",     "b": "escape",
+    "B": "ignore_backups",  "c": "time_change",    "C": "format_vertical",
+    "d": "directory",       "D": "dired",          "f": "unsorted",
+    "F": "classify",        "g": "no_owner",       "G": "no_group",
+    "h": "human_readable",  "H": "dereference_command_line",
+    "i": "inode",           "k": "kibibytes",      "l": "long",
+    "L": "dereference",     "m": "stream",         "n": "numeric_uid_gid",
+    "N": "literal",         "r": "reverse",        "R": "recursive",
+    "s": "blocks",          "S": "sort_size",      "t": "time_sort_modified",
+    "u": "time_access",     "U": "unsorted",       "v": "sort_version",
+    "x": "format_across",   "X": "sort_extension", "1": "one_per_line",
+    "Z": "selinux",
+    "almost_all": "almost_all",     "ignore_backups": "ignore_backups",
+    "no_group": "no_group",         "numeric_uid_gid": "numeric_uid_gid",
+    "dereference_command_line": "dereference_command_line",
+    "group_directories_first": "group_directories_first",
+    "dereference_command_line_symlink_to_dir": "dereference_command_line_symlink_to_dir",
+    "w": "width",
+    "T": "tabsize",
+    "I": "ignore"
+  },
+  "short_values": ["w", "T", "I"],
+  "long_values": [
+    "sort", "time_style", "format", "width", "tabsize",
+    "ignore", "hide", "indicator_style", "quoting_style",
+    "block_size", "time"
+  ],
+  "long_optional_values": ["color", "hyperlink"],
+  "accumulate": ["ignore", "hide"]
+}
+@parsed = args.parse(os.argv(), @_ls_spec)
+@o = @parsed["options"]
+@paths = @parsed["positional"]
+@cwd = os.getcwd()
+
+# ── Procedures ───────────────────────────────────────────────────────────────
+
+@default_to_dot_if_empty = procedure(@paths_in, @paths_out) {
+  @paths_out = @paths_in
+  if (list.is_empty(@paths_out)) {
+    @paths_out = ["."]
+  }
+}
+
+@get_entry_suffix = procedure(@entry, @classify_flag, @suf_out) {
+  @suf_out = ""
+  if (@classify_flag) {
+    if (@entry.get("is_dir", false)) {
+      @suf_out = "/"
+    } else {
+      if (@entry.get("is_symlink", false)) {
+        @suf_out = "@"
+      } else {
+        if (@entry.get("is_executable", false)) {
+          @suf_out = "*"
+        }
+      }
+    }
+  }
+}
+
+@get_size_string = procedure(@entry, @human_flag, @si_flag, @sz_out) {
+  @_ft = @entry.get("file_type_char", "-")
+  @_is_dir = @entry.get("is_dir", false)
+  
+  match (@_ft) {
+    "b" => {
+      @_maj = number.to_string(@entry.get("major", 0))
+      @_min = number.to_string(@entry.get("minor", 0))
+      @sz_out = "${@_maj}, ${@_min}"
+    },
+    "c" => {
+      @_maj = number.to_string(@entry.get("major", 0))
+      @_min = number.to_string(@entry.get("minor", 0))
+      @sz_out = "${@_maj}, ${@_min}"
+    },
+    _ => {
+      if (@human_flag) {
+        if (@_is_dir) {
+          @sz_out = math.human_bytes(@entry.get("size", 0), false)
+        } else {
+          @sz_out = math.human_bytes(@entry.get("size", 0), @si_flag)
+        }
+      } else {
+        @sz_out = number.to_string(@entry.get("size", 0))
+      }
+    }
+  }
+}

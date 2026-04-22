@@ -37,13 +37,18 @@ if (!@skip_main) {
   @minor = number.parse(0, list.get(@pos, 3, "0"))
   
   @mode = 0
-  match (@type_str) {
-    "p" => { @mode = 4516 }, # 0o010644 -> 4516
-    "c", "u" => { @mode = 8612 }, # 0o020644 -> 8612
-    "b" => { @mode = 25004 }, # 0o060644 -> 25004
-    _ => {
-      sys.eprint("mknod: invalid device type '${@type_str}'")
-      sys.exit(1)
+  if (@type_str == "p") {
+    @mode = 4516
+  } else {
+    if (@type_str == "c" || @type_str == "u") {
+      @mode = 8612
+    } else {
+      if (@type_str == "b") {
+        @mode = 25004
+      } else {
+        sys.eprint("mknod: invalid device type '${@type_str}'")
+        sys.exit(1)
+      }
     }
   }
   

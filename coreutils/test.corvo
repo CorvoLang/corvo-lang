@@ -33,16 +33,22 @@ if (@len > 0) {
     @op = list.get(@pos, 1)
     @right = list.get(@pos, 2)
     
-    match (@op) {
-      "=" => { @res = (@left == @right) },
-      "!=" => { @res = (@left != @right) },
-      "-eq" => { try { @res = (number.parse(0, @left) == number.parse(0, @right)) } fallback { @res = false } },
-      "-ne" => { try { @res = (number.parse(0, @left) != number.parse(0, @right)) } fallback { @res = false } },
-      "-gt" => { try { @res = (number.parse(0, @left) > number.parse(0, @right)) } fallback { @res = false } },
-      "-ge" => { try { @res = (number.parse(0, @left) >= number.parse(0, @right)) } fallback { @res = false } },
-      "-lt" => { try { @res = (number.parse(0, @left) < number.parse(0, @right)) } fallback { @res = false } },
-      "-le" => { try { @res = (number.parse(0, @left) <= number.parse(0, @right)) } fallback { @res = false } },
-      _ => { @res = false }
+    if (@op == "=") { @res = (@left == @right) } else {
+      if (@op == "!=") { @res = (@left != @right) } else {
+        if (@op == "-eq") { try { @res = (number.parse(0, @left) == number.parse(0, @right)) } fallback { @res = false } } else {
+          if (@op == "-ne") { try { @res = (number.parse(0, @left) != number.parse(0, @right)) } fallback { @res = false } } else {
+            if (@op == "-gt") { try { @res = (number.parse(0, @left) > number.parse(0, @right)) } fallback { @res = false } } else {
+              if (@op == "-ge") { try { @res = (number.parse(0, @left) >= number.parse(0, @right)) } fallback { @res = false } } else {
+                if (@op == "-lt") { try { @res = (number.parse(0, @left) < number.parse(0, @right)) } fallback { @res = false } } else {
+                  if (@op == "-le") { try { @res = (number.parse(0, @left) <= number.parse(0, @right)) } fallback { @res = false } } else {
+                    @res = false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   } else {
     if (@len >= 2) {
@@ -50,29 +56,33 @@ if (@len > 0) {
       @op = list.get(@pos, 0)
       @arg = list.get(@pos, 1)
       
-      match (@op) {
-        "-e" => { @res = fs.exists(@arg) },
-        "-f" => { 
+      if (@op == "-e") { @res = fs.exists(@arg) } else {
+        if (@op == "-f") { 
           try { 
             @s = fs.stat(@arg)
             @res = (map.get(@s, "is_dir", false) == false)
           } fallback { @res = false }
-        },
-        "-d" => {
-          try {
-            @s = fs.stat(@arg)
-            @res = (map.get(@s, "is_dir", false) == true)
-          } fallback { @res = false }
-        },
-        "-s" => {
-          try {
-            @s = fs.stat(@arg)
-            @res = (map.get(@s, "size", 0) > 0)
-          } fallback { @res = false }
-        },
-        "-z" => { @res = string.is_empty(@arg) },
-        "-n" => { @res = !string.is_empty(@arg) },
-        _ => { @res = false }
+        } else {
+          if (@op == "-d") {
+            try {
+              @s = fs.stat(@arg)
+              @res = (map.get(@s, "is_dir", false) == true)
+            } fallback { @res = false }
+          } else {
+            if (@op == "-s") {
+              try {
+                @s = fs.stat(@arg)
+                @res = (map.get(@s, "size", 0) > 0)
+              } fallback { @res = false }
+            } else {
+              if (@op == "-z") { @res = string.is_empty(@arg) } else {
+                if (@op == "-n") { @res = !string.is_empty(@arg) } else {
+                  @res = false
+                }
+              }
+            }
+          }
+        }
       }
     } else {
       # Single argument case: [ string ]
