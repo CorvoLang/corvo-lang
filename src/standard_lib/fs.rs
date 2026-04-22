@@ -179,6 +179,7 @@ pub fn link(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult
         .map_err(|e| CorvoError::file_system(e.to_string()))
 }
 
+#[allow(unused_variables)]
 pub fn symlink(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     let src = args
         .first()
@@ -412,6 +413,7 @@ pub fn read_meta(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoR
     Ok(Value::Map(m))
 }
 
+#[allow(unused_variables)]
 pub fn mkfifo(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     let path = args
         .first()
@@ -441,6 +443,7 @@ pub fn mkfifo(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResu
     }
 }
 
+#[allow(unused_variables)]
 pub fn mknod(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     let path = args
         .first()
@@ -487,7 +490,7 @@ pub fn read_link(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoR
 pub fn mktemp(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     use rand::{distributions::Alphanumeric, Rng};
     let template = args
-        .get(0)
+        .first()
         .and_then(|v| v.as_string())
         .map(|s| s.as_str())
         .unwrap_or("tmp.XXXXXX");
@@ -535,7 +538,7 @@ pub fn mktemp(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResu
 pub fn read_hex(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     use std::io::{Read, Seek, SeekFrom};
     let path = args
-        .get(0)
+        .first()
         .and_then(|v| v.as_string())
         .ok_or_else(|| CorvoError::invalid_argument("fs.read_hex: path missing"))?;
     let offset = args.get(1).and_then(|v| v.as_number()).unwrap_or(0.0) as u64;
@@ -555,7 +558,7 @@ pub fn read_hex(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoRe
 pub fn write_hex(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     use std::io::{Seek, SeekFrom, Write};
     let path = args
-        .get(0)
+        .first()
         .and_then(|v| v.as_string())
         .ok_or_else(|| CorvoError::invalid_argument("fs.write_hex: path missing"))?;
     let offset = args.get(1).and_then(|v| v.as_number()).unwrap_or(0.0) as u64;
@@ -576,6 +579,7 @@ pub fn write_hex(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoR
     let mut f = fs::OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(false)
         .open(path)
         .map_err(|e| CorvoError::file_system(e.to_string()))?;
     

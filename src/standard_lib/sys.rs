@@ -360,6 +360,7 @@ fn wait_with_timeout(
     }
 }
 
+#[allow(unused_variables)]
 pub fn chroot(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     let path = args
         .first()
@@ -387,6 +388,7 @@ pub fn chroot(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResu
     }
 }
 
+#[allow(unused_variables)]
 pub fn nice(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     let inc = args
         .first()
@@ -398,9 +400,22 @@ pub fn nice(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult
         unsafe {
             // nice() returns the new priority, but it can be -1 which is a valid value.
             // We must clear errno before and check it after.
-            *libc::__errno_location() = 0;
+            #[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd"))]
+            {
+                *libc::__error() = 0;
+            }
+            #[cfg(target_os = "linux")]
+            {
+                *libc::__errno_location() = 0;
+            }
+            
             let _ = libc::nice(inc as libc::c_int);
+            
+            #[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd"))]
+            let err = *libc::__error();
+            #[cfg(target_os = "linux")]
             let err = *libc::__errno_location();
+
             if err != 0 {
                 return Err(CorvoError::io(format!("nice failed: {}", std::io::Error::from_raw_os_error(err))));
             }

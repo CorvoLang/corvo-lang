@@ -171,6 +171,7 @@ pub fn nproc(_args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResu
 }
 
 /// Get disk space usage for a path.
+#[allow(unused_variables)]
 pub fn df(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     let path = args
         .first()
@@ -490,7 +491,11 @@ pub fn username(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoRe
 
     #[cfg(not(unix))]
     {
-        Ok(Value::String(whoami::username()))
+        Ok(Value::String(
+            std::env::var("USERNAME")
+                .or_else(|_| std::env::var("USER"))
+                .unwrap_or_else(|_| "unknown".to_string())
+        ))
     }
 }
 
