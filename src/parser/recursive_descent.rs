@@ -924,12 +924,10 @@ impl Parser {
 
         for part in &parts {
             match &part.token_type {
-                TokenType::String(s) => {
-                    if !s.is_empty() {
-                        expr_parts.push(Expr::Literal {
-                            value: crate::type_system::Value::String(s.clone()),
-                        });
-                    }
+                TokenType::String(s) if !s.is_empty() => {
+                    expr_parts.push(Expr::Literal {
+                        value: crate::type_system::Value::String(s.clone()),
+                    });
                 }
                 TokenType::StringInterpolation(expr_tokens) => {
                     let mut sub_parser = Parser::new(expr_tokens.clone());
