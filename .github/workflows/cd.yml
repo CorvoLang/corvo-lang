@@ -219,3 +219,23 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-rc') }}
           files: |
             release/*
+
+  publish-crate:
+    name: Publish Crate
+    runs-on: ubuntu-latest
+    needs: [build-binaries]
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Update Cargo.toml version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v ver="$VERSION" '/^version = / && !replaced { sub(/version = .*/, "version = \"" ver "\""); replaced=1 } 1' Cargo.toml > tmp.toml && mv tmp.toml Cargo.toml
+
+      - name: Publish to crates.io
+        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --allow-dirty
