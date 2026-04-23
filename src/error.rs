@@ -1,6 +1,10 @@
 use crate::span::Span;
 use std::fmt;
 
+/// Represents all errors that can occur during the execution of a Corvo program.
+///
+/// This encompasses lexing, parsing, and runtime errors, as well as file system
+/// and networking issues that might be encountered by standard library functions.
 #[derive(Debug, Clone)]
 pub enum CorvoError {
     Lexing {
@@ -269,6 +273,7 @@ impl CorvoError {
     }
 }
 
+/// A convenient type alias for `Result` with `CorvoError`.
 pub type CorvoResult<T> = Result<T, CorvoError>;
 
 #[cfg(test)]

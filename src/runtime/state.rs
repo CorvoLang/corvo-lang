@@ -3,6 +3,11 @@ use crate::type_system::Value;
 use crate::CorvoError;
 use std::collections::HashMap;
 
+/// Holds the current state of a Corvo program during execution.
+///
+/// The `RuntimeState` tracks normal variables, static variables (which persist
+/// and can be captured at compile time), the arguments passed to the script,
+/// and the registry of active TCP connections.
 #[derive(Debug)]
 pub struct RuntimeState {
     vars: HashMap<String, Value>,

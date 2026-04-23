@@ -632,7 +632,7 @@ fn send_os_notification(title: &str, message: &str) -> bool {
 /// `password` (PASS command, pass `""` to skip), identifies as `nickname`,
 /// joins `channel`, sends the `message` as a PRIVMSG, and disconnects.
 ///
-/// Args: host, port, nickname, channel, message, [password]
+/// Args: host, port, nickname, channel, message, \[password\]
 /// Returns: map { success: bool }
 pub fn irc(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     use std::io::{BufRead, BufReader, Write};

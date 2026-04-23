@@ -1,15 +1,33 @@
+//! # Corvo Programming Language
+//!
+//! This crate provides the parser, compiler, and runtime for the Corvo language.
+//!
+//! You can execute Corvo code directly using [`run_source`] or [`run_file`], or compile it
+//! to a standalone Rust binary using the compiler module.
+
 mod strverscmp;
 
+/// Abstract Syntax Tree node definitions.
 pub mod ast;
+/// Code generator and compiler to standalone Rust binaries.
 pub mod compiler;
+/// Linter, static analysis, and pretty error rendering.
 pub mod diagnostic;
+/// Error types and results for Corvo.
 pub mod error;
+/// Tokeniser and token definitions.
 pub mod lexer;
+/// Recursive-descent parser.
 pub mod parser;
+/// Interactive Read-Eval-Print Loop.
 pub mod repl;
+/// Runtime state, including variables and statics.
 pub mod runtime;
+/// Source code locations and spans.
 pub mod span;
+/// Built-in modules and standard library functions.
 pub mod standard_lib;
+/// Type definitions and type-specific methods.
 pub mod type_system;
 
 pub use error::{CorvoError, CorvoResult};
@@ -21,11 +39,26 @@ use crate::lexer::Lexer;
 use crate::parser::Parser;
 use std::path::Path;
 
+/// Runs a Corvo script from a given file path.
+///
+/// # Arguments
+/// * `path` - The path to the Corvo source file.
+///
+/// # Errors
+/// Returns a `CorvoError` if reading the file fails, or if a lexing, parsing,
+/// or runtime error occurs during execution.
 pub fn run_file(path: &Path) -> CorvoResult<()> {
     let source = std::fs::read_to_string(path).map_err(|e| CorvoError::io(e.to_string()))?;
     run_source(&source)
 }
 
+/// Runs Corvo source code directly from a string.
+///
+/// # Arguments
+/// * `source` - The Corvo source code to execute.
+///
+/// # Errors
+/// Returns a `CorvoError` if a lexing, parsing, or runtime error occurs.
 pub fn run_source(source: &str) -> CorvoResult<()> {
     let mut state = RuntimeState::new();
     run_source_with_state(source, &mut state)
@@ -38,6 +71,17 @@ pub fn run_source_with_script_argv(source: &str, script_argv: Vec<String>) -> Co
     run_source_with_state(source, &mut state)
 }
 
+/// Runs Corvo source code with a specific, existing runtime state.
+///
+/// This is useful if you need to preload variables or inspect the state
+/// after execution.
+///
+/// # Arguments
+/// * `source` - The Corvo source code to execute.
+/// * `state` - The `RuntimeState` to use and mutate during execution.
+///
+/// # Errors
+/// Returns a `CorvoError` if a lexing, parsing, or runtime error occurs.
 pub fn run_source_with_state(source: &str, state: &mut RuntimeState) -> CorvoResult<()> {
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize()?;
@@ -55,6 +99,7 @@ pub fn run_source_with_state(source: &str, state: &mut RuntimeState) -> CorvoRes
     Ok(())
 }
 
+/// Starts the Corvo interactive Read-Eval-Print Loop (REPL).
 pub fn run_repl() {
     repl::run();
 }

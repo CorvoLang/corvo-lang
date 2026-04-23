@@ -45,6 +45,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Update Cargo.toml version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            awk -v ver="$VERSION" '/^version = / && !replaced { sub(/version = .*/, "version = \"" ver "\""); replaced=1 } 1' Cargo.toml > tmp.toml && mv tmp.toml Cargo.toml
+          fi
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -98,6 +106,14 @@ jobs:
         platform: [linux/amd64, linux/arm64]
     steps:
       - uses: actions/checkout@v6
+
+      - name: Update Cargo.toml version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            awk -v ver="$VERSION" '/^version = / && !replaced { sub(/version = .*/, "version = \"" ver "\""); replaced=1 } 1' Cargo.toml > tmp.toml && mv tmp.toml Cargo.toml
+          fi
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3

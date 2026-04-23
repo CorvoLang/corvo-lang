@@ -1,5 +1,6 @@
 use std::fmt;
 
+/// Represents a specific point in the source code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position {
     pub line: usize,
@@ -41,6 +42,7 @@ impl fmt::Display for Position {
     }
 }
 
+/// Represents a region of source code, typically encompassing a token or AST node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
     pub start: Position,
