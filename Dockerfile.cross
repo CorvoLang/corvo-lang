@@ -1,0 +1,6 @@
+FROM ghcr.io/cross-rs/aarch64-unknown-linux-gnu:main
+RUN dpkg --add-architecture arm64 && \
+    apt-get update && \
+    apt-get install -y pkg-config libssl-dev:arm64
+ENV OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu
+ENV OPENSSL_INCLUDE_DIR=/usr/include/aarch64-linux-gnu
