@@ -31,7 +31,7 @@ aes-gcm = "0.10"
 sha2 = "0.10"
 md-5 = "0.10"
 rand = "0.8"
-reqwest = { version = "0.11", features = ["json", "blocking"] }
+reqwest = { version = "0.11", default-features = false, features = ["json", "blocking", "rustls-tls"] }
 tokio = { version = "1.35", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -42,7 +42,7 @@ base64 = "0.21"
 dns-lookup = "2.0"
 hostname = "0.4"
 structopt = "0.3"
-lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "builder", "native-tls"] }
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "builder", "rustls-tls"] }
 sha1 = "0.10"
 blake2 = "0.10"
 handlebars = "6.4.0"
