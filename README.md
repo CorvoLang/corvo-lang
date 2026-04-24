@@ -126,7 +126,7 @@ sys.echo("Compiled on ${static.get("BUILD_DATE")}")
 ## Quick start
 
 ```bash
-git clone https://github.com/KeanuReadmes/corvo-lang
+git clone https://github.com/CorvoLang/corvo-lang
 cd corvo-lang
 cargo build --release
 ```
@@ -169,7 +169,7 @@ The `coreutils/` directory contains high-performance, GNU-compatible re-implemen
 ## Install
 
 ```bash
-git clone https://github.com/KeanuReadmes/corvo-lang
+git clone https://github.com/CorvoLang/corvo-lang
 cd corvo-lang
 cargo build --release
 sudo cp target/release/corvo /usr/local/bin/
