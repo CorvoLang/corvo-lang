@@ -32,6 +32,9 @@ impl Evaluator {
 
     pub fn run(&mut self, program: &Program, state: &mut RuntimeState) -> CorvoResult<()> {
         for stmt in &program.statements {
+            if self.pre_exec_mode && !matches!(stmt, Stmt::PrepBlock { .. }) {
+                continue;
+            }
             self.exec_stmt(stmt, state)?;
             if self.terminate_requested {
                 break;
