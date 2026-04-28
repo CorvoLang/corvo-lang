@@ -58,6 +58,9 @@ corvo --repl
 # Evaluate a snippet
 corvo --eval 'sys.echo("Hello from Corvo!")'
 
+# Check syntax without executing
+corvo --check script.corvo
+
 # Check for syntax errors and unknown functions
 corvo --lint script.corvo
 

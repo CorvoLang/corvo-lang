@@ -32,7 +32,7 @@
 | `os.ttyname` | `` | `String` | Gets TTY name | `examples/os_example.corvo` |
 | `os.uptime` | `` | `Number` | Gets system uptime | `examples/os_example.corvo` |
 | `os.load_average` | `` | `List` | Gets system load averages | `examples/os_example.corvo` |
-| `os.user_count` | `` | `Number` | Gets number of logged in users | `examples/os_example.corvo` |
+| `os.user_count` | `` | `Number` | Gets number of logged-in users | `examples/os_example.corvo` |
 | `os.users` | `` | `List` | Gets logged in users | `examples/os_example.corvo` |
 | `os.user_id` | `` | `Number` | Gets effective user ID | `examples/os_example.corvo` |
 | `os.group_id` | `` | `Number` | Gets effective group ID | `examples/os_example.corvo` |
