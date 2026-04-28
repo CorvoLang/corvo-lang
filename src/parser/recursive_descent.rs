@@ -140,6 +140,7 @@ impl Parser {
             | TokenType::AssertLe
             | TokenType::AssertMatch => self.parse_assert()?,
             TokenType::If => self.parse_if()?,
+            TokenType::HttpListen => self.parse_http_listen_stmt()?,
             TokenType::At => {
                 // @name = value       → VarSet shortcut
                 // @name[index] = val  → VarIndexSet shortcut
@@ -401,7 +402,7 @@ impl Parser {
         let then_branch = self.parse_block_body("if body")?;
 
         let else_branch = if self.match_token(TokenType::Else) {
-            if self.match_token(TokenType::If) {
+            if self.check(TokenType::If) {
                 vec![self.parse_if()?]
             } else {
                 self.consume(TokenType::LeftBrace, "Expected '{' before else body")?;
@@ -415,6 +416,68 @@ impl Parser {
             condition,
             then_branch,
             else_branch,
+        })
+    }
+
+    fn parse_http_listen_stmt(&mut self) -> CorvoResult<Stmt> {
+        if self.in_prep_block {
+            return Err(self.error("http_listen not allowed inside prep block"));
+        }
+        self.advance(); // consume 'http_listen'
+        self.consume(TokenType::LeftParen, "Expected '(' after 'http_listen'")?;
+
+        self.consume(
+            TokenType::Identifier("port".to_string()),
+            "Expected 'port' in http_listen arguments",
+        )?;
+        self.consume(TokenType::Colon, "Expected ':' after 'port'")?;
+
+        let port = Box::new(self.parse_expression()?);
+
+        self.consume(TokenType::Comma, "Expected ',' after port expression")?;
+
+        self.consume(
+            TokenType::At,
+            "Expected '@' before request variable name in http_listen",
+        )?;
+        let req_ident = self.parse_name_after_at()?;
+
+        self.consume(TokenType::Comma, "Expected ',' after request variable")?;
+
+        self.consume(
+            TokenType::At,
+            "Expected '@' before response variable name in http_listen",
+        )?;
+        let resp_ident = self.parse_name_after_at()?;
+
+        let mut shared_vars = Vec::new();
+        while self.match_token(TokenType::Comma) {
+            self.consume(
+                TokenType::Shared,
+                "Expected 'shared' keyword before shared variable in http_listen",
+            )?;
+            self.consume(
+                TokenType::At,
+                "Expected '@' before shared variable name in http_listen",
+            )?;
+            let name = self.parse_name_after_at()?;
+            shared_vars.push(name);
+        }
+
+        self.consume(
+            TokenType::RightParen,
+            "Expected ')' after http_listen arguments",
+        )?;
+        self.consume(TokenType::LeftBrace, "Expected '{' before http_listen body")?;
+
+        let body = self.parse_block_body("http_listen block")?;
+
+        Ok(Stmt::HttpListen {
+            port,
+            req_ident,
+            resp_ident,
+            shared_vars,
+            body,
         })
     }
 

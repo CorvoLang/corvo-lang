@@ -536,6 +536,56 @@ impl Transpiler {
                     self.indent()
                 ));
             }
+            Stmt::HttpListen {
+                port,
+                req_ident,
+                resp_ident,
+                shared_vars,
+                body,
+            } => {
+                let port_expr = self.transpile_expr(port, state_var);
+                let shared_list = shared_vars
+                    .iter()
+                    .map(|v| format!("{:?}.to_string()", v))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let mut body_code = String::new();
+                let old_indent = self.indent_level;
+                self.indent_level += 2;
+                for s in body {
+                    body_code.push_str(&self.transpile_stmt(s, state_var));
+                }
+                body_code.push_str(&format!("{}Ok(Value::Null)\n", self.indent()));
+                self.indent_level = old_indent;
+                code.push_str(&format!(
+                    "{}corvo_lang::compiler::Evaluator::new().exec_http_listen_native(\n\
+                     {}    {},\n\
+                     {}    {:?},\n\
+                     {}    {:?},\n\
+                     {}    &[{}],\n\
+                     {}    std::sync::Arc::new(move |_args, {}| {{\n\
+                     {}\
+                     {}    }}),\n\
+                     {}    &mut {}\n\
+                     {})?;\n",
+                    self.indent(),
+                    self.indent(),
+                    port_expr,
+                    self.indent(),
+                    req_ident,
+                    self.indent(),
+                    resp_ident,
+                    self.indent(),
+                    shared_list,
+                    self.indent(),
+                    state_var,
+                    body_code,
+                    self.indent(),
+                    self.indent(),
+                    state_var,
+                    self.indent()
+                ));
+            }
         }
         code
     }
@@ -770,7 +820,7 @@ impl Transpiler {
             Expr::IndexAccess { target, index } => {
                 let t = self.transpile_expr(target, state_var);
                 let i = self.transpile_expr(index, state_var);
-                format!("match ({}, {}) {{\n    (Value::List(l), Value::Number(idx)) => l.get(*idx as usize).cloned().ok_or_else(|| CorvoError::runtime(\"Index out of bounds\"))?,\n    (Value::Map(m), Value::String(key)) => m.get(&key).cloned().ok_or_else(|| CorvoError::runtime(format!(\"Key not found: {{}}\", key)))?,\n    _ => return Err(CorvoError::r#type(\"index access error\"))\n}}", t, i)
+                format!("match ({}, {}) {{\n    (Value::List(l), Value::Number(idx)) => {{\n        if !idx.is_finite() || idx < 0.0 || idx.fract() != 0.0 {{\n            return Err(CorvoError::runtime(\"Invalid index\"));\n        }}\n        l.get(idx as usize).cloned().ok_or_else(|| CorvoError::runtime(\"Index out of bounds\"))?\n    }},\n    (Value::Map(m), Value::String(key)) => m.get(&key).cloned().ok_or_else(|| CorvoError::runtime(format!(\"Key not found: {{}}\", key)))?,\n    _ => return Err(CorvoError::r#type(\"index access error\"))\n}}", t, i)
             }
             Expr::SliceAccess { target, start, end } => {
                 let t = self.transpile_expr(target, state_var);
