@@ -328,7 +328,6 @@ impl Compiler {
     }
 }
 
-
 fn create_build_dir() -> Result<PathBuf, CorvoError> {
     let base = std::env::temp_dir().join("corvo_build");
     let _ = std::fs::remove_dir_all(&base);
