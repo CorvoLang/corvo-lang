@@ -187,6 +187,29 @@ fn lint_stmt(stmt: &Stmt, out: &mut Vec<LintDiagnostic>) {
                 });
             }
         }
+        Stmt::HttpListen {
+            port,
+            body,
+            shared_vars,
+            ..
+        } => {
+            lint_expr(port, out);
+            if !shared_vars.is_empty() {
+                out.push(LintDiagnostic {
+                    message: "http_listen: shared variables are serialized at write-back"
+                        .to_string(),
+                    help: Some(
+                        "Write-back order is non-deterministic between concurrent requests. \
+                         Ensure the state accumulation is order-independent."
+                            .to_string(),
+                    ),
+                    severity: LintSeverity::Warning,
+                });
+            }
+            for s in body {
+                lint_stmt(s, out);
+            }
+        }
         Stmt::Terminate => {}
         Stmt::VarIndexSet { index, value, .. } => {
             lint_expr(index, out);

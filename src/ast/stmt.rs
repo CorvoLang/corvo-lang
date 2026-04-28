@@ -70,6 +70,13 @@ pub enum Stmt {
         then_branch: Vec<Stmt>,
         else_branch: Vec<Stmt>,
     },
+    HttpListen {
+        port: Box<Expr>,
+        req_ident: String,
+        resp_ident: String,
+        shared_vars: Vec<String>,
+        body: Vec<Stmt>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

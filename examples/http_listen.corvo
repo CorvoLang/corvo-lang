@@ -1,0 +1,51 @@
+# HTTP Server Example
+# Starts a basic REST API using the http_listen block.
+
+sys.echo("Starting server on port 8080...")
+
+@hit_count = 0
+@messages = list.new()
+
+http_listen(port: 8080, @req, @resp, shared @hit_count, shared @messages) {
+    # 1. Concurrent State Accumulation
+    @hit_count += 1
+    
+    # 2. Simple Routing
+    match(@req["path"]) {
+        "/" => {
+            @resp["body"] = "Welcome to Corvo HTTP Server! Hits: " + number.to_string(@hit_count)
+            @headers = @resp["headers"]
+            @headers["content-type"] = "text/plain"
+            @resp["headers"] = @headers
+        },
+        "/api/messages" => {
+            match(@req["method"]) {
+                "GET" => {
+                    @resp["body"] = json.stringify(@messages)
+                    @headers = @resp["headers"]
+                    @headers["content-type"] = "application/json"
+                    @resp["headers"] = @headers
+                },
+                "POST" => {
+                    try {
+                        @parsed = json.parse(@req["body"])
+                        list.push(@messages, @parsed["text"])
+                        @resp["status"] = 201
+                        @resp["body"] = "Message added"
+                    } fallback {
+                        @resp["status"] = 400
+                        @resp["body"] = "Invalid JSON"
+                    }
+                },
+                _ => {
+                    @resp["status"] = 405
+                    @resp["body"] = "Method Not Allowed"
+                }
+            }
+        },
+        _ => {
+            @resp["status"] = 404
+            @resp["body"] = "404 Not Found"
+        }
+    }
+}

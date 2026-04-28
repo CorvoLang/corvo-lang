@@ -26,6 +26,7 @@ pub enum TokenType {
     AssertMatch,
     Procedure,
     Shared,
+    HttpListen,
 
     // Literals
     String(String),
@@ -99,6 +100,7 @@ impl fmt::Display for TokenType {
             Self::AssertMatch => write!(f, "assert_match"),
             Self::Procedure => write!(f, "procedure"),
             Self::Shared => write!(f, "shared"),
+            Self::HttpListen => write!(f, "http_listen"),
             Self::String(s) => write!(f, "\"{}\"", s),
             Self::Regex(pattern, flags) => write!(f, "/{}/{}", pattern, flags),
             Self::Number(n) => {
