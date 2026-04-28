@@ -402,7 +402,7 @@ impl Parser {
         let then_branch = self.parse_block_body("if body")?;
 
         let else_branch = if self.match_token(TokenType::Else) {
-            if self.match_token(TokenType::If) {
+            if self.check(TokenType::If) {
                 vec![self.parse_if()?]
             } else {
                 self.consume(TokenType::LeftBrace, "Expected '{' before else body")?;
@@ -420,6 +420,9 @@ impl Parser {
     }
 
     fn parse_http_listen_stmt(&mut self) -> CorvoResult<Stmt> {
+        if self.in_prep_block {
+            return Err(self.error("http_listen not allowed inside prep block"));
+        }
         self.advance(); // consume 'http_listen'
         self.consume(TokenType::LeftParen, "Expected '(' after 'http_listen'")?;
 

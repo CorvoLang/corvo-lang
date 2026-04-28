@@ -72,6 +72,7 @@ When the interpreter encounters `Stmt::HttpListen`, implement this pipeline:
     *   **Scope Isolation:** Instantiate a fresh `runtime::scope::Scope`.
         *   Insert the `@req` and `@resp` maps.
         *   For each string in `shared_vars`, extract it from the outer scope as a `SharedValue` (Corvo's native `Arc<Mutex<Value>>` wrapper) and clone the reference into the new local scope.
+        *   **Note:** All other outer variables are intentionally *inaccessible*. Standard lexical shadowing does not implicitly import them; you must pass state explicitly via `shared`.
     *   **Concurrency:** Spawn a native OS thread (`std::thread::spawn`).
     *   **Execution:** Inside the thread, instantiate a new `Evaluator` and execute the `body` statements using the isolated `Scope`.
 4.  **Response Flush:** When block execution finishes, extract the final state of the variable named by `resp_ident` from the `Scope`. Validate it is still a `Value::Map`. Construct a raw HTTP response string using its `"status"`, `"headers"`, and `"body"` keys, write it to the TCP stream, and cleanly close the connection.
@@ -167,4 +168,4 @@ http_listen(port: 5050, @req, @resp) {
 ## 6. AI Edge-Cases Checklist
 - [ ] **Type Enforcement Phase:** Ensure the final extraction phase strictly validates that `@resp` is still a `Value::Map` and `status` is a `Value::Integer`. If the user accidentally performed `@resp = "string"`, return a hard-coded HTTP `500 Internal Server Error` to the network client instead of crashing the Rust evaluator.
 - [ ] **Port Conflicts:** If `TcpListener::bind` fails (e.g., port already in use), map it to a cleanly formatted `CorvoError` and halt script execution prior to loop entry.
-- [ ] **Missing Shared Declaration:** If a user attempts to update outer-scope variables inside the block *without* adding them to the `shared` comma-separated list, standard Corvo lexical scope-shadowing rules must naturally isolate and drop those changes upon thread completion. Do not allow implicit state leaks.
+- [ ] **Missing Shared Declaration:** If a user attempts to update outer-scope variables inside the block *without* adding them to the `shared` comma-separated list, or even tries to read them, they are entirely inaccessible. Corvo enforces explicit state sharing—outer variables are hidden by default to prevent implicit state leaks.

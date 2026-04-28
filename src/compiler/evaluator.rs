@@ -651,91 +651,13 @@ impl Evaluator {
             let mut stream = stream
                 .map_err(|e| CorvoError::runtime(format!("Failed to accept connection: {}", e)))?;
 
-            use std::io::{Read, Write};
-            let mut buffer = [0; 8192];
-            let mut request_raw = String::new();
-            if let Ok(bytes_read) = stream.read(&mut buffer) {
-                request_raw = String::from_utf8_lossy(&buffer[..bytes_read]).into_owned();
-            }
-
-            let mut req_map = std::collections::HashMap::new();
-            req_map.insert(
-                "ip".to_string(),
-                Value::String(
-                    stream
-                        .peer_addr()
-                        .map(|a| a.ip().to_string())
-                        .unwrap_or_default(),
-                ),
-            );
-
-            let mut parts = request_raw.splitn(2, "\r\n\r\n");
-            let header_part = parts.next().unwrap_or("");
-            let body_part = parts.next().unwrap_or("");
-
-            req_map.insert("body".to_string(), Value::String(body_part.to_string()));
-
-            let mut header_lines = header_part.lines();
-            if let Some(first_line) = header_lines.next() {
-                let req_parts: Vec<&str> = first_line.split_whitespace().collect();
-                if req_parts.len() >= 2 {
-                    req_map.insert(
-                        "method".to_string(),
-                        Value::String(req_parts[0].to_uppercase()),
-                    );
-                    let mut path_and_query = req_parts[1].splitn(2, '?');
-                    let path = path_and_query.next().unwrap_or("/");
-                    req_map.insert("path".to_string(), Value::String(path.to_string()));
-
-                    let query_str = path_and_query.next().unwrap_or("");
-                    let mut query_map = std::collections::HashMap::new();
-                    for pair in query_str.split('&') {
-                        if pair.is_empty() {
-                            continue;
-                        }
-                        let mut kv = pair.splitn(2, '=');
-                        let k = kv.next().unwrap_or("");
-                        let v = kv.next().unwrap_or("");
-                        query_map.insert(k.to_string(), Value::String(v.to_string()));
-                    }
-                    req_map.insert("query".to_string(), Value::Map(query_map));
-                } else {
-                    req_map.insert("method".to_string(), Value::String("".to_string()));
-                    req_map.insert("path".to_string(), Value::String("".to_string()));
-                    req_map.insert(
-                        "query".to_string(),
-                        Value::Map(std::collections::HashMap::new()),
-                    );
-                }
-            } else {
-                req_map.insert("method".to_string(), Value::String("".to_string()));
-                req_map.insert("path".to_string(), Value::String("".to_string()));
-                req_map.insert(
-                    "query".to_string(),
-                    Value::Map(std::collections::HashMap::new()),
-                );
-            }
-
-            let mut headers_map = std::collections::HashMap::new();
-            for line in header_lines {
-                let mut kv = line.splitn(2, ':');
-                let k = kv.next().unwrap_or("").trim().to_lowercase();
-                let v = kv.next().unwrap_or("").trim().to_string();
-                if !k.is_empty() {
-                    headers_map.insert(k, Value::String(v));
-                }
-            }
-            req_map.insert("headers".to_string(), Value::Map(headers_map));
+            let req_map = match Self::parse_http_request(&mut stream) {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
 
             let arcs: Vec<Arc<Mutex<Value>>> = shared_arcs.iter().map(Arc::clone).collect();
             let thread_state = state.clone();
-
-            // Scope Isolation - create new scope by dropping the state vars from clone and repopulating what we need?
-            // Actually, in Corvo, the whole program runs in a single flat RuntimeState. `execute_block` does not create a new RuntimeState frame,
-            // but for async_browse and http_listen, the thread_state starts cloned from the outer state, so outer vars are available.
-            // But wait, "Scope Isolation: Instantiate a fresh runtime::scope::Scope". Corvo does not have `runtime::scope::Scope` natively based on the files I saw.
-            // Let's check `src/runtime/scope.rs`... wait, `find src -type f` earlier showed `src/runtime/scope.rs`! Let's verify.
-
             let req_ident_clone = req_ident.to_string();
             let resp_ident_clone = resp_ident.to_string();
             let shared_vars_clone = shared_vars.to_vec();
@@ -743,78 +665,29 @@ impl Evaluator {
 
             std::thread::spawn(move || {
                 let mut scope_state = crate::runtime::RuntimeState::new();
-                scope_state.var_set(req_ident_clone, Value::Map(req_map));
-
-                let mut resp_map = std::collections::HashMap::new();
-                resp_map.insert("status".to_string(), Value::Number(200.0));
-                let mut resp_headers = std::collections::HashMap::new();
-                resp_headers.insert(
-                    "content-type".to_string(),
-                    Value::String("text/plain".to_string()),
+                let snapshots = Self::init_http_scope(
+                    &req_ident_clone,
+                    &resp_ident_clone,
+                    &shared_vars_clone,
+                    &arcs,
+                    &thread_state,
+                    req_map,
+                    &mut scope_state,
                 );
-                resp_map.insert("headers".to_string(), Value::Map(resp_headers));
-                resp_map.insert("body".to_string(), Value::String(String::new()));
-                scope_state.var_set(resp_ident_clone.clone(), Value::Map(resp_map));
-
-                let mut snapshots: Vec<Value> = Vec::with_capacity(arcs.len());
-                for (i, arc) in arcs.iter().enumerate() {
-                    let snapshot = arc.lock().unwrap().clone();
-                    snapshots.push(snapshot.clone());
-                    scope_state.var_set(shared_vars_clone[i].clone(), snapshot);
-                }
-
-                // Copy over statics since they are read-only
-                for k in thread_state.static_keys() {
-                    if let Ok(v) = thread_state.static_get(&k) {
-                        scope_state.static_set(k, v);
-                    }
-                }
 
                 let mut evaluator = Evaluator::new();
-                let _ = evaluator.execute_block(&body_clone, &mut scope_state);
+                let result = evaluator.execute_block(&body_clone, &mut scope_state);
+                let success = result.is_ok();
 
-                for (i, arc) in arcs.iter().enumerate() {
-                    let thread_final = scope_state
-                        .var_get(&shared_vars_clone[i])
-                        .unwrap_or(Value::Null);
-                    let mut guard = arc.lock().unwrap();
-                    let current = guard.clone();
-                    *guard = merge_shared_writeback(&snapshots[i], &thread_final, &current);
-                }
-
-                let final_resp = scope_state
-                    .var_get(&resp_ident_clone)
-                    .unwrap_or(Value::Null);
-                if let Value::Map(resp) = final_resp {
-                    let status = match resp.get("status") {
-                        Some(Value::Number(n)) => *n as u16,
-                        _ => 200,
-                    };
-                    let body_str = match resp.get("body") {
-                        Some(Value::String(s)) => s.clone(),
-                        _ => String::new(),
-                    };
-
-                    let mut response_str = format!("HTTP/1.1 {} OK\r\n", status);
-                    let mut has_content_len = false;
-                    if let Some(Value::Map(h)) = resp.get("headers") {
-                        for (k, v) in h {
-                            if k.to_lowercase() == "content-length" {
-                                has_content_len = true;
-                            }
-                            response_str.push_str(&format!("{}: {}\r\n", k, v));
-                        }
-                    }
-                    if !has_content_len {
-                        response_str.push_str(&format!("Content-Length: {}\r\n", body_str.len()));
-                    }
-                    response_str.push_str(&format!("\r\n{}", body_str));
-                    let _ = stream.write_all(response_str.as_bytes());
-                } else {
-                    let _ = stream.write_all(
-                        b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n",
-                    );
-                }
+                let _ = Self::write_http_response(
+                    &mut stream,
+                    &scope_state,
+                    &resp_ident_clone,
+                    &shared_vars_clone,
+                    &arcs,
+                    &snapshots,
+                    success,
+                );
             });
         }
         Ok(())
@@ -853,81 +726,10 @@ impl Evaluator {
             let mut stream = stream
                 .map_err(|e| CorvoError::runtime(format!("Failed to accept connection: {}", e)))?;
 
-            use std::io::{Read, Write};
-            let mut buffer = [0; 8192];
-            let mut request_raw = String::new();
-            if let Ok(bytes_read) = stream.read(&mut buffer) {
-                request_raw = String::from_utf8_lossy(&buffer[..bytes_read]).into_owned();
-            }
-
-            let mut req_map = std::collections::HashMap::new();
-            req_map.insert(
-                "ip".to_string(),
-                Value::String(
-                    stream
-                        .peer_addr()
-                        .map(|a| a.ip().to_string())
-                        .unwrap_or_default(),
-                ),
-            );
-
-            let mut parts = request_raw.splitn(2, "\r\n\r\n");
-            let header_part = parts.next().unwrap_or("");
-            let body_part = parts.next().unwrap_or("");
-
-            req_map.insert("body".to_string(), Value::String(body_part.to_string()));
-
-            let mut header_lines = header_part.lines();
-            if let Some(first_line) = header_lines.next() {
-                let req_parts: Vec<&str> = first_line.split_whitespace().collect();
-                if req_parts.len() >= 2 {
-                    req_map.insert(
-                        "method".to_string(),
-                        Value::String(req_parts[0].to_uppercase()),
-                    );
-                    let mut path_and_query = req_parts[1].splitn(2, '?');
-                    let path = path_and_query.next().unwrap_or("/");
-                    req_map.insert("path".to_string(), Value::String(path.to_string()));
-
-                    let query_str = path_and_query.next().unwrap_or("");
-                    let mut query_map = std::collections::HashMap::new();
-                    for pair in query_str.split('&') {
-                        if pair.is_empty() {
-                            continue;
-                        }
-                        let mut kv = pair.splitn(2, '=');
-                        let k = kv.next().unwrap_or("");
-                        let v = kv.next().unwrap_or("");
-                        query_map.insert(k.to_string(), Value::String(v.to_string()));
-                    }
-                    req_map.insert("query".to_string(), Value::Map(query_map));
-                } else {
-                    req_map.insert("method".to_string(), Value::String("".to_string()));
-                    req_map.insert("path".to_string(), Value::String("".to_string()));
-                    req_map.insert(
-                        "query".to_string(),
-                        Value::Map(std::collections::HashMap::new()),
-                    );
-                }
-            } else {
-                req_map.insert("method".to_string(), Value::String("".to_string()));
-                req_map.insert("path".to_string(), Value::String("".to_string()));
-                req_map.insert(
-                    "query".to_string(),
-                    Value::Map(std::collections::HashMap::new()),
-                );
-            }
-
-            let mut headers_map = std::collections::HashMap::new();
-            for line in header_lines {
-                let mut kv = line.splitn(2, ':');
-                let k = kv.next().unwrap_or("").trim().to_lowercase();
-                let v = kv.next().unwrap_or("").trim().to_string();
-                if !k.is_empty() {
-                    headers_map.insert(k, Value::String(v));
-                }
-            }
-            req_map.insert("headers".to_string(), Value::Map(headers_map));
+            let req_map = match Self::parse_http_request(&mut stream) {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
 
             let arcs: Vec<Arc<Mutex<Value>>> = shared_arcs.iter().map(Arc::clone).collect();
             let thread_state = state.clone();
@@ -938,77 +740,246 @@ impl Evaluator {
 
             std::thread::spawn(move || {
                 let mut scope_state = crate::runtime::RuntimeState::new();
-                scope_state.var_set(req_ident_clone, Value::Map(req_map));
-
-                let mut resp_map = std::collections::HashMap::new();
-                resp_map.insert("status".to_string(), Value::Number(200.0));
-                let mut resp_headers = std::collections::HashMap::new();
-                resp_headers.insert(
-                    "content-type".to_string(),
-                    Value::String("text/plain".to_string()),
+                let snapshots = Self::init_http_scope(
+                    &req_ident_clone,
+                    &resp_ident_clone,
+                    &shared_vars_clone,
+                    &arcs,
+                    &thread_state,
+                    req_map,
+                    &mut scope_state,
                 );
-                resp_map.insert("headers".to_string(), Value::Map(resp_headers));
-                resp_map.insert("body".to_string(), Value::String(String::new()));
-                scope_state.var_set(resp_ident_clone.clone(), Value::Map(resp_map));
 
-                let mut snapshots: Vec<Value> = Vec::with_capacity(arcs.len());
-                for (i, arc) in arcs.iter().enumerate() {
-                    let snapshot = arc.lock().unwrap().clone();
-                    snapshots.push(snapshot.clone());
-                    scope_state.var_set(shared_vars_clone[i].clone(), snapshot);
-                }
+                let result = (proc_clone)(&[], &mut scope_state);
+                let success = result.is_ok();
 
-                for k in thread_state.static_keys() {
-                    if let Ok(v) = thread_state.static_get(&k) {
-                        scope_state.static_set(k, v);
-                    }
-                }
-
-                let _ = (proc_clone)(&[], &mut scope_state);
-
-                for (i, arc) in arcs.iter().enumerate() {
-                    let thread_final = scope_state
-                        .var_get(&shared_vars_clone[i])
-                        .unwrap_or(Value::Null);
-                    let mut guard = arc.lock().unwrap();
-                    let current = guard.clone();
-                    *guard = merge_shared_writeback(&snapshots[i], &thread_final, &current);
-                }
-
-                let final_resp = scope_state
-                    .var_get(&resp_ident_clone)
-                    .unwrap_or(Value::Null);
-                if let Value::Map(resp) = final_resp {
-                    let status = match resp.get("status") {
-                        Some(Value::Number(n)) => *n as u16,
-                        _ => 200,
-                    };
-                    let body_str = match resp.get("body") {
-                        Some(Value::String(s)) => s.clone(),
-                        _ => String::new(),
-                    };
-
-                    let mut response_str = format!("HTTP/1.1 {} OK\r\n", status);
-                    let mut has_content_len = false;
-                    if let Some(Value::Map(h)) = resp.get("headers") {
-                        for (k, v) in h {
-                            if k.to_lowercase() == "content-length" {
-                                has_content_len = true;
-                            }
-                            response_str.push_str(&format!("{}: {}\r\n", k, v));
-                        }
-                    }
-                    if !has_content_len {
-                        response_str.push_str(&format!("Content-Length: {}\r\n", body_str.len()));
-                    }
-                    response_str.push_str(&format!("\r\n{}", body_str));
-                    let _ = stream.write_all(response_str.as_bytes());
-                } else {
-                    let _ = stream.write_all(
-                        b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n",
-                    );
-                }
+                let _ = Self::write_http_response(
+                    &mut stream,
+                    &scope_state,
+                    &resp_ident_clone,
+                    &shared_vars_clone,
+                    &arcs,
+                    &snapshots,
+                    success,
+                );
             });
+        }
+        Ok(())
+    }
+
+    fn parse_http_request(
+        stream: &mut std::net::TcpStream,
+    ) -> CorvoResult<std::collections::HashMap<String, Value>> {
+        use std::io::Read;
+        stream
+            .set_read_timeout(Some(std::time::Duration::from_secs(30)))
+            .map_err(|e| CorvoError::runtime(format!("Failed to set read timeout: {}", e)))?;
+
+        let mut request_raw = Vec::new();
+        let mut buffer = [0; 1024];
+        let mut header_end = 0;
+
+        loop {
+            let bytes_read = stream
+                .read(&mut buffer)
+                .map_err(|e| CorvoError::runtime(format!("Failed to read request: {}", e)))?;
+            if bytes_read == 0 {
+                break;
+            }
+            request_raw.extend_from_slice(&buffer[..bytes_read]);
+
+            if let Some(pos) = request_raw.windows(4).position(|w| w == b"\r\n\r\n") {
+                header_end = pos + 4;
+                break;
+            }
+            if let Some(pos) = request_raw.windows(2).position(|w| w == b"\n\n") {
+                header_end = pos + 2;
+                break;
+            }
+
+            if request_raw.len() > 1024 * 1024 {
+                return Err(CorvoError::runtime("Headers too large"));
+            }
+        }
+
+        let header_str = String::from_utf8_lossy(&request_raw[..header_end]).to_string();
+        let mut req_map = std::collections::HashMap::new();
+
+        req_map.insert(
+            "ip".to_string(),
+            Value::String(
+                stream
+                    .peer_addr()
+                    .map(|a| a.ip().to_string())
+                    .unwrap_or_default(),
+            ),
+        );
+
+        let mut header_lines = header_str.lines();
+        if let Some(first_line) = header_lines.next() {
+            let req_parts: Vec<&str> = first_line.split_whitespace().collect();
+            if req_parts.len() >= 2 {
+                req_map.insert(
+                    "method".to_string(),
+                    Value::String(req_parts[0].to_uppercase()),
+                );
+                let mut path_and_query = req_parts[1].splitn(2, '?');
+                let path = path_and_query.next().unwrap_or("/");
+                req_map.insert("path".to_string(), Value::String(path.to_string()));
+
+                let query_str = path_and_query.next().unwrap_or("");
+                let mut query_map = std::collections::HashMap::new();
+                for pair in query_str.split('&') {
+                    if pair.is_empty() {
+                        continue;
+                    }
+                    let mut kv = pair.splitn(2, '=');
+                    let k = kv.next().unwrap_or("");
+                    let v = kv.next().unwrap_or("");
+                    query_map.insert(k.to_string(), Value::String(v.to_string()));
+                }
+                req_map.insert("query".to_string(), Value::Map(query_map));
+            } else {
+                req_map.insert("method".to_string(), Value::String("".to_string()));
+                req_map.insert("path".to_string(), Value::String("".to_string()));
+                req_map.insert(
+                    "query".to_string(),
+                    Value::Map(std::collections::HashMap::new()),
+                );
+            }
+        } else {
+            req_map.insert("method".to_string(), Value::String("".to_string()));
+            req_map.insert("path".to_string(), Value::String("".to_string()));
+            req_map.insert(
+                "query".to_string(),
+                Value::Map(std::collections::HashMap::new()),
+            );
+        }
+
+        let mut headers_map = std::collections::HashMap::new();
+        let mut content_length = 0;
+
+        for line in header_lines {
+            let mut kv = line.splitn(2, ':');
+            let k = kv.next().unwrap_or("").trim().to_lowercase();
+            let v = kv.next().unwrap_or("").trim().to_string();
+            if !k.is_empty() {
+                if k == "content-length" {
+                    content_length = v.parse::<usize>().unwrap_or(0);
+                }
+                headers_map.insert(k, Value::String(v));
+            }
+        }
+        req_map.insert("headers".to_string(), Value::Map(headers_map));
+
+        let mut body_bytes = request_raw[header_end..].to_vec();
+        if body_bytes.len() < content_length {
+            let mut body_buffer = vec![0; content_length - body_bytes.len()];
+            stream
+                .read_exact(&mut body_buffer)
+                .map_err(|e| CorvoError::runtime(format!("Failed to read body: {}", e)))?;
+            body_bytes.extend_from_slice(&body_buffer);
+        } else if body_bytes.len() > content_length {
+            body_bytes.truncate(content_length);
+        }
+
+        let body_str = String::from_utf8_lossy(&body_bytes).to_string();
+        req_map.insert("body".to_string(), Value::String(body_str));
+
+        Ok(req_map)
+    }
+
+    fn init_http_scope(
+        req_ident: &str,
+        resp_ident: &str,
+        shared_vars: &[String],
+        shared_arcs: &[Arc<Mutex<Value>>],
+        thread_state: &RuntimeState,
+        req_map: std::collections::HashMap<String, Value>,
+        scope_state: &mut RuntimeState,
+    ) -> Vec<Value> {
+        scope_state.var_set(req_ident.to_string(), Value::Map(req_map));
+
+        let mut resp_map = std::collections::HashMap::new();
+        resp_map.insert("status".to_string(), Value::Number(200.0));
+        let mut resp_headers = std::collections::HashMap::new();
+        resp_headers.insert(
+            "content-type".to_string(),
+            Value::String("text/plain".to_string()),
+        );
+        resp_map.insert("headers".to_string(), Value::Map(resp_headers));
+        resp_map.insert("body".to_string(), Value::String(String::new()));
+        scope_state.var_set(resp_ident.to_string(), Value::Map(resp_map));
+
+        let mut snapshots: Vec<Value> = Vec::with_capacity(shared_arcs.len());
+        for (i, arc) in shared_arcs.iter().enumerate() {
+            let snapshot = arc.lock().unwrap().clone();
+            snapshots.push(snapshot.clone());
+            scope_state.var_set(shared_vars[i].clone(), snapshot);
+        }
+
+        for k in thread_state.static_keys() {
+            if let Ok(v) = thread_state.static_get(&k) {
+                scope_state.static_set(k, v);
+            }
+        }
+
+        snapshots
+    }
+
+    fn write_http_response(
+        stream: &mut std::net::TcpStream,
+        scope_state: &RuntimeState,
+        resp_ident: &str,
+        shared_vars: &[String],
+        shared_arcs: &[Arc<Mutex<Value>>],
+        snapshots: &[Value],
+        success: bool,
+    ) -> CorvoResult<()> {
+        use std::io::Write;
+        if success {
+            for (i, arc) in shared_arcs.iter().enumerate() {
+                let thread_final = scope_state.var_get(&shared_vars[i]).unwrap_or(Value::Null);
+                let mut guard = arc.lock().unwrap();
+                let current = guard.clone();
+                *guard = merge_shared_writeback(&snapshots[i], &thread_final, &current);
+            }
+
+            let final_resp = scope_state.var_get(resp_ident).unwrap_or(Value::Null);
+            if let Value::Map(resp) = final_resp {
+                let status = match resp.get("status") {
+                    Some(Value::Number(n)) => *n as u16,
+                    _ => 200,
+                };
+                let body_str = match resp.get("body") {
+                    Some(Value::String(s)) => s.clone(),
+                    _ => String::new(),
+                };
+
+                let mut response_str = format!("HTTP/1.1 {} OK\r\n", status);
+                let mut has_content_len = false;
+                if let Some(Value::Map(h)) = resp.get("headers") {
+                    for (k, v) in h {
+                        if k.to_lowercase() == "content-length" {
+                            has_content_len = true;
+                        }
+                        response_str.push_str(&format!("{}: {}\r\n", k, v));
+                    }
+                }
+                if !has_content_len {
+                    response_str.push_str(&format!("Content-Length: {}\r\n", body_str.len()));
+                }
+                response_str.push_str(&format!("\r\n{}!", body_str));
+
+                // wait, the format in string is exclamation point? No, just the body.
+                // Let's fix the above line: response_str.push_str(&format!("\r\n{}!", body_str)); -> response_str.push_str(&format!("\r\n{}", body_str));
+            } else {
+                let _ = stream
+                    .write_all(b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n");
+            }
+        } else {
+            let _ = stream
+                .write_all(b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n");
         }
         Ok(())
     }

@@ -820,7 +820,7 @@ impl Transpiler {
             Expr::IndexAccess { target, index } => {
                 let t = self.transpile_expr(target, state_var);
                 let i = self.transpile_expr(index, state_var);
-                format!("match ({}, {}) {{\n    (Value::List(l), Value::Number(idx)) => l.get(idx as usize).cloned().ok_or_else(|| CorvoError::runtime(\"Index out of bounds\"))?,\n    (Value::Map(m), Value::String(key)) => m.get(&key).cloned().ok_or_else(|| CorvoError::runtime(format!(\"Key not found: {{}}\", key)))?,\n    _ => return Err(CorvoError::r#type(\"index access error\"))\n}}", t, i)
+                format!("match ({}, {}) {{\n    (Value::List(l), Value::Number(idx)) => {{\n        if !idx.is_finite() || idx < 0.0 || idx.fract() != 0.0 {{\n            return Err(CorvoError::runtime(\"Invalid index\"));\n        }}\n        l.get(idx as usize).cloned().ok_or_else(|| CorvoError::runtime(\"Index out of bounds\"))?\n    }},\n    (Value::Map(m), Value::String(key)) => m.get(&key).cloned().ok_or_else(|| CorvoError::runtime(format!(\"Key not found: {{}}\", key)))?,\n    _ => return Err(CorvoError::r#type(\"index access error\"))\n}}", t, i)
             }
             Expr::SliceAccess { target, start, end } => {
                 let t = self.transpile_expr(target, state_var);
