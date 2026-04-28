@@ -13,6 +13,24 @@ Corvo is a modern scripting language that compiles to standalone Rust binaries. 
 * **Robust Coreutils:** Corvo ships with its own implementations of standard Unix utilities (like `ls`, `cat`, `cp`, `rm`, `chmod`) written entirely in Corvo, proving the language's capability.
 * **Built-in Linter & Safety:** Includes an AST-based linter (`--lint`) that catches issues before you run or compile your code, similar to Cargo Clippy.
 
+## 📦 Installation
+
+To install the Corvo CLI via Cargo, run:
+
+```bash
+cargo install corvo-lang
+```
+
+### Prerequisites
+
+Corvo requires the **Rust toolchain** to be installed on your system to compile scripts into standalone binaries.
+
+*   **Linux / macOS**: Open your terminal and run:
+    ```bash
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    ```
+*   **Windows**: Download and run [rustup-init.exe](https://rustup.rs/) and follow the on-screen instructions. You may also need to install the [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
+
 ## 🚀 Quick Start
 
 ### Hello World

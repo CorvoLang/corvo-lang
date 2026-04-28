@@ -35,7 +35,7 @@ fn test_transpile_http_listen_compiles() {
 
     assert!(status.success());
     assert!(output_dir.join("Cargo.toml").exists());
-    assert!(output_dir.join("src/main.rs").exists());
+    assert!(output_dir.join("src/http_test.rs").exists());
 
     // Check that the transpiled code compiles successfully.
     // We don't use 'cargo run' because the server would block forever.

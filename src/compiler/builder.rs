@@ -90,10 +90,9 @@ impl Compiler {
     }
 
     pub fn compile(&self, output: &Path) -> Result<PathBuf, CorvoError> {
-        let crate_root = find_crate_root()?;
         let build_dir = create_build_dir()?;
 
-        self.generate_cargo_toml(&build_dir, &crate_root)?;
+        self.generate_cargo_toml(&build_dir, "corvo_compiled")?;
         self.generate_main_rs(&build_dir)?;
 
         let binary = self.run_cargo_build(&build_dir)?;
@@ -103,11 +102,16 @@ impl Compiler {
     }
 
     pub fn transpile(&self, output_dir: &Path) -> Result<(), CorvoError> {
-        let crate_root = find_crate_root()?;
+        let bin_name = self
+            ._source_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("main");
+
         std::fs::create_dir_all(output_dir)
             .map_err(|e| CorvoError::io(format!("Failed to create output directory: {}", e)))?;
 
-        self.generate_cargo_toml(output_dir, &crate_root)?;
+        self.generate_cargo_toml(output_dir, bin_name)?;
 
         // Use Transpiler to generate main.rs
         let mut lexer = crate::lexer::Lexer::new(&self.source_without_prep);
@@ -123,45 +127,72 @@ impl Compiler {
         std::fs::create_dir_all(&src_dir)
             .map_err(|e| CorvoError::io(format!("Failed to create src dir: {}", e)))?;
 
-        std::fs::write(src_dir.join("main.rs"), rust_code)
-            .map_err(|e| CorvoError::io(format!("Failed to write main.rs: {}", e)))?;
+        let output_file = src_dir.join(format!("{}.rs", bin_name));
+        std::fs::write(&output_file, rust_code)
+            .map_err(|e| CorvoError::io(format!("Failed to write {}.rs: {}", bin_name, e)))?;
 
         Ok(())
     }
 
-    fn generate_cargo_toml(&self, build_dir: &Path, crate_root: &Path) -> Result<(), CorvoError> {
-        let crate_root_str = crate_root
-            .to_str()
-            .ok_or_else(|| CorvoError::io("Invalid crate root path".to_string()))?
-            .replace('\\', "/");
+    fn generate_cargo_toml(&self, build_dir: &Path, bin_name: &str) -> Result<(), CorvoError> {
+        let cargo_toml_path = build_dir.join("Cargo.toml");
 
-        // libc is required for platform-specific anti-debugging calls
-        // (ptrace on Linux/macOS, sysctl on macOS).
-        let libc_dep = if self.no_debug {
-            "libc = \"0.2\"\n"
+        let mut content = if cargo_toml_path.exists() {
+            std::fs::read_to_string(&cargo_toml_path)
+                .map_err(|e| CorvoError::io(format!("Failed to read Cargo.toml: {}", e)))?
         } else {
-            ""
+            let package_name = build_dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("corvo_project");
+
+            format!(
+                "[package]\n\
+                 name = \"{}\"\n\
+                 version = \"0.1.0\"\n\
+                 edition = \"2021\"\n\
+                 \n\
+                 [dependencies]\n\
+                 corvo-lang = \"*\"\n\
+                 regex = \"1.10\"\n\
+                 serde_json = \"1.0\"\n\
+                 \n\
+                 [profile.release]\n\
+                 opt-level = 2\n\
+                 lto = false\n",
+                package_name
+            )
         };
 
-        let cargo_toml = format!(
-            "[package]\n\
-             name = \"corvo_compiled\"\n\
-             version = \"0.1.0\"\n\
-             edition = \"2021\"\n\
-             \n\
-             [dependencies]\n\
-             corvo-lang = {{ path = \"{}\" }}\n\
-             regex = \"1.10\"\n\
-             serde_json = \"1.0\"\n\
-             {}\
-             \n\
-             [profile.release]\n\
-             opt-level = 2\n\
-             lto = false\n",
-            crate_root_str, libc_dep
+        // Add libc if needed and not already present
+        if self.no_debug && !content.contains("libc =") {
+            if let Some(pos) = content.find("[dependencies]") {
+                let rest = &content[pos..];
+                if let Some(newline_pos) = rest.find('\n') {
+                    content.insert_str(pos + newline_pos + 1, "libc = \"0.2\"\n");
+                }
+            }
+        }
+
+        // Binary path: for "corvo_compiled" (compile mode), we use "src/main.rs"
+        // for everything else (transpile mode), we use "src/{bin_name}.rs"
+        let bin_path = if bin_name == "corvo_compiled" {
+            "src/main.rs".to_string()
+        } else {
+            format!("src/{}.rs", bin_name)
+        };
+
+        let bin_entry = format!(
+            "\n[[bin]]\nname = \"{}\"\npath = \"{}\"\n",
+            bin_name, bin_path
         );
 
-        std::fs::write(build_dir.join("Cargo.toml"), cargo_toml)
+        // Check if this binary already exists
+        if !content.contains(&format!("name = \"{}\"", bin_name)) {
+            content.push_str(&bin_entry);
+        }
+
+        std::fs::write(&cargo_toml_path, content)
             .map_err(|e| CorvoError::io(format!("Failed to write Cargo.toml: {}", e)))?;
 
         Ok(())
@@ -297,40 +328,6 @@ impl Compiler {
     }
 }
 
-fn find_crate_root() -> Result<PathBuf, CorvoError> {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let manifest_path = PathBuf::from(manifest_dir);
-    if manifest_path.join("Cargo.toml").exists() {
-        return Ok(manifest_path);
-    }
-
-    let exe = std::env::current_exe()
-        .map_err(|e| CorvoError::io(format!("Cannot find executable: {}", e)))?;
-
-    let mut current = exe
-        .parent()
-        .ok_or_else(|| CorvoError::io("Cannot find parent of executable".to_string()))?;
-
-    loop {
-        let cargo_toml = current.join("Cargo.toml");
-        if cargo_toml.exists() {
-            if let Ok(content) = std::fs::read_to_string(&cargo_toml) {
-                if content.contains("corvo-lang") || content.contains("corvo_lang") {
-                    return Ok(current.to_path_buf());
-                }
-            }
-        }
-        match current.parent() {
-            Some(parent) => current = parent,
-            None => break,
-        }
-    }
-
-    Err(CorvoError::io(
-        "Cannot find corvo-lang crate root. Run from within the corvo-lang project directory."
-            .to_string(),
-    ))
-}
 
 fn create_build_dir() -> Result<PathBuf, CorvoError> {
     let base = std::env::temp_dir().join("corvo_build");
@@ -1268,10 +1265,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&build_dir);
         std::fs::create_dir_all(&build_dir).unwrap();
 
-        // Use a dummy crate root path for the test.
-        let dummy_root = PathBuf::from("/tmp/corvo_dummy_root");
         compiler
-            .generate_cargo_toml(&build_dir, &dummy_root)
+            .generate_cargo_toml(&build_dir, "test_bin")
             .unwrap();
 
         let cargo_toml = std::fs::read_to_string(build_dir.join("Cargo.toml")).unwrap();
@@ -1291,9 +1286,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&build_dir);
         std::fs::create_dir_all(&build_dir).unwrap();
 
-        let dummy_root = PathBuf::from("/tmp/corvo_dummy_root");
         compiler
-            .generate_cargo_toml(&build_dir, &dummy_root)
+            .generate_cargo_toml(&build_dir, "test_bin")
             .unwrap();
 
         let cargo_toml = std::fs::read_to_string(build_dir.join("Cargo.toml")).unwrap();

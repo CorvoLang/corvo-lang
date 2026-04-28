@@ -54,11 +54,11 @@ fn test_transpile_and_run_fizzbuzz() {
 
     assert!(status.success());
     assert!(output_dir.join("Cargo.toml").exists());
-    assert!(output_dir.join("src/main.rs").exists());
+    assert!(output_dir.join("src/fizzbuzz.rs").exists());
 
     // Run the transpiled project
     let output = Command::new("cargo")
-        .args(["run"])
+        .args(["run", "--bin", "fizzbuzz"])
         .current_dir(&output_dir)
         .output()
         .expect("failed to run transpiled project");
