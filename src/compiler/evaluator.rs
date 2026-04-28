@@ -14,13 +14,20 @@ pub enum ControlFlow {
 
 pub struct Evaluator {
     terminate_requested: bool,
+    pre_exec_mode: bool,
 }
 
 impl Evaluator {
     pub fn new() -> Self {
         Self {
             terminate_requested: false,
+            pre_exec_mode: false,
         }
+    }
+
+    pub fn with_pre_exec_mode(mut self, pre_exec: bool) -> Self {
+        self.pre_exec_mode = pre_exec;
+        self
     }
 
     pub fn run(&mut self, program: &Program, state: &mut RuntimeState) -> CorvoResult<()> {
@@ -291,7 +298,12 @@ impl Evaluator {
                 resp_ident,
                 shared_vars,
                 body,
-            } => self.exec_http_listen(port, req_ident, resp_ident, shared_vars, body, state),
+            } => {
+                if self.pre_exec_mode {
+                    return Ok(());
+                }
+                self.exec_http_listen(port, req_ident, resp_ident, shared_vars, body, state)
+            }
         }
     }
 

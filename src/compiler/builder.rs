@@ -77,7 +77,7 @@ impl Compiler {
         let program = parser.parse()?;
 
         let mut state = RuntimeState::new();
-        let mut evaluator = crate::compiler::Evaluator::new();
+        let mut evaluator = crate::compiler::Evaluator::new().with_pre_exec_mode(true);
         // Run the script. Runtime errors are OK - we just want static values.
         let _ = evaluator.run(&program, &mut state);
 
