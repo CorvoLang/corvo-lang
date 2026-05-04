@@ -488,11 +488,10 @@ impl Parser {
         }
         self.advance(); // consume 'amqp_consume'
 
-        let mut has_parens = false;
-        if self.check(TokenType::LeftParen) {
-            self.advance();
-            has_parens = true;
-        }
+        self.consume(
+            TokenType::LeftParen,
+            "Expected '(' after 'amqp_consume'",
+        )?;
 
         let connection = Box::new(self.parse_expression()?);
         self.consume(TokenType::Comma, "Expected ',' after connection expression")?;
@@ -520,12 +519,10 @@ impl Parser {
             shared_vars.push(name);
         }
 
-        if has_parens {
-            self.consume(
-                TokenType::RightParen,
-                "Expected ')' after amqp_consume arguments",
-            )?;
-        }
+        self.consume(
+            TokenType::RightParen,
+            "Expected ')' after amqp_consume arguments",
+        )?;
 
         self.consume(
             TokenType::LeftBrace,

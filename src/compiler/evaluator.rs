@@ -549,21 +549,14 @@ impl Evaluator {
         }
     }
 
-    #[allow(clippy::type_complexity)]
-    pub fn exec_amqp_consume_native(
-        &mut self,
+    fn run_amqp_consumer_loop(
         conn_val: Value,
-        queue_val: Value,
+        queue: String,
         msg_ident: &str,
         shared_vars: &[&str],
-        body_fn: Arc<dyn Fn(&mut RuntimeState) -> Result<(), CorvoError> + Send + Sync>,
         state: &mut RuntimeState,
+        body_fn: impl FnMut(&mut RuntimeState) -> CorvoResult<()> + Send + Sync,
     ) -> CorvoResult<()> {
-        let queue = queue_val
-            .as_string()
-            .ok_or_else(|| CorvoError::r#type("amqp_consume queue must be a string"))?
-            .clone();
-
         let shared_arcs: Vec<Arc<Mutex<Value>>> = shared_vars
             .iter()
             .map(|name| {
@@ -575,6 +568,10 @@ impl Evaluator {
         let thread_state = state.clone();
         let msg_ident_clone = msg_ident.to_string();
         let shared_vars_clone: Vec<String> = shared_vars.iter().map(|s| s.to_string()).collect();
+
+        // Use a Mutex around body_fn so we can call it in an async context
+        use std::sync::Mutex as StdMutex;
+        let body_fn_mutex = Arc::new(StdMutex::new(body_fn));
 
         let run_loop = |rt: Arc<tokio::runtime::Runtime>,
                         conn: Arc<lapin::Connection>|
@@ -629,12 +626,15 @@ impl Evaluator {
                     }
 
                     let mut eval_state = thread_state.clone();
-                    for (k, v) in scope_state.get_all() {
+                    for (k, v) in scope_state.vars_snapshot() {
                         eval_state.var_set(k, v);
                     }
                     eval_state.var_set(msg_ident_clone.clone(), Value::Map(msg_map));
 
-                    let result = body_fn(&mut eval_state);
+                    let result = {
+                        let mut guard = body_fn_mutex.lock().unwrap();
+                        guard(&mut eval_state)
+                    };
 
                     for (i, arc) in arcs.iter().enumerate() {
                         let final_val = eval_state
@@ -681,6 +681,26 @@ impl Evaluator {
                 "amqp_consume expects an AMQP connection or URL string as the first argument",
             )),
         }
+    }
+
+    #[allow(clippy::type_complexity)]
+    pub fn exec_amqp_consume_native(
+        &mut self,
+        conn_val: Value,
+        queue_val: Value,
+        msg_ident: &str,
+        shared_vars: &[&str],
+        body_fn: Arc<dyn Fn(&mut RuntimeState) -> Result<(), CorvoError> + Send + Sync>,
+        state: &mut RuntimeState,
+    ) -> CorvoResult<()> {
+        let queue = queue_val
+            .as_string()
+            .ok_or_else(|| CorvoError::r#type("amqp_consume queue must be a string"))?
+            .clone();
+
+        Self::run_amqp_consumer_loop(conn_val, queue, msg_ident, shared_vars, state, |s| {
+            body_fn(s)
+        })
     }
 
     pub fn exec_async_browse_native(
@@ -856,126 +876,13 @@ impl Evaluator {
             .ok_or_else(|| CorvoError::r#type("amqp_consume queue must be a string"))?
             .clone();
 
-        let shared_arcs: Vec<Arc<Mutex<Value>>> = shared_vars
-            .iter()
-            .map(|name| {
-                let val = state.var_get(name).unwrap_or(Value::Null);
-                Arc::new(Mutex::new(val))
-            })
-            .collect::<Vec<_>>();
-
-        let thread_state = state.clone();
-        let msg_ident_clone = msg_ident.to_string();
-        let shared_vars_clone = shared_vars.to_vec();
+        let refs: Vec<&str> = shared_vars.iter().map(|s| s.as_str()).collect();
         let body_clone = body.to_vec();
 
-        let run_loop = |rt: Arc<tokio::runtime::Runtime>,
-                        conn: Arc<lapin::Connection>|
-         -> CorvoResult<()> {
-            rt.block_on(async {
-                use futures_util::stream::StreamExt;
-                use lapin::options::BasicConsumeOptions;
-                use lapin::types::FieldTable;
-
-                let channel = conn.create_channel().await.map_err(|e| {
-                    CorvoError::runtime(format!("Failed to create AMQP channel: {}", e))
-                })?;
-
-                let mut consumer = channel
-                    .basic_consume(
-                        &queue,
-                        "corvo_consumer",
-                        BasicConsumeOptions::default(),
-                        FieldTable::default(),
-                    )
-                    .await
-                    .map_err(|e| {
-                        CorvoError::runtime(format!("Failed to start AMQP consumer: {}", e))
-                    })?;
-
-                while let Some(delivery) = consumer.next().await {
-                    let delivery = match delivery {
-                        Ok(d) => d,
-                        Err(e) => {
-                            eprintln!("AMQP consumer error: {}", e);
-                            continue;
-                        }
-                    };
-
-                    let body_str = String::from_utf8_lossy(&delivery.data).to_string();
-                    let routing_key = delivery.routing_key.to_string();
-                    let exchange = delivery.exchange.to_string();
-
-                    let mut msg_map = std::collections::HashMap::new();
-                    msg_map.insert("body".to_string(), Value::String(body_str));
-                    msg_map.insert("routing_key".to_string(), Value::String(routing_key));
-                    msg_map.insert("exchange".to_string(), Value::String(exchange));
-
-                    let arcs: Vec<Arc<Mutex<Value>>> = shared_arcs.iter().map(Arc::clone).collect();
-                    let mut scope_state = crate::runtime::RuntimeState::new();
-
-                    let mut snapshots = Vec::new();
-                    for (i, arc) in arcs.iter().enumerate() {
-                        let snapshot = arc.lock().unwrap().clone();
-                        snapshots.push(snapshot.clone());
-                        scope_state.var_set(shared_vars_clone[i].clone(), snapshot);
-                    }
-
-                    // For the block, provide a copy of thread state plus the shared vars + msg_map
-                    let mut eval_state = thread_state.clone();
-                    for (k, v) in scope_state.get_all() {
-                        eval_state.var_set(k, v);
-                    }
-                    eval_state.var_set(msg_ident_clone.clone(), Value::Map(msg_map));
-
-                    let mut evaluator = Evaluator::new();
-                    let result = evaluator.execute_block(&body_clone, &mut eval_state);
-
-                    for (i, arc) in arcs.iter().enumerate() {
-                        let final_val = eval_state
-                            .var_get(&shared_vars_clone[i])
-                            .unwrap_or(Value::Null);
-                        let mut guard = arc.lock().unwrap();
-                        let current = guard.clone();
-                        *guard = merge_shared_writeback(&snapshots[i], &final_val, &current);
-                    }
-
-                    use lapin::options::{BasicAckOptions, BasicNackOptions};
-                    if result.is_ok() {
-                        let _ = delivery.ack(BasicAckOptions::default()).await;
-                    } else {
-                        let _ = delivery.nack(BasicNackOptions::default()).await;
-                    }
-                }
-                Ok(())
-            })
-        };
-
-        match conn_val {
-            Value::AmqpConnection(c) => run_loop(Arc::clone(&c.0), Arc::clone(&c.1)),
-            Value::String(url) => {
-                let rt = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .map_err(|e| {
-                        CorvoError::runtime(format!("Failed to build tokio runtime: {}", e))
-                    })?;
-
-                let conn = rt
-                    .block_on(async {
-                        lapin::Connection::connect(&url, lapin::ConnectionProperties::default())
-                            .await
-                    })
-                    .map_err(|e| {
-                        CorvoError::runtime(format!("Failed to connect to AMQP broker: {}", e))
-                    })?;
-
-                run_loop(Arc::new(rt), Arc::new(conn))
-            }
-            _ => Err(CorvoError::r#type(
-                "amqp_consume expects an AMQP connection or URL string as the first argument",
-            )),
-        }
+        Self::run_amqp_consumer_loop(conn_val, queue, msg_ident, &refs, state, |eval_state| {
+            let mut evaluator = Evaluator::default();
+            evaluator.execute_block(&body_clone, eval_state)
+        })
     }
 
     pub fn exec_http_listen_native(

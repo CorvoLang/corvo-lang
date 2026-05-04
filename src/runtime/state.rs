@@ -73,7 +73,7 @@ impl RuntimeState {
         self.vars.clear();
     }
 
-    pub fn get_all(&self) -> HashMap<String, Value> {
+    pub fn vars_snapshot(&self) -> HashMap<String, Value> {
         self.vars.clone()
     }
 

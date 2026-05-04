@@ -78,10 +78,10 @@ pub fn value_to_json(value: &Value) -> CorvoResult<serde_json::Value> {
             "procedures cannot be serialized to JSON",
         )),
         Value::Shared(_) => Err(CorvoError::r#type(
-            "Cannot stringify a shared variable directly",
+            "shared variables cannot be serialized to JSON",
         )),
         Value::AmqpConnection(_) => Err(CorvoError::r#type(
-            "Cannot stringify an AMQP connection to JSON",
+            "amqp connections cannot be serialized to JSON",
         )),
         Value::DatabasePool(_) => Err(CorvoError::r#type(
             "database pools cannot be serialized to JSON",

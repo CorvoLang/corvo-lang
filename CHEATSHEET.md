@@ -119,8 +119,8 @@
 | `db.close` | `pool` | `Null` | Closes the database pool | `examples/db_example.corvo` |
 | `amqp.connect` | `url` | `AmqpConnection` | Connects to an AMQP broker | `examples/amqp_example.corvo` |
 | `amqp.publish` | `conn, exchange, routing_key, payload`| `Boolean` | Publishes a message | `examples/amqp_example.corvo` |
-| `amqp.queue_delete` | `conn, queue_name` | `Boolean` | Deletes a queue | `examples/amqp_example.corvo` |
-| `amqp.queue_purge` | `conn, queue_name` | `Boolean` | Purges a queue | `examples/amqp_example.corvo` |
+| `amqp.queue_delete` | `conn, queue_name` | `Number` | Deletes a queue | `examples/amqp_example.corvo` |
+| `amqp.queue_purge` | `conn, queue_name` | `Number` | Purges a queue | `examples/amqp_example.corvo` |
 | `xml.parse` | `str` | `Value` | Parses XML string | `examples/xml_example.corvo` |
 | `env.parse` | `str` | `Map` | Parses dotenv string | `examples/env_example.corvo` |
 | `args.scan` | `` | `Map` | Scans command line flags | `examples/args.corvo` |

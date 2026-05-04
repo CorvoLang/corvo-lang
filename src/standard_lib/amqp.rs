@@ -3,6 +3,55 @@ use crate::{CorvoError, CorvoResult};
 use lapin::{options::*, BasicProperties, Connection, ConnectionProperties};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::future::Future;
+
+async fn run_with_channel<F, Fut, R>(conn: &Connection, f: F) -> CorvoResult<R>
+where
+    F: FnOnce(lapin::Channel) -> Fut,
+    Fut: Future<Output = CorvoResult<R>>,
+{
+    let channel = conn.create_channel().await.map_err(|e| {
+        CorvoError::runtime(format!("Failed to create AMQP channel: {}", e))
+    })?;
+    f(channel).await
+}
+
+fn with_amqp_connection<F, Fut, R>(arg: &Value, name: &str, f: F) -> CorvoResult<R>
+where
+    F: FnOnce(lapin::Channel) -> Fut,
+    Fut: Future<Output = CorvoResult<R>>,
+{
+    match arg {
+        Value::AmqpConnection(c) => {
+            let rt = &c.0;
+            let conn = &c.1;
+            rt.block_on(run_with_channel(conn, f))
+        }
+        Value::String(url) => {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| {
+                    CorvoError::runtime(format!("Failed to build tokio runtime: {}", e))
+                })?;
+
+            rt.block_on(async {
+                let conn = Connection::connect(url, ConnectionProperties::default())
+                    .await
+                    .map_err(|e| {
+                        CorvoError::runtime(format!("Failed to connect to AMQP broker: {}", e))
+                    })?;
+                let result = run_with_channel(&conn, f).await;
+                let _ = conn.close(0, "").await;
+                result
+            })
+        }
+        _ => Err(CorvoError::r#type(format!(
+            "{} expects an AMQP connection or URL string as the first argument",
+            name
+        ))),
+    }
+}
 
 pub fn connect(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     if args.is_empty() || args.len() > 1 {
@@ -47,70 +96,23 @@ pub fn publish(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoRes
         .as_string()
         .ok_or_else(|| CorvoError::r#type("amqp.publish expects body as string"))?;
 
-    match &args[0] {
-        Value::AmqpConnection(c) => {
-            let rt = &c.0;
-            let conn = &c.1;
-            rt.block_on(async {
-                let channel = conn.create_channel().await.map_err(|e| {
-                    CorvoError::runtime(format!("Failed to create AMQP channel: {}", e))
-                })?;
-                channel
-                    .basic_publish(
-                        exchange,
-                        routing_key,
-                        BasicPublishOptions::default(),
-                        body.as_bytes(),
-                        BasicProperties::default(),
-                    )
-                    .await
-                    .map_err(|e| CorvoError::runtime(format!("Failed to publish message: {}", e)))?
-                    .await
-                    .map_err(|e| {
-                        CorvoError::runtime(format!("Failed to publish message: {}", e))
-                    })?;
-                Ok(Value::Null)
-            })
-        }
-        Value::String(url) => {
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| {
-                    CorvoError::runtime(format!("Failed to build tokio runtime: {}", e))
-                })?;
-
-            rt.block_on(async {
-                let conn = Connection::connect(url, ConnectionProperties::default())
-                    .await
-                    .map_err(|e| {
-                        CorvoError::runtime(format!("Failed to connect to AMQP broker: {}", e))
-                    })?;
-                let channel = conn.create_channel().await.map_err(|e| {
-                    CorvoError::runtime(format!("Failed to create AMQP channel: {}", e))
-                })?;
-                channel
-                    .basic_publish(
-                        exchange,
-                        routing_key,
-                        BasicPublishOptions::default(),
-                        body.as_bytes(),
-                        BasicProperties::default(),
-                    )
-                    .await
-                    .map_err(|e| CorvoError::runtime(format!("Failed to publish message: {}", e)))?
-                    .await
-                    .map_err(|e| {
-                        CorvoError::runtime(format!("Failed to publish message: {}", e))
-                    })?;
-                let _ = conn.close(0, "").await;
-                Ok(Value::Null)
-            })
-        }
-        _ => Err(CorvoError::r#type(
-            "amqp.publish expects an AMQP connection or URL string as the first argument",
-        )),
-    }
+    with_amqp_connection(&args[0], "amqp.publish", |channel| async move {
+        channel
+            .basic_publish(
+                &exchange,
+                &routing_key,
+                BasicPublishOptions::default(),
+                body.as_bytes(),
+                BasicProperties::default(),
+            )
+            .await
+            .map_err(|e| CorvoError::runtime(format!("Failed to publish message: {}", e)))?
+            .await
+            .map_err(|e| {
+                CorvoError::runtime(format!("Failed to publish message: {}", e))
+            })?;
+        Ok(Value::Boolean(true))
+    })
 }
 
 pub fn queue_delete(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
@@ -124,50 +126,13 @@ pub fn queue_delete(args: &[Value], _named_args: &HashMap<String, Value>) -> Cor
         .as_string()
         .ok_or_else(|| CorvoError::r#type("amqp.queue_delete expects queue name as string"))?;
 
-    match &args[0] {
-        Value::AmqpConnection(c) => {
-            let rt = &c.0;
-            let conn = &c.1;
-            rt.block_on(async {
-                let channel = conn.create_channel().await.map_err(|e| {
-                    CorvoError::runtime(format!("Failed to create AMQP channel: {}", e))
-                })?;
-                let count = channel
-                    .queue_delete(queue, QueueDeleteOptions::default())
-                    .await
-                    .map_err(|e| CorvoError::runtime(format!("Failed to delete queue: {}", e)))?;
-                Ok(Value::Number(count as f64))
-            })
-        }
-        Value::String(url) => {
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| {
-                    CorvoError::runtime(format!("Failed to build tokio runtime: {}", e))
-                })?;
-
-            rt.block_on(async {
-                let conn = Connection::connect(url, ConnectionProperties::default())
-                    .await
-                    .map_err(|e| {
-                        CorvoError::runtime(format!("Failed to connect to AMQP broker: {}", e))
-                    })?;
-                let channel = conn.create_channel().await.map_err(|e| {
-                    CorvoError::runtime(format!("Failed to create AMQP channel: {}", e))
-                })?;
-                let count = channel
-                    .queue_delete(queue, QueueDeleteOptions::default())
-                    .await
-                    .map_err(|e| CorvoError::runtime(format!("Failed to delete queue: {}", e)))?;
-                let _ = conn.close(0, "").await;
-                Ok(Value::Number(count as f64))
-            })
-        }
-        _ => Err(CorvoError::r#type(
-            "amqp.queue_delete expects an AMQP connection or URL string as the first argument",
-        )),
-    }
+    with_amqp_connection(&args[0], "amqp.queue_delete", |channel| async move {
+        let count = channel
+            .queue_delete(&queue, QueueDeleteOptions::default())
+            .await
+            .map_err(|e| CorvoError::runtime(format!("Failed to delete queue: {}", e)))?;
+        Ok(Value::Number(count as f64))
+    })
 }
 
 pub fn queue_purge(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
@@ -181,48 +146,11 @@ pub fn queue_purge(args: &[Value], _named_args: &HashMap<String, Value>) -> Corv
         .as_string()
         .ok_or_else(|| CorvoError::r#type("amqp.queue_purge expects queue name as string"))?;
 
-    match &args[0] {
-        Value::AmqpConnection(c) => {
-            let rt = &c.0;
-            let conn = &c.1;
-            rt.block_on(async {
-                let channel = conn.create_channel().await.map_err(|e| {
-                    CorvoError::runtime(format!("Failed to create AMQP channel: {}", e))
-                })?;
-                let count = channel
-                    .queue_purge(queue, QueuePurgeOptions::default())
-                    .await
-                    .map_err(|e| CorvoError::runtime(format!("Failed to purge queue: {}", e)))?;
-                Ok(Value::Number(count as f64))
-            })
-        }
-        Value::String(url) => {
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| {
-                    CorvoError::runtime(format!("Failed to build tokio runtime: {}", e))
-                })?;
-
-            rt.block_on(async {
-                let conn = Connection::connect(url, ConnectionProperties::default())
-                    .await
-                    .map_err(|e| {
-                        CorvoError::runtime(format!("Failed to connect to AMQP broker: {}", e))
-                    })?;
-                let channel = conn.create_channel().await.map_err(|e| {
-                    CorvoError::runtime(format!("Failed to create AMQP channel: {}", e))
-                })?;
-                let count = channel
-                    .queue_purge(queue, QueuePurgeOptions::default())
-                    .await
-                    .map_err(|e| CorvoError::runtime(format!("Failed to purge queue: {}", e)))?;
-                let _ = conn.close(0, "").await;
-                Ok(Value::Number(count as f64))
-            })
-        }
-        _ => Err(CorvoError::r#type(
-            "amqp.queue_purge expects an AMQP connection or URL string as the first argument",
-        )),
-    }
+    with_amqp_connection(&args[0], "amqp.queue_purge", |channel| async move {
+        let count = channel
+            .queue_purge(&queue, QueuePurgeOptions::default())
+            .await
+            .map_err(|e| CorvoError::runtime(format!("Failed to purge queue: {}", e)))?;
+        Ok(Value::Number(count as f64))
+    })
 }

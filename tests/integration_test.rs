@@ -3350,3 +3350,47 @@ fn test_async_browse_multiple_shared_vars() {
         ])
     );
 }
+
+#[test]
+fn test_amqp_consume_parse_error_inside_prep() {
+    let result = run_with_state(
+        r#"
+        prep {
+            amqp_consume("amqp://localhost", "queue", @msg) {
+                sys.echo("test")
+            }
+        }
+        "#,
+    );
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err().to_string();
+    assert!(err_msg.contains("amqp_consume not allowed inside prep block"));
+}
+
+#[test]
+fn test_amqp_consume_type_error_first_arg() {
+    let result = run_with_state(
+        r#"
+        amqp_consume(42, "queue", @msg) {
+            sys.echo("test")
+        }
+        "#,
+    );
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err().to_string();
+    assert!(err_msg.contains("expects an AMQP connection or URL string as the first argument"));
+}
+
+#[test]
+fn test_amqp_consume_type_error_queue_arg() {
+    let result = run_with_state(
+        r#"
+        amqp_consume("amqp://localhost", 42, @msg) {
+            sys.echo("test")
+        }
+        "#,
+    );
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err().to_string();
+    assert!(err_msg.contains("queue must be a string"));
+}
