@@ -73,6 +73,10 @@ impl RuntimeState {
         self.vars.clear();
     }
 
+    pub fn get_all(&self) -> HashMap<String, Value> {
+        self.vars.clone()
+    }
+
     // --- Static Variable Operations ---
 
     pub fn static_get(&self, name: &str) -> Result<Value, CorvoError> {

@@ -141,6 +141,7 @@ impl Parser {
             | TokenType::AssertMatch => self.parse_assert()?,
             TokenType::If => self.parse_if()?,
             TokenType::HttpListen => self.parse_http_listen_stmt()?,
+            TokenType::AmqpConsume => self.parse_amqp_consume_stmt()?,
             TokenType::At => {
                 // @name = value       → VarSet shortcut
                 // @name[index] = val  → VarIndexSet shortcut
@@ -476,6 +477,66 @@ impl Parser {
             port,
             req_ident,
             resp_ident,
+            shared_vars,
+            body,
+        })
+    }
+
+    fn parse_amqp_consume_stmt(&mut self) -> CorvoResult<Stmt> {
+        if self.in_prep_block {
+            return Err(self.error("amqp_consume not allowed inside prep block"));
+        }
+        self.advance(); // consume 'amqp_consume'
+
+        let mut has_parens = false;
+        if self.check(TokenType::LeftParen) {
+            self.advance();
+            has_parens = true;
+        }
+
+        let connection = Box::new(self.parse_expression()?);
+        self.consume(TokenType::Comma, "Expected ',' after connection expression")?;
+
+        let queue = Box::new(self.parse_expression()?);
+        self.consume(TokenType::Comma, "Expected ',' after queue expression")?;
+
+        self.consume(
+            TokenType::At,
+            "Expected '@' before message variable name in amqp_consume",
+        )?;
+        let msg_ident = self.parse_name_after_at()?;
+
+        let mut shared_vars = Vec::new();
+        while self.match_token(TokenType::Comma) {
+            self.consume(
+                TokenType::Shared,
+                "Expected 'shared' keyword before shared variable in amqp_consume",
+            )?;
+            self.consume(
+                TokenType::At,
+                "Expected '@' before shared variable name in amqp_consume",
+            )?;
+            let name = self.parse_name_after_at()?;
+            shared_vars.push(name);
+        }
+
+        if has_parens {
+            self.consume(
+                TokenType::RightParen,
+                "Expected ')' after amqp_consume arguments",
+            )?;
+        }
+
+        self.consume(
+            TokenType::LeftBrace,
+            "Expected '{' before amqp_consume body",
+        )?;
+        let body = self.parse_block_body("amqp_consume block")?;
+
+        Ok(Stmt::AmqpConsume {
+            connection,
+            queue,
+            msg_ident,
             shared_vars,
             body,
         })

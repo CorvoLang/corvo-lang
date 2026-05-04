@@ -1,0 +1,47 @@
+# AMQP Producer and Consumer Example
+# Requirements: A running RabbitMQ server (e.g., via Docker: docker run -p 5672:5672 rabbitmq)
+
+# 1. Setup connection
+@url = "amqp://127.0.0.1:5672/%2f"
+sys.print("Connecting to AMQP broker at ", @url, "...")
+
+try {
+    @conn = amqp.connect(@url)
+    sys.print("Connected!")
+} fallback {
+    sys.print("Failed to connect to RabbitMQ. Is it running?")
+    sys.exit(1)
+}
+
+@queue_name = "corvo_test_queue"
+
+# 2. Publish messages
+sys.print("Publishing messages to queue: ", @queue_name)
+@messages = ["Hello", "World", "From", "Corvo"]
+
+browse(@messages, @i, @msg) {
+    @payload = @msg + " - " + time.unix_now()
+    amqp.publish(@conn, "amq.direct", @queue_name, @payload)
+    sys.print("Published: ", @payload)
+    sys.sleep(500)
+}
+
+# 3. Consume messages
+sys.print("\nStarting consumer (listening on ", @queue_name, ")...")
+sys.print("Press Ctrl+C to exit.\n")
+
+@messages_received = 0
+
+amqp_consume(@conn, @queue_name, @msg, shared @messages_received) {
+    @messages_received += 1
+    sys.print("[", @messages_received, "] Received message:")
+    sys.print("  Body: ", @msg["body"])
+    sys.print("  Routing Key: ", @msg["routing_key"])
+    sys.print("  Exchange: ", @msg["exchange"])
+    
+    if (@messages_received >= 4) {
+        sys.print("\nReceived all expected messages. Cleaning up...")
+        amqp.queue_delete(@conn, @queue_name)
+        sys.exit(0)
+    }
+}

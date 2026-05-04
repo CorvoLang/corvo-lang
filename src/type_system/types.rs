@@ -11,6 +11,7 @@ pub enum Type {
     Null,
     Procedure,
     DatabasePool,
+    AmqpConnection,
 }
 
 impl Type {
@@ -29,6 +30,7 @@ impl Type {
             "null" => Some(Self::Null),
             "procedure" => Some(Self::Procedure),
             "database_pool" => Some(Self::DatabasePool),
+            "amqp_connection" => Some(Self::AmqpConnection),
             _ => None,
         }
     }
@@ -44,6 +46,7 @@ impl Type {
             Self::Null => "null",
             Self::Procedure => "procedure",
             Self::DatabasePool => "database_pool",
+            Self::AmqpConnection => "amqp_connection",
         }
     }
 }
@@ -67,6 +70,10 @@ mod tests {
         assert_eq!(Type::parse_name("map"), Some(Type::Map));
         assert_eq!(Type::parse_name("null"), Some(Type::Null));
         assert_eq!(Type::parse_name("database_pool"), Some(Type::DatabasePool));
+        assert_eq!(
+            Type::parse_name("amqp_connection"),
+            Some(Type::AmqpConnection)
+        );
     }
 
     #[test]
@@ -85,6 +92,7 @@ mod tests {
         assert_eq!(Type::Map.as_str(), "map");
         assert_eq!(Type::Null.as_str(), "null");
         assert_eq!(Type::DatabasePool.as_str(), "database_pool");
+        assert_eq!(Type::AmqpConnection.as_str(), "amqp_connection");
     }
 
     #[test]

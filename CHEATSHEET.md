@@ -117,6 +117,10 @@
 | `db.query` | `pool, sql, args...`| `List` | Executes a SQL query returning rows | `examples/db_example.corvo` |
 | `db.execute` | `pool, sql, args...`| `Number` | Executes a SQL statement | `examples/db_example.corvo` |
 | `db.close` | `pool` | `Null` | Closes the database pool | `examples/db_example.corvo` |
+| `amqp.connect` | `url` | `AmqpConnection` | Connects to an AMQP broker | `examples/amqp_example.corvo` |
+| `amqp.publish` | `conn, exchange, routing_key, payload`| `Boolean` | Publishes a message | `examples/amqp_example.corvo` |
+| `amqp.queue_delete` | `conn, queue_name` | `Boolean` | Deletes a queue | `examples/amqp_example.corvo` |
+| `amqp.queue_purge` | `conn, queue_name` | `Boolean` | Purges a queue | `examples/amqp_example.corvo` |
 | `xml.parse` | `str` | `Value` | Parses XML string | `examples/xml_example.corvo` |
 | `env.parse` | `str` | `Map` | Parses dotenv string | `examples/env_example.corvo` |
 | `args.scan` | `` | `Map` | Scans command line flags | `examples/args.corvo` |
@@ -270,4 +274,5 @@ Corvo has several built-in block structures for control flow, iteration, and ser
 | `if` / `else` | Conditional execution | `if (@cond) { ... } else { ... }` |
 | `dont_panic` | Suppresses runtime errors within the block | `dont_panic { sys.panic() }` |
 | `http_listen` | Starts a concurrent HTTP server loop | `http_listen("0.0.0.0:8080", @req) { ... }` |
+| `amqp_consume` | Starts an AMQP queue consumer | `amqp_consume(@conn, "queue", @msg) { ... }` |
 | `procedure` | Defines a reusable function block | `@my_func = procedure(@arg) { ... }` |

@@ -27,6 +27,7 @@ pub enum TokenType {
     Procedure,
     Shared,
     HttpListen,
+    AmqpConsume,
 
     // Literals
     String(String),
@@ -101,6 +102,7 @@ impl fmt::Display for TokenType {
             Self::Procedure => write!(f, "procedure"),
             Self::Shared => write!(f, "shared"),
             Self::HttpListen => write!(f, "http_listen"),
+            Self::AmqpConsume => write!(f, "amqp_consume"),
             Self::String(s) => write!(f, "\"{}\"", s),
             Self::Regex(pattern, flags) => write!(f, "/{}/{}", pattern, flags),
             Self::Number(n) => {

@@ -94,7 +94,10 @@ fn value_to_yaml_value(value: &Value) -> CorvoResult<serde_yaml::Value> {
             "procedures cannot be serialized to YAML",
         )),
         Value::Shared(_) => Err(CorvoError::r#type(
-            "shared values cannot be serialized to YAML",
+            "Cannot stringify a shared variable directly",
+        )),
+        Value::AmqpConnection(_) => Err(CorvoError::r#type(
+            "Cannot stringify an AMQP connection to YAML",
         )),
         Value::DatabasePool(_) => Err(CorvoError::r#type(
             "database pools cannot be serialized to YAML",

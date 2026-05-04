@@ -1,3 +1,4 @@
+pub mod amqp;
 pub mod args;
 pub mod crypto;
 pub mod csv;
@@ -169,6 +170,11 @@ pub fn call(
         "db.query" => db::query(args, named_args),
         "db.execute" => db::execute(args, named_args),
         "db.close" => db::close(args, named_args),
+
+        "amqp.connect" => amqp::connect(args, named_args),
+        "amqp.publish" => amqp::publish(args, named_args),
+        "amqp.queue_delete" => amqp::queue_delete(args, named_args),
+        "amqp.queue_purge" => amqp::queue_purge(args, named_args),
 
         "xml.parse" => xml::parse_value(args, named_args),
 
