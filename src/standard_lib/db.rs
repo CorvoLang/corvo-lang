@@ -1,7 +1,7 @@
 use crate::type_system::{DatabasePoolValue, Value};
 use crate::{CorvoError, CorvoResult};
 use sqlx::any::AnyPoolOptions;
-use sqlx::{Column, Row, ValueRef};
+use sqlx::{Column, Row, TypeInfo, ValueRef};
 use std::collections::HashMap;
 use std::sync::{Arc, Once};
 
@@ -86,11 +86,18 @@ fn bind_args<'q>(
     Ok(query)
 }
 
-fn extract_row(row: sqlx::any::AnyRow) -> Value {
+fn extract_row(row: sqlx::any::AnyRow) -> CorvoResult<Value> {
     let mut map = HashMap::new();
     for i in 0..row.columns().len() {
         let col = row.column(i);
         let name = col.name().to_string();
+
+        if map.contains_key(&name) {
+            return Err(CorvoError::runtime(format!(
+                "Duplicate column name detected: {}",
+                name
+            )));
+        }
 
         let val_ref = match row.try_get_raw(i) {
             Ok(v) => v,
@@ -119,11 +126,14 @@ fn extract_row(row: sqlx::any::AnyRow) -> Value {
         } else if let Ok(v) = row.try_get::<bool, _>(i) {
             map.insert(name, Value::Boolean(v));
         } else {
-            // Fallback for unsupported types
-            map.insert(name, Value::String("<unsupported db type>".to_string()));
+            let type_name = col.type_info().name().to_string();
+            return Err(CorvoError::runtime(format!(
+                "Unsupported database column type '{}' for column '{}'",
+                type_name, name
+            )));
         }
     }
-    Value::Map(map)
+    Ok(Value::Map(map))
 }
 
 pub fn query(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
@@ -160,7 +170,10 @@ pub fn query(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
             .await
             .map_err(|e| CorvoError::runtime(format!("Query failed: {}", e)))?;
 
-        let mapped_rows = rows.into_iter().map(extract_row).collect();
+        let mut mapped_rows = Vec::new();
+        for row in rows {
+            mapped_rows.push(extract_row(row)?);
+        }
         Ok(Value::List(mapped_rows))
     })
 }
