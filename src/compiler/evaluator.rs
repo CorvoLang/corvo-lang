@@ -43,6 +43,7 @@ impl Evaluator {
         Ok(())
     }
 
+    // skipcq: RS-R1000
     fn exec_stmt(&mut self, stmt: &Stmt, state: &mut RuntimeState) -> CorvoResult<()> {
         match stmt {
             Stmt::PrepBlock { body } => {

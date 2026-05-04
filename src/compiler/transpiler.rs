@@ -78,6 +78,7 @@ impl Transpiler {
         "    ".repeat(self.indent_level)
     }
 
+    // skipcq: RS-R1000
     fn transpile_stmt(&mut self, stmt: &Stmt, state_var: &str) -> String {
         let mut code = String::new();
         match stmt {
@@ -549,12 +550,12 @@ impl Transpiler {
                     .map(|v| format!("{:?}.to_string()", v))
                     .collect::<Vec<_>>()
                     .join(", ");
-                let mut body_code = String::new();
                 let old_indent = self.indent_level;
                 self.indent_level += 2;
-                for s in body {
-                    body_code.push_str(&self.transpile_stmt(s, state_var));
-                }
+                let mut body_code: String = body
+                    .iter()
+                    .map(|s| self.transpile_stmt(s, state_var))
+                    .collect();
                 body_code.push_str(&format!("{}Ok(Value::Null)\n", self.indent()));
                 self.indent_level = old_indent;
                 code.push_str(&format!(
@@ -600,12 +601,12 @@ impl Transpiler {
                     .map(|v| format!("{:?}", v))
                     .collect::<Vec<_>>()
                     .join(", ");
-                let mut body_code = String::new();
                 let old_indent = self.indent_level;
                 self.indent_level += 2;
-                for s in body {
-                    body_code.push_str(&self.transpile_stmt(s, state_var));
-                }
+                let mut body_code: String = body
+                    .iter()
+                    .map(|s| self.transpile_stmt(s, state_var))
+                    .collect();
                 body_code.push_str(&format!("{}Ok(())\n", self.indent()));
                 self.indent_level = old_indent;
                 code.push_str(&format!(

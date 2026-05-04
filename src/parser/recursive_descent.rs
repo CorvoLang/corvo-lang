@@ -113,6 +113,7 @@ impl Parser {
         Ok(Program::new(statements))
     }
 
+    // skipcq: RS-R1000
     fn parse_statement(&mut self) -> CorvoResult<Option<Stmt>> {
         self.skip_comments();
 

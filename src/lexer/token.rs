@@ -77,6 +77,7 @@ pub enum TokenType {
 }
 
 impl fmt::Display for TokenType {
+    // skipcq: RS-R1000
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Prep => write!(f, "prep"),

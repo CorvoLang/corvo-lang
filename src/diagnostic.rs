@@ -129,6 +129,7 @@ pub fn lint_program(program: &Program) -> Vec<LintDiagnostic> {
     diags
 }
 
+// skipcq: RS-R1000
 fn lint_stmt(stmt: &Stmt, out: &mut Vec<LintDiagnostic>) {
     match stmt {
         Stmt::ExprStmt { expr } => lint_expr(expr, out),
