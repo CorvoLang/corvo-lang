@@ -773,6 +773,7 @@ impl Transpiler {
                             Value::List(_) => \"list\",\n            \
                             Value::Map(_) => \"map\",\n            \
                             Value::Regex(_, _) => \"re\",\n            \
+                            Value::DatabasePool(_) => \"db\",\n            \
                             Value::Procedure(_) | Value::NativeProcedure {{ .. }} => \"procedure\",\n            \
                             _ => return Err(CorvoError::r#type(\"method call error\"))\n        }};\n        \
                         corvo_lang::standard_lib::call(&format!(\"{{}}.{{}}\", ns, {:?}), &a, &{}, &{})?\n\

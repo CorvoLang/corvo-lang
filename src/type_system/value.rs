@@ -61,6 +61,32 @@ impl<'de> Deserialize<'de> for SharedValue {
     }
 }
 
+/// A wrapper for an active database pool and its associated Tokio runtime.
+#[derive(Debug, Clone)]
+pub struct DatabasePoolValue(pub Arc<tokio::runtime::Runtime>, pub Arc<sqlx::AnyPool>);
+
+impl PartialEq for DatabasePoolValue {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.1, &other.1)
+    }
+}
+
+impl Serialize for DatabasePoolValue {
+    fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
+        Err(serde::ser::Error::custom(
+            "database pools cannot be serialized as statics",
+        ))
+    }
+}
+
+impl<'de> Deserialize<'de> for DatabasePoolValue {
+    fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
+        Err(serde::de::Error::custom(
+            "database pools cannot be deserialized",
+        ))
+    }
+}
+
 pub type NativeCallback = Arc<
     dyn Fn(&[Value], &mut crate::runtime::RuntimeState) -> crate::CorvoResult<Value> + Send + Sync,
 >;
@@ -85,6 +111,8 @@ pub enum Value {
     /// share a single accumulator variable safely.  This variant is internal-only
     /// and is never produced by ordinary Corvo code.
     Shared(Box<SharedValue>),
+    /// A database connection pool.
+    DatabasePool(Box<DatabasePoolValue>),
 }
 
 impl fmt::Debug for Value {
@@ -100,6 +128,7 @@ impl fmt::Debug for Value {
             Self::Procedure(p) => f.debug_tuple("Procedure").field(p).finish(),
             Self::NativeProcedure { .. } => f.write_str("NativeProcedure(<native closure>)"),
             Self::Shared(s) => f.debug_tuple("Shared").field(s).finish(),
+            Self::DatabasePool(d) => f.debug_tuple("DatabasePool").field(d).finish(),
         }
     }
 }
@@ -126,6 +155,7 @@ impl PartialEq for Value {
                 },
             ) => ap == bp && Arc::ptr_eq(ac, bc),
             (Self::Shared(a), Self::Shared(b)) => a == b,
+            (Self::DatabasePool(a), Self::DatabasePool(b)) => a == b,
             _ => false,
         }
     }
@@ -167,6 +197,9 @@ impl Serialize for Value {
             )),
             Self::Shared(_) => Err(serde::ser::Error::custom(
                 "shared values cannot be serialized",
+            )),
+            Self::DatabasePool(_) => Err(serde::ser::Error::custom(
+                "database pools cannot be serialized",
             )),
         }
     }
@@ -258,6 +291,7 @@ impl Value {
             Self::Null => Type::Null,
             Self::Procedure(_) | Self::NativeProcedure { .. } => Type::Procedure,
             Self::Shared(sv) => sv.0.lock().unwrap().r#type(),
+            Self::DatabasePool(_) => Type::DatabasePool,
         }
     }
 
@@ -314,6 +348,7 @@ impl Value {
             Self::Regex(pattern, _) => !pattern.is_empty(),
             Self::Procedure(_) | Self::NativeProcedure { .. } => true,
             Self::Shared(sv) => sv.0.lock().unwrap().is_truthy(),
+            Self::DatabasePool(_) => true,
         }
     }
 }
@@ -343,6 +378,7 @@ impl fmt::Display for Value {
             Self::Null => write!(f, "null"),
             Self::Procedure(_) | Self::NativeProcedure { .. } => write!(f, "<procedure>"),
             Self::Shared(sv) => write!(f, "{}", sv.0.lock().unwrap()),
+            Self::DatabasePool(_) => write!(f, "<database_pool>"),
         }
     }
 }

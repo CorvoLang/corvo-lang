@@ -1129,6 +1129,7 @@ impl Evaluator {
                     Value::Number(_) => "number",
                     Value::List(_) => "list",
                     Value::Map(_) => "map",
+                    Value::DatabasePool(_) => "db",
                     Value::Procedure(_) | Value::NativeProcedure { .. } => return Err(CorvoError::runtime(
                         "procedure.call must be used as a statement, not in an expression context",
                     )),

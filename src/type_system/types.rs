@@ -10,6 +10,7 @@ pub enum Type {
     Regex,
     Null,
     Procedure,
+    DatabasePool,
 }
 
 impl Type {
@@ -27,6 +28,7 @@ impl Type {
             "regex" => Some(Self::Regex),
             "null" => Some(Self::Null),
             "procedure" => Some(Self::Procedure),
+            "database_pool" => Some(Self::DatabasePool),
             _ => None,
         }
     }
@@ -41,6 +43,7 @@ impl Type {
             Self::Regex => "regex",
             Self::Null => "null",
             Self::Procedure => "procedure",
+            Self::DatabasePool => "database_pool",
         }
     }
 }

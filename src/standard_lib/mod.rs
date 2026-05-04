@@ -1,6 +1,7 @@
 pub mod args;
 pub mod crypto;
 pub mod csv;
+pub mod db;
 pub mod dns;
 pub mod env;
 pub mod fs;
@@ -162,6 +163,11 @@ pub fn call(
         "hcl.stringify" => hcl::stringify(args, named_args),
 
         "csv.parse" => csv::parse_value(args, named_args),
+
+        "db.connect" => db::connect(args, named_args),
+        "db.query" => db::query(args, named_args),
+        "db.execute" => db::execute(args, named_args),
+        "db.close" => db::close(args, named_args),
 
         "xml.parse" => xml::parse_value(args, named_args),
 
