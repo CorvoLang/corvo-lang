@@ -71,7 +71,11 @@ fn bind_args<'q>(
                 }
             }
             Value::Boolean(b) => query = query.bind(*b),
-            Value::Null => query = query.bind(None::<String>),
+            Value::Null => {
+                return Err(CorvoError::r#type(
+                    "Cannot bind null value to SQL query (unsupported typed null)",
+                ))
+            }
             _ => {
                 return Err(CorvoError::r#type(
                     "Unsupported argument type for SQL query",
@@ -217,4 +221,45 @@ pub fn close(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
         pool.close().await;
         Ok(Value::Null)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::type_system::Value;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_db_lifecycle() {
+        let args_connect = vec![
+            Value::String("sqlite://?mode=memory&cache=shared".to_string()),
+            Value::Number(1.0),
+        ];
+        let pool_val = connect(&args_connect, &HashMap::new()).unwrap();
+
+        let args_exec = vec![
+            pool_val.clone(),
+            Value::String("CREATE TABLE test (id INTEGER, val TEXT)".to_string()),
+        ];
+        execute(&args_exec, &HashMap::new()).unwrap();
+
+        let args_insert = vec![
+            pool_val.clone(),
+            Value::String("INSERT INTO test (id, val) VALUES (?, ?)".to_string()),
+            Value::Number(1.0),
+            Value::String("hello".to_string()),
+        ];
+        execute(&args_insert, &HashMap::new()).unwrap();
+
+        let args_query = vec![
+            pool_val.clone(),
+            Value::String("SELECT * FROM test".to_string()),
+        ];
+        let result = query(&args_query, &HashMap::new()).unwrap();
+        let list = result.as_list().unwrap();
+        assert_eq!(list.len(), 1);
+
+        let args_close = vec![pool_val];
+        close(&args_close, &HashMap::new()).unwrap();
+    }
 }
