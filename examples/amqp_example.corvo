@@ -20,7 +20,7 @@ sys.print("Publishing messages to queue: ", @queue_name)
 @messages = ["Hello", "World", "From", "Corvo"]
 
 browse(@messages, @i, @msg) {
-    @payload = @msg + " - " + time.unix_now()
+    @payload = @msg + " - " + time.unix_now().to_string()
     amqp.publish(@conn, "amq.direct", @queue_name, @payload)
     sys.print("Published: ", @payload)
     sys.sleep(500)

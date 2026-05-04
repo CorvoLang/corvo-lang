@@ -19,33 +19,70 @@ where
 
 fn with_amqp_connection<F, Fut, R>(arg: &Value, name: &str, f: F) -> CorvoResult<R>
 where
-    F: FnOnce(lapin::Channel) -> Fut,
-    Fut: Future<Output = CorvoResult<R>>,
+    F: FnOnce(lapin::Channel) -> Fut + Send,
+    Fut: Future<Output = CorvoResult<R>> + Send,
+    R: Send,
 {
     match arg {
         Value::AmqpConnection(c) => {
             let rt = &c.0;
             let conn = &c.1;
-            rt.block_on(run_with_channel(conn, f))
+            if tokio::runtime::Handle::try_current().is_ok() {
+                std::thread::scope(|s| {
+                    s.spawn(|| rt.block_on(run_with_channel(conn, f)))
+                        .join()
+                        .unwrap()
+                })
+            } else {
+                rt.block_on(run_with_channel(conn, f))
+            }
         }
         Value::String(url) => {
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| {
-                    CorvoError::runtime(format!("Failed to build tokio runtime: {}", e))
-                })?;
-
-            rt.block_on(async {
-                let conn = Connection::connect(url, ConnectionProperties::default())
-                    .await
+            if tokio::runtime::Handle::try_current().is_ok() {
+                std::thread::scope(|s| {
+                    s.spawn(|| {
+                        let rt = tokio::runtime::Builder::new_current_thread()
+                            .enable_all()
+                            .build()
+                            .map_err(|e| {
+                                CorvoError::runtime(format!("Failed to build tokio runtime: {}", e))
+                            })?;
+                        rt.block_on(async {
+                            let conn = Connection::connect(url, ConnectionProperties::default())
+                                .await
+                                .map_err(|e| {
+                                    CorvoError::runtime(format!(
+                                        "Failed to connect to AMQP broker: {}",
+                                        e
+                                    ))
+                                })?;
+                            let result = run_with_channel(&conn, f).await;
+                            let _ = conn.close(0, "").await;
+                            result
+                        })
+                    })
+                    .join()
+                    .unwrap()
+                })
+            } else {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
                     .map_err(|e| {
-                        CorvoError::runtime(format!("Failed to connect to AMQP broker: {}", e))
+                        CorvoError::runtime(format!("Failed to build tokio runtime: {}", e))
                     })?;
-                let result = run_with_channel(&conn, f).await;
-                let _ = conn.close(0, "").await;
-                result
-            })
+
+                rt.block_on(async {
+                    let conn = Connection::connect(url, ConnectionProperties::default())
+                        .await
+                        .map_err(|e| {
+                            CorvoError::runtime(format!("Failed to connect to AMQP broker: {}", e))
+                        })?;
+                    let result = run_with_channel(&conn, f).await;
+                    let _ = conn.close(0, "").await;
+                    result
+                })
+            }
         }
         _ => Err(CorvoError::r#type(format!(
             "{} expects an AMQP connection or URL string as the first argument",

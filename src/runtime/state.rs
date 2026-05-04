@@ -222,6 +222,20 @@ mod tests {
         assert!(!state.has_var("x"));
     }
 
+    #[test]
+    fn test_vars_snapshot() {
+        let mut state = RuntimeState::new();
+        state.var_set("x".to_string(), Value::Number(1.0));
+        state.var_set("y".to_string(), Value::Number(2.0));
+        let mut snap = state.vars_snapshot();
+        // Snapshot reflects current state
+        assert_eq!(snap.get("x"), Some(&Value::Number(1.0)));
+        assert_eq!(snap.get("y"), Some(&Value::Number(2.0)));
+        // Mutating the snapshot does not affect the original
+        snap.insert("x".to_string(), Value::Number(99.0));
+        assert_eq!(state.var_get("x").unwrap(), Value::Number(1.0));
+    }
+
     // --- Static Tests ---
 
     #[test]

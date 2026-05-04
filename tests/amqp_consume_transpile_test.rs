@@ -49,9 +49,10 @@ fn test_transpile_amqp_consume_compiles() {
     let cargo_toml_path = output_dir.join("Cargo.toml");
     let mut cargo_toml = fs::read_to_string(&cargo_toml_path).unwrap();
     let repo_dir = std::env::current_dir().unwrap();
+    let repo_path = repo_dir.to_string_lossy().replace('\\', "/");
     cargo_toml.push_str(&format!(
         "\n[patch.crates-io]\ncorvo-lang = {{ path = \"{}\" }}\n",
-        repo_dir.display()
+        repo_path
     ));
     fs::write(&cargo_toml_path, cargo_toml).unwrap();
 
