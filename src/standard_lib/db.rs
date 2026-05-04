@@ -9,7 +9,9 @@ static INIT_DRIVERS: Once = Once::new();
 
 pub fn connect(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     if args.is_empty() || args.len() > 2 {
-        return Err(CorvoError::runtime("db.connect expects 1 or 2 arguments: (url, [max_connections])"));
+        return Err(CorvoError::runtime(
+            "db.connect expects 1 or 2 arguments: (url, [max_connections])",
+        ));
     }
 
     let url = match &args[0] {
@@ -20,14 +22,18 @@ pub fn connect(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoRes
     let max_connections = if args.len() == 2 {
         match &args[1] {
             Value::Number(n) => *n as u32,
-            _ => return Err(CorvoError::r#type("db.connect expects max_connections as number")),
+            _ => {
+                return Err(CorvoError::r#type(
+                    "db.connect expects max_connections as number",
+                ))
+            }
         }
     } else {
         10
     };
 
     INIT_DRIVERS.call_once(|| {
-        let _ = sqlx::any::install_default_drivers();
+        sqlx::any::install_default_drivers();
     });
 
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -35,12 +41,14 @@ pub fn connect(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoRes
         .build()
         .map_err(|e| CorvoError::runtime(format!("Failed to build tokio runtime: {}", e)))?;
 
-    let pool = rt.block_on(async {
-        AnyPoolOptions::new()
-            .max_connections(max_connections)
-            .connect(url)
-            .await
-    }).map_err(|e| CorvoError::runtime(format!("Failed to connect to database: {}", e)))?;
+    let pool = rt
+        .block_on(async {
+            AnyPoolOptions::new()
+                .max_connections(max_connections)
+                .connect(url)
+                .await
+        })
+        .map_err(|e| CorvoError::runtime(format!("Failed to connect to database: {}", e)))?;
 
     Ok(Value::DatabasePool(Box::new(DatabasePoolValue(
         Arc::new(rt),
@@ -64,7 +72,11 @@ fn bind_args<'q>(
             }
             Value::Boolean(b) => query = query.bind(*b),
             Value::Null => query = query.bind(None::<String>),
-            _ => return Err(CorvoError::r#type("Unsupported argument type for SQL query")),
+            _ => {
+                return Err(CorvoError::r#type(
+                    "Unsupported argument type for SQL query",
+                ))
+            }
         }
     }
     Ok(query)
@@ -112,12 +124,18 @@ fn extract_row(row: sqlx::any::AnyRow) -> Value {
 
 pub fn query(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     if args.len() < 2 {
-        return Err(CorvoError::runtime("db.query expects at least 2 arguments: (pool, sql, [args...])"));
+        return Err(CorvoError::runtime(
+            "db.query expects at least 2 arguments: (pool, sql, [args...])",
+        ));
     }
 
     let (rt, pool) = match &args[0] {
         Value::DatabasePool(d) => (&d.0, &d.1),
-        _ => return Err(CorvoError::r#type("db.query expects a database pool as the first argument")),
+        _ => {
+            return Err(CorvoError::r#type(
+                "db.query expects a database pool as the first argument",
+            ))
+        }
     };
 
     let sql = match &args[1] {
@@ -126,7 +144,7 @@ pub fn query(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
     };
 
     let query_args = &args[2..];
-    
+
     rt.block_on(async {
         let q = sqlx::query(sql);
         let q = match bind_args(q, query_args) {
@@ -134,7 +152,9 @@ pub fn query(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
             Err(e) => return Err(e),
         };
 
-        let rows = q.fetch_all(pool.as_ref()).await
+        let rows = q
+            .fetch_all(pool.as_ref())
+            .await
             .map_err(|e| CorvoError::runtime(format!("Query failed: {}", e)))?;
 
         let mapped_rows = rows.into_iter().map(extract_row).collect();
@@ -144,12 +164,18 @@ pub fn query(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
 
 pub fn execute(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     if args.len() < 2 {
-        return Err(CorvoError::runtime("db.execute expects at least 2 arguments: (pool, sql, [args...])"));
+        return Err(CorvoError::runtime(
+            "db.execute expects at least 2 arguments: (pool, sql, [args...])",
+        ));
     }
 
     let (rt, pool) = match &args[0] {
         Value::DatabasePool(d) => (&d.0, &d.1),
-        _ => return Err(CorvoError::r#type("db.execute expects a database pool as the first argument")),
+        _ => {
+            return Err(CorvoError::r#type(
+                "db.execute expects a database pool as the first argument",
+            ))
+        }
     };
 
     let sql = match &args[1] {
@@ -166,7 +192,9 @@ pub fn execute(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoRes
             Err(e) => return Err(e),
         };
 
-        let result = q.execute(pool.as_ref()).await
+        let result = q
+            .execute(pool.as_ref())
+            .await
             .map_err(|e| CorvoError::runtime(format!("Execute failed: {}", e)))?;
 
         Ok(Value::Number(result.rows_affected() as f64))
@@ -180,7 +208,11 @@ pub fn close(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
 
     let (rt, pool) = match &args[0] {
         Value::DatabasePool(d) => (&d.0, &d.1),
-        _ => return Err(CorvoError::r#type("db.close expects a database pool as the first argument")),
+        _ => {
+            return Err(CorvoError::r#type(
+                "db.close expects a database pool as the first argument",
+            ))
+        }
     };
 
     rt.block_on(async {
