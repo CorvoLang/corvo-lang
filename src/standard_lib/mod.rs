@@ -25,6 +25,7 @@ use crate::type_system::Value;
 use crate::{CorvoError, CorvoResult};
 use std::collections::HashMap;
 
+// skipcq: RS-R1000
 pub fn call(
     name: &str,
     args: &[Value],

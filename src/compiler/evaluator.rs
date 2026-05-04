@@ -984,6 +984,7 @@ impl Evaluator {
         Ok(())
     }
 
+    // skipcq: RS-R1000
     fn eval_expr(&self, expr: &Expr, state: &RuntimeState) -> CorvoResult<Value> {
         match expr {
             Expr::Literal { value } => Ok(value.clone()),
