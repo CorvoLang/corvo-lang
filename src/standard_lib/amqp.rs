@@ -2,17 +2,18 @@ use crate::type_system::{AmqpConnectionValue, Value};
 use crate::{CorvoError, CorvoResult};
 use lapin::{options::*, BasicProperties, Connection, ConnectionProperties};
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::future::Future;
+use std::sync::Arc;
 
 async fn run_with_channel<F, Fut, R>(conn: &Connection, f: F) -> CorvoResult<R>
 where
     F: FnOnce(lapin::Channel) -> Fut,
     Fut: Future<Output = CorvoResult<R>>,
 {
-    let channel = conn.create_channel().await.map_err(|e| {
-        CorvoError::runtime(format!("Failed to create AMQP channel: {}", e))
-    })?;
+    let channel = conn
+        .create_channel()
+        .await
+        .map_err(|e| CorvoError::runtime(format!("Failed to create AMQP channel: {}", e)))?;
     f(channel).await
 }
 
@@ -99,8 +100,8 @@ pub fn publish(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoRes
     with_amqp_connection(&args[0], "amqp.publish", |channel| async move {
         channel
             .basic_publish(
-                &exchange,
-                &routing_key,
+                exchange,
+                routing_key,
                 BasicPublishOptions::default(),
                 body.as_bytes(),
                 BasicProperties::default(),
@@ -108,9 +109,7 @@ pub fn publish(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoRes
             .await
             .map_err(|e| CorvoError::runtime(format!("Failed to publish message: {}", e)))?
             .await
-            .map_err(|e| {
-                CorvoError::runtime(format!("Failed to publish message: {}", e))
-            })?;
+            .map_err(|e| CorvoError::runtime(format!("Failed to publish message: {}", e)))?;
         Ok(Value::Boolean(true))
     })
 }
@@ -128,7 +127,7 @@ pub fn queue_delete(args: &[Value], _named_args: &HashMap<String, Value>) -> Cor
 
     with_amqp_connection(&args[0], "amqp.queue_delete", |channel| async move {
         let count = channel
-            .queue_delete(&queue, QueueDeleteOptions::default())
+            .queue_delete(queue, QueueDeleteOptions::default())
             .await
             .map_err(|e| CorvoError::runtime(format!("Failed to delete queue: {}", e)))?;
         Ok(Value::Number(count as f64))
@@ -148,7 +147,7 @@ pub fn queue_purge(args: &[Value], _named_args: &HashMap<String, Value>) -> Corv
 
     with_amqp_connection(&args[0], "amqp.queue_purge", |channel| async move {
         let count = channel
-            .queue_purge(&queue, QueuePurgeOptions::default())
+            .queue_purge(queue, QueuePurgeOptions::default())
             .await
             .map_err(|e| CorvoError::runtime(format!("Failed to purge queue: {}", e)))?;
         Ok(Value::Number(count as f64))

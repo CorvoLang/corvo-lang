@@ -488,10 +488,7 @@ impl Parser {
         }
         self.advance(); // consume 'amqp_consume'
 
-        self.consume(
-            TokenType::LeftParen,
-            "Expected '(' after 'amqp_consume'",
-        )?;
+        self.consume(TokenType::LeftParen, "Expected '(' after 'amqp_consume'")?;
 
         let connection = Box::new(self.parse_expression()?);
         self.consume(TokenType::Comma, "Expected ',' after connection expression")?;
