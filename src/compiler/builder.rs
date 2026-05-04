@@ -515,6 +515,9 @@ fn value_to_json_value(v: &Value) -> serde_json::Value {
         Value::Shared(_) => {
             panic!("shared values cannot be serialized as statics")
         }
+        Value::DatabasePool(_) => {
+            panic!("database pools cannot be serialized as statics")
+        }
     }
 }
 
@@ -727,6 +730,9 @@ fn value_to_rust_code(value: &Value) -> String {
         }
         Value::Shared(_) => {
             panic!("shared values cannot be compiled to Rust source literals")
+        }
+        Value::DatabasePool(_) => {
+            panic!("database pools cannot be compiled to Rust source literals")
         }
     }
 }

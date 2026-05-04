@@ -1,0 +1,6 @@
+prep {
+    @pool = db.connect("sqlite::memory:")
+    # This should fail at compile-time/evaluation because static.set requires serializable values
+    static.set("MY_DB", @pool)
+}
+sys.echo("This should not be printed.")

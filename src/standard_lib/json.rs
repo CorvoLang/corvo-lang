@@ -80,6 +80,9 @@ pub fn value_to_json(value: &Value) -> CorvoResult<serde_json::Value> {
         Value::Shared(_) => Err(CorvoError::r#type(
             "shared values cannot be serialized to JSON",
         )),
+        Value::DatabasePool(_) => Err(CorvoError::r#type(
+            "database pools cannot be serialized to JSON",
+        )),
     }
 }
 

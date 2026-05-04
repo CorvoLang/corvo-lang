@@ -1,0 +1,22 @@
+sys.echo("Testing DB connectivity...")
+
+fs.write("test.db", "")
+@pool = db.connect("sqlite://test.db")
+sys.echo("Connected to SQLite file.")
+
+@res = @pool.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER, active INTEGER)")
+sys.echo("Table created.")
+
+@res = @pool.execute("INSERT INTO users (name, age, active) VALUES (?, ?, ?)", "Alice", 30, 1)
+@res = @pool.execute("INSERT INTO users (name, age, active) VALUES (?, ?, ?)", "Bob", 25, 0)
+sys.echo("Inserted rows.")
+
+@rows = @pool.query("SELECT * FROM users")
+sys.echo("Query Results:")
+browse(@rows, @idx, @row) {
+    sys.echo("Row ", @idx, ": ", @row)
+}
+
+@pool.close()
+fs.delete("test.db")
+sys.echo("Done.")

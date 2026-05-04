@@ -10,6 +10,7 @@ pub enum Type {
     Regex,
     Null,
     Procedure,
+    DatabasePool,
 }
 
 impl Type {
@@ -27,6 +28,7 @@ impl Type {
             "regex" => Some(Self::Regex),
             "null" => Some(Self::Null),
             "procedure" => Some(Self::Procedure),
+            "database_pool" => Some(Self::DatabasePool),
             _ => None,
         }
     }
@@ -41,6 +43,7 @@ impl Type {
             Self::Regex => "regex",
             Self::Null => "null",
             Self::Procedure => "procedure",
+            Self::DatabasePool => "database_pool",
         }
     }
 }
@@ -63,6 +66,7 @@ mod tests {
         assert_eq!(Type::parse_name("list"), Some(Type::List));
         assert_eq!(Type::parse_name("map"), Some(Type::Map));
         assert_eq!(Type::parse_name("null"), Some(Type::Null));
+        assert_eq!(Type::parse_name("database_pool"), Some(Type::DatabasePool));
     }
 
     #[test]
@@ -80,6 +84,7 @@ mod tests {
         assert_eq!(Type::List.as_str(), "list");
         assert_eq!(Type::Map.as_str(), "map");
         assert_eq!(Type::Null.as_str(), "null");
+        assert_eq!(Type::DatabasePool.as_str(), "database_pool");
     }
 
     #[test]

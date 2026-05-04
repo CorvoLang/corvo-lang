@@ -96,5 +96,8 @@ fn value_to_yaml_value(value: &Value) -> CorvoResult<serde_yaml::Value> {
         Value::Shared(_) => Err(CorvoError::r#type(
             "shared values cannot be serialized to YAML",
         )),
+        Value::DatabasePool(_) => Err(CorvoError::r#type(
+            "database pools cannot be serialized to YAML",
+        )),
     }
 }

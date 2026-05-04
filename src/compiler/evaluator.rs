@@ -984,6 +984,7 @@ impl Evaluator {
         Ok(())
     }
 
+    // skipcq: RS-R1000
     fn eval_expr(&self, expr: &Expr, state: &RuntimeState) -> CorvoResult<Value> {
         match expr {
             Expr::Literal { value } => Ok(value.clone()),
@@ -1129,6 +1130,7 @@ impl Evaluator {
                     Value::Number(_) => "number",
                     Value::List(_) => "list",
                     Value::Map(_) => "map",
+                    Value::DatabasePool(_) => "db",
                     Value::Procedure(_) | Value::NativeProcedure { .. } => return Err(CorvoError::runtime(
                         "procedure.call must be used as a statement, not in an expression context",
                     )),

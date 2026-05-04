@@ -351,6 +351,7 @@ const KNOWN_NAMESPACES: &[&str] = &[
     "yaml",
     "hcl",
     "csv",
+    "db",
     "xml",
     "env",
     "args",
@@ -490,6 +491,11 @@ pub const KNOWN_FUNCTIONS: &[&str] = &[
     "hcl.stringify",
     // csv
     "csv.parse",
+    // db
+    "db.connect",
+    "db.query",
+    "db.execute",
+    "db.close",
     // xml
     "xml.parse",
     // env
