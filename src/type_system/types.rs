@@ -66,6 +66,7 @@ mod tests {
         assert_eq!(Type::parse_name("list"), Some(Type::List));
         assert_eq!(Type::parse_name("map"), Some(Type::Map));
         assert_eq!(Type::parse_name("null"), Some(Type::Null));
+        assert_eq!(Type::parse_name("database_pool"), Some(Type::DatabasePool));
     }
 
     #[test]
@@ -83,6 +84,7 @@ mod tests {
         assert_eq!(Type::List.as_str(), "list");
         assert_eq!(Type::Map.as_str(), "map");
         assert_eq!(Type::Null.as_str(), "null");
+        assert_eq!(Type::DatabasePool.as_str(), "database_pool");
     }
 
     #[test]

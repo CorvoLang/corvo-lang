@@ -14,20 +14,20 @@ pub fn connect(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoRes
         ));
     }
 
-    let url = match &args[0] {
-        Value::String(s) => s,
-        _ => return Err(CorvoError::r#type("db.connect expects URL as string")),
-    };
+    let url = args[0]
+        .as_string()
+        .ok_or_else(|| CorvoError::r#type("db.connect expects URL as string"))?;
 
     let max_connections = if args.len() == 2 {
-        match &args[1] {
-            Value::Number(n) => *n as u32,
-            _ => {
-                return Err(CorvoError::r#type(
-                    "db.connect expects max_connections as number",
-                ))
-            }
+        let n = args[1]
+            .as_number()
+            .ok_or_else(|| CorvoError::r#type("db.connect expects max_connections as number"))?;
+        if n <= 0.0 || n.fract() != 0.0 {
+            return Err(CorvoError::r#type(
+                "db.connect expects max_connections to be a positive integer",
+            ));
         }
+        n as u32
     } else {
         10
     };
@@ -138,10 +138,9 @@ pub fn query(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
         }
     };
 
-    let sql = match &args[1] {
-        Value::String(s) => s,
-        _ => return Err(CorvoError::r#type("db.query expects SQL query as string")),
-    };
+    let sql = args[1]
+        .as_string()
+        .ok_or_else(|| CorvoError::r#type("db.query expects SQL query as string"))?;
 
     let query_args = &args[2..];
 
@@ -178,10 +177,9 @@ pub fn execute(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoRes
         }
     };
 
-    let sql = match &args[1] {
-        Value::String(s) => s,
-        _ => return Err(CorvoError::r#type("db.execute expects SQL query as string")),
-    };
+    let sql = args[1]
+        .as_string()
+        .ok_or_else(|| CorvoError::r#type("db.execute expects SQL query as string"))?;
 
     let query_args = &args[2..];
 
