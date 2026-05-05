@@ -1,5 +1,8 @@
 # coreutils/nl.corvo — GNU-compatible `nl`
 # Run: `corvo coreutils/nl.corvo [OPTION]... [FILE]...`
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @spec = {
   "aliases": { "v": "starting-line-number", "i": "line-increment", "s": "separator", "w": "width" },
   "short_values": ["v", "i", "s", "w"],
@@ -24,7 +27,7 @@ if (@o.get("help", false)) {
 }
 
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("nl (Corvo coreutils) 0.1.0")
+  sys.echo("nl (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 

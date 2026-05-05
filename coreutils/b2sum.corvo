@@ -2,6 +2,9 @@
 # Computes BLAKE2b-512 message digests.
 # Run: corvo coreutils/b2sum.corvo -- [OPTION]... [FILE]...
 
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @_spec = {
   "aliases": {
     "c": "check",
@@ -45,7 +48,7 @@ try {
 
 try {
   assert_eq(@o.get("version", false), true)
-  sys.echo("b2sum (Corvo coreutils) 0.1.0")
+  sys.echo("b2sum (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 } fallback {}
 

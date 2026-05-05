@@ -1,4 +1,7 @@
 # Shrink or extend the size of each FILE to the specified size.
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @parsed = args.parse(os.argv(), { "aliases": { "s": "size" } })
 @o = @parsed["options"]
 @pos = @parsed["positional"]
@@ -16,7 +19,7 @@ if (@o.get("help", false)) {
 }
 
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("truncate (Corvo coreutils) 0.1.0")
+  sys.echo("truncate (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 

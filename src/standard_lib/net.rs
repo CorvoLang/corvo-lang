@@ -197,6 +197,76 @@ pub fn tcp_close(
     Ok(Value::Null)
 }
 
+#[macro_export]
+macro_rules! net_tcp_listen {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("net.tcp_listen", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("net.tcp_listen", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! net_tcp_accept {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("net.tcp_accept", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("net.tcp_accept", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! net_tcp_close_listener {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("net.tcp_close_listener", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("net.tcp_close_listener", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! net_tcp_connect {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("net.tcp_connect", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("net.tcp_connect", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! net_tcp_read {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("net.tcp_read", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("net.tcp_read", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! net_tcp_write {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("net.tcp_write", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("net.tcp_write", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! net_tcp_close {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("net.tcp_close", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("net.tcp_close", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

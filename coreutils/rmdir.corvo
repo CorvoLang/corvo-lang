@@ -8,6 +8,9 @@
 #         corvo coreutils/rmdir.corvo -- -p a/b/c
 
 # ── Argument-parser spec ──────────────────────────────────────────────────────
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @_rmdir_spec = {
   "aliases": {
     "p": "parents",
@@ -46,7 +49,7 @@ try {
 # ── Handle --version ──────────────────────────────────────────────────────────
 try {
   assert_eq(@o.get("version", false), true)
-  sys.echo("rmdir (Corvo coreutils) 0.1.0")
+  sys.echo("rmdir (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 } fallback {}
 

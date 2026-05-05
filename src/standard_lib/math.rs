@@ -334,6 +334,146 @@ pub fn range(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
     Ok(Value::List(result))
 }
 
+#[macro_export]
+macro_rules! math_add {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.add", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.add", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! math_sub {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.sub", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.sub", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! math_mul {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.mul", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.mul", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! math_div {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.div", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.div", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! math_mod {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.mod", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.mod", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! math_max {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.max", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.max", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! math_min {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.min", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.min", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! math_floor {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.floor", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.floor", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! math_round {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.round", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.round", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! math_ceil {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.ceil", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.ceil", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! math_random {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.random", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.random", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! math_human_bytes {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.human_bytes", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.human_bytes", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! math_parse_size {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.parse_size", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.parse_size", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! math_range {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.range", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("math.range", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

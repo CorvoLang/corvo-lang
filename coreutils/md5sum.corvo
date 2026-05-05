@@ -1,4 +1,7 @@
 # coreutils/md5sum.corvo — GNU-compatible `md5sum`
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @spec = {
   "aliases": {
     "c": "check",
@@ -29,7 +32,7 @@ try {
 
 try {
   assert_eq(@o.get("version", false), true)
-  sys.echo("md5sum (Corvo coreutils) 0.1.0")
+  sys.echo("md5sum (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 } fallback {}
 

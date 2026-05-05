@@ -1,4 +1,7 @@
 # Print value of a symbolic link or canonical file name.
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @parsed = args.parse(os.argv(), { "aliases": { "f": "canonicalize" } })
 @o = @parsed["options"]
 @pos = @parsed["positional"]
@@ -20,7 +23,7 @@ if (@o.get("help", false)) {
 }
 
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("readlink (Corvo coreutils) 0.1.0")
+  sys.echo("readlink (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 

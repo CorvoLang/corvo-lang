@@ -17,6 +17,7 @@ The Corvo compiler, interpreter, and standard library are located in the `src/` 
 2. **Registration**: Expose and route the function in the `call` match block inside `src/standard_lib/mod.rs`.
 3. **Linting**: Add the full function name (e.g., `"fs.new_feature"`) to the `KNOWN_FUNCTIONS` array in `src/diagnostic.rs` so the static linter doesn't flag it as unknown.
 4. **Documentation**: Update `CHEATSHEET.md` with the new function signature and description.
+5. **Transpilation Macro**: Add a new `#[macro_export]` macro definition for the function in the corresponding implementation file (e.g., `src/standard_lib/fs.rs` for `fs.new_feature` or `src/type_system/type_methods.rs` for type methods) so that the transpiler can generate cleaner Rust code.
 
 ### Adding a New Syntax Block or Expression
 Extending the language syntax itself (e.g., adding a new loop type or control flow) requires updates across the entire pipeline:

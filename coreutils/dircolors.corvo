@@ -1,4 +1,7 @@
 # coreutils/dircolors.corvo — Color setup for ls
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @parsed = args.parse(os.argv(), { "aliases": { "b": "sh", "c": "csh", "p": "print-database" } })
 @o = @parsed["options"]
 
@@ -15,7 +18,7 @@ if (@o.get("help", false)) {
 }
 
 if (@o.get("version", false)) {
-  sys.echo("dircolors (Corvo coreutils) 0.1.0")
+  sys.echo("dircolors (Corvo coreutils) " + static.get("version"))
   sys.exit(0)
 }
 

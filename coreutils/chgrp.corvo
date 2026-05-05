@@ -1,6 +1,9 @@
 # coreutils/chgrp.corvo — GNU-compatible `chgrp`
 # Run: `corvo coreutils/chgrp.corvo -- [OPTION]... GROUP FILE...`
 
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @_chgrp_spec = {
   "aliases": {
     "R": "recursive",
@@ -32,7 +35,7 @@ try {
 
 try {
   assert_eq(@o.get("version", false), true)
-  sys.echo("chgrp (Corvo coreutils) 0.1.0")
+  sys.echo("chgrp (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 } fallback {}
 

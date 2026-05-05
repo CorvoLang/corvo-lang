@@ -2,6 +2,9 @@
 # Print CRC checksum and byte counts of each FILE.
 # Run: corvo coreutils/cksum.corvo -- [FILE]...
 
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @_spec = {
   "aliases": {
     "a": "algorithm",
@@ -49,7 +52,7 @@ try {
 
 try {
   assert_eq(@o.get("version", false), true)
-  sys.echo("cksum (Corvo coreutils) 0.1.0")
+  sys.echo("cksum (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 } fallback {}
 

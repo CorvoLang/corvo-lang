@@ -1,6 +1,9 @@
 # coreutils/dd.corvo — GNU-compatible `dd`
 # Run: `corvo coreutils/dd.corvo [OPERAND]...`
 
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @operands = os.argv()
 @if = "-"
 @of = "-"
@@ -27,7 +30,7 @@ browse(@operands, @_oi, @op) {
     sys.exit(0)
   }
   if (@op == "--version") {
-    sys.echo("dd (Corvo coreutils) 0.1.0")
+    sys.echo("dd (Corvo coreutils) " + static.get("version"))
     sys.exit(0)
   }
   

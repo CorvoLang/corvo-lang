@@ -1,4 +1,7 @@
 # Run COMMAND with modified scheduling priority.
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @spec = {
   "aliases": { "n": "adjustment" },
   "short_values": ["n"],
@@ -21,7 +24,7 @@ if (@o.get("help", false)) {
 }
 
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("nice (Corvo coreutils) 0.1.0")
+  sys.echo("nice (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 

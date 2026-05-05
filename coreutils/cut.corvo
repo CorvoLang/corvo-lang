@@ -9,6 +9,9 @@
 #         corvo coreutils/cut.corvo -- -f1,3 -d: /etc/passwd
 
 # -- Argument-parser spec ------------------------------------------------------
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @_cut_spec = {
   "aliases": {
     "b": "bytes",
@@ -68,7 +71,7 @@ try {
 # -- Handle --version ----------------------------------------------------------
 try {
   assert_eq(@o.get("version", false), true)
-  sys.echo("cut (Corvo coreutils) 0.1.0")
+  sys.echo("cut (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 } fallback {}
 

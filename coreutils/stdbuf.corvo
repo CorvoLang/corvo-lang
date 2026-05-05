@@ -1,4 +1,7 @@
 # Run COMMAND, with modified buffering operations for its standard streams.
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @parsed = args.parse(os.argv(), { "aliases": { "i": "input", "o": "output", "e": "error" } })
 @o = @parsed["options"]
 @pos = @parsed["positional"]
@@ -17,7 +20,7 @@ if (@o.get("help", false)) {
 }
 
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("stdbuf (Corvo coreutils) 0.1.0")
+  sys.echo("stdbuf (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 

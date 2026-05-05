@@ -2,6 +2,9 @@
 # Base32 encode or decode FILE (or stdin) to stdout.
 # Run: corvo coreutils/base32.corvo -- [OPTION]... [FILE]
 
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @_spec = {
   "aliases": {
     "d": "decode",
@@ -38,7 +41,7 @@ try {
 
 try {
   assert_eq(@o.get("version", false), true)
-  sys.echo("base32 (Corvo coreutils) 0.1.0")
+  sys.echo("base32 (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 } fallback {}
 

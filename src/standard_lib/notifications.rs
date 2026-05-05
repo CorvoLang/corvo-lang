@@ -750,3 +750,113 @@ pub fn irc(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<
     result.insert("success".to_string(), Value::Boolean(true));
     Ok(Value::Map(result))
 }
+
+#[macro_export]
+macro_rules! notifications_smtp {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.smtp", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.smtp", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! notifications_slack {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.slack", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.slack", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! notifications_telegram {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.telegram", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.telegram", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! notifications_mattermost {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.mattermost", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.mattermost", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! notifications_gitter {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.gitter", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.gitter", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! notifications_messenger {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.messenger", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.messenger", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! notifications_discord {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.discord", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.discord", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! notifications_teams {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.teams", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.teams", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! notifications_x {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.x", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.x", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! notifications_os {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.os", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.os", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! notifications_irc {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.irc", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("notifications.irc", &[$($arg),*], &$kwargs, $state)
+    };
+}

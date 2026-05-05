@@ -71,3 +71,43 @@ pub fn chat(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult
 
     Ok(Value::Map(response))
 }
+
+#[macro_export]
+macro_rules! llm_model {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("llm.model", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("llm.model", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! llm_prompt {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("llm.prompt", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("llm.prompt", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! llm_embed {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("llm.embed", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("llm.embed", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! llm_chat {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("llm.chat", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("llm.chat", &[$($arg),*], &$kwargs, $state)
+    };
+}

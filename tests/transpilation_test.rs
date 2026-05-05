@@ -56,6 +56,17 @@ fn test_transpile_and_run_fizzbuzz() {
     assert!(output_dir.join("Cargo.toml").exists());
     assert!(output_dir.join("src/fizzbuzz.rs").exists());
 
+    // Patch Cargo.toml to use the local corvo-lang dependency
+    let cargo_toml_path = output_dir.join("Cargo.toml");
+    let mut cargo_toml = fs::read_to_string(&cargo_toml_path).unwrap();
+    let repo_dir = std::env::current_dir().unwrap();
+    let repo_path = repo_dir.to_string_lossy().replace('\\', "/");
+    cargo_toml.push_str(&format!(
+        "\n[patch.crates-io]\ncorvo-lang = {{ path = \"{}\" }}\n",
+        repo_path
+    ));
+    fs::write(&cargo_toml_path, cargo_toml).unwrap();
+
     // Run the transpiled project
     let output = Command::new("cargo")
         .args(["run", "--bin", "fizzbuzz"])
