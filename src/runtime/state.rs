@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn test_vars_snapshot() {
-        let mut state = RuntimeState::new();
+        let mut state = RuntimeState::default();
         state.var_set("x".to_string(), Value::Number(1.0));
         state.var_set("y".to_string(), Value::Number(2.0));
         let mut snap = state.vars_snapshot();
