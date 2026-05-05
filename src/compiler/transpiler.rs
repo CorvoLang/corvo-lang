@@ -309,7 +309,14 @@ impl Transpiler {
                 body,
             } => {
                 let iter_expr = self.transpile_expr(iterable, state_var);
-                code.push_str(&format!("{}corvo_lang::corvo_browse!(&mut {}, {}, {:?}, {:?}, {{\n", self.indent(), state_var, iter_expr, key, value));
+                code.push_str(&format!(
+                    "{}corvo_lang::corvo_browse!(&mut {}, {}, {:?}, {:?}, {{\n",
+                    self.indent(),
+                    state_var,
+                    iter_expr,
+                    key,
+                    value
+                ));
                 self.indent_level += 1;
                 for s in body {
                     code.push_str(&self.transpile_stmt(s, state_var));
@@ -375,7 +382,10 @@ impl Transpiler {
                 code.push_str(&format!("{}    }})();\n", self.indent()));
                 code.push_str(&format!("{}    if {}.var_get(\"_terminate_requested\").unwrap_or(Value::Boolean(false)).is_truthy() {{\n", self.indent(), state_var));
                 if self.closure_depth > 0 {
-                    code.push_str(&format!("{}        return Err(CorvoError::runtime(\"terminate\"));\n", self.indent()));
+                    code.push_str(&format!(
+                        "{}        return Err(CorvoError::runtime(\"terminate\"));\n",
+                        self.indent()
+                    ));
                 } else {
                     code.push_str(&format!("{}        {}.var_set(\"_terminate_requested\".to_string(), Value::Boolean(false));\n", self.indent(), state_var));
                     code.push_str(&format!("{}        return Ok(());\n", self.indent()));
@@ -399,7 +409,10 @@ impl Transpiler {
                     code.push_str(&format!("{}    }})();\n", self.indent()));
                     code.push_str(&format!("{}    if {}.var_get(\"_terminate_requested\").unwrap_or(Value::Boolean(false)).is_truthy() {{\n", self.indent(), state_var));
                     if self.closure_depth > 0 {
-                        code.push_str(&format!("{}        return Err(CorvoError::runtime(\"terminate\"));\n", self.indent()));
+                        code.push_str(&format!(
+                            "{}        return Err(CorvoError::runtime(\"terminate\"));\n",
+                            self.indent()
+                        ));
                     } else {
                         code.push_str(&format!("{}        {}.var_set(\"_terminate_requested\".to_string(), Value::Boolean(false));\n", self.indent(), state_var));
                         code.push_str(&format!("{}        return Ok(());\n", self.indent()));
@@ -427,7 +440,13 @@ impl Transpiler {
                         AssertKind::Le => "le",
                         AssertKind::Match => "match",
                     };
-                    code.push_str(&format!("{}corvo_lang::corvo_assert!({}, {}, {});\n", self.indent(), kind_str, v0, v1));
+                    code.push_str(&format!(
+                        "{}corvo_lang::corvo_assert!({}, {}, {});\n",
+                        self.indent(),
+                        kind_str,
+                        v0,
+                        v1
+                    ));
                 } else {
                     code.push_str(&format!("{}return Err(CorvoError::assertion(\"assert requires exactly 2 arguments\".to_string()));\n", self.indent()));
                 }
@@ -449,7 +468,10 @@ impl Transpiler {
                 code.push_str(&format!("{}    }})();\n", self.indent()));
                 code.push_str(&format!("{}    if {}.var_get(\"_terminate_requested\").unwrap_or(Value::Boolean(false)).is_truthy() {{\n", self.indent(), state_var));
                 if self.closure_depth > 0 {
-                    code.push_str(&format!("{}        return Err(CorvoError::runtime(\"terminate\"));\n", self.indent()));
+                    code.push_str(&format!(
+                        "{}        return Err(CorvoError::runtime(\"terminate\"));\n",
+                        self.indent()
+                    ));
                 } else {
                     code.push_str(&format!("{}        {}.var_set(\"_terminate_requested\".to_string(), Value::Boolean(false));\n", self.indent(), state_var));
                     code.push_str(&format!("{}        return Ok(());\n", self.indent()));
@@ -789,7 +811,9 @@ impl Transpiler {
                 let mut arms_code = Vec::new();
                 for arm in arms {
                     let condition = match &arm.pattern {
-                        MatchPattern::Literal(v) => format!("_match_val == {}", self.value_to_rust_literal(v)),
+                        MatchPattern::Literal(v) => {
+                            format!("_match_val == {}", self.value_to_rust_literal(v))
+                        }
                         MatchPattern::Wildcard => "true".to_string(),
                         MatchPattern::Regex(p, f) => {
                             format!(

@@ -411,12 +411,19 @@ macro_rules! corvo_method_call {
         let mut t = $target;
         #[allow(clippy::eq_op)]
         if $method == "call" && matches!(t, $crate::type_system::Value::NativeProcedure { .. }) {
-            if let $crate::type_system::Value::NativeProcedure { params: p_names, callback: p } = t {
-                let saved: Vec<Option<$crate::type_system::Value>> = p_names.iter().map(|p| $state.var_remove(p)).collect();
+            if let $crate::type_system::Value::NativeProcedure {
+                params: p_names,
+                callback: p,
+            } = t
+            {
+                let saved: Vec<Option<$crate::type_system::Value>> =
+                    p_names.iter().map(|p| $state.var_remove(p)).collect();
                 let res = (p)(&$args, $state)?;
                 for (i, param) in p_names.iter().enumerate() {
                     if let Some(Some(outer_name)) = $outer_names.get(i) {
-                        let updated = $state.var_get(param.as_str()).unwrap_or($crate::type_system::Value::Null);
+                        let updated = $state
+                            .var_get(param.as_str())
+                            .unwrap_or($crate::type_system::Value::Null);
                         $state.var_set(outer_name.clone(), updated);
                     }
                     $state.var_remove(param.as_str());
@@ -425,7 +432,9 @@ macro_rules! corvo_method_call {
                     }
                 }
                 res
-            } else { unreachable!() }
+            } else {
+                unreachable!()
+            }
         } else {
             let mut a = vec![t.clone()];
             a.extend($args);
@@ -437,10 +446,16 @@ macro_rules! corvo_method_call {
                 $crate::type_system::Value::Regex(_, _) => "re",
                 $crate::type_system::Value::DatabasePool(_) => "db",
                 $crate::type_system::Value::AmqpConnection(_) => "amqp",
-                $crate::type_system::Value::Procedure(_) | $crate::type_system::Value::NativeProcedure { .. } => "procedure",
+                $crate::type_system::Value::Procedure(_)
+                | $crate::type_system::Value::NativeProcedure { .. } => "procedure",
                 _ => return Err($crate::CorvoError::r#type("method call error")),
             };
-            $crate::standard_lib::call(&format!("{}.{}", ns, $method), &a, &std::collections::HashMap::new(), $state)?
+            $crate::standard_lib::call(
+                &format!("{}.{}", ns, $method),
+                &a,
+                &std::collections::HashMap::new(),
+                $state,
+            )?
         }
     }};
 }
@@ -451,7 +466,10 @@ macro_rules! corvo_browse {
         match $iter_val {
             $crate::type_system::Value::List(list) => {
                 for (i, item) in list.iter().enumerate() {
-                    $state.var_set($key.to_string(), $crate::type_system::Value::Number(i as f64));
+                    $state.var_set(
+                        $key.to_string(),
+                        $crate::type_system::Value::Number(i as f64),
+                    );
                     $state.var_set($value.to_string(), item.clone());
                     $body
                 }
@@ -465,36 +483,62 @@ macro_rules! corvo_browse {
                     $body
                 }
             }
-            _ => return Err($crate::CorvoError::r#type("browse only works on lists and maps")),
+            _ => {
+                return Err($crate::CorvoError::r#type(
+                    "browse only works on lists and maps",
+                ))
+            }
         }
-    }
+    };
 }
 
 #[macro_export]
 macro_rules! corvo_assert {
     (eq, $v0:expr, $v1:expr) => {
-        if $v0 != $v1 { return Err($crate::CorvoError::assertion(format!("{} != {}", $v0, $v1))); }
+        if $v0 != $v1 {
+            return Err($crate::CorvoError::assertion(format!("{} != {}", $v0, $v1)));
+        }
     };
     (neq, $v0:expr, $v1:expr) => {
-        if $v0 == $v1 { return Err($crate::CorvoError::assertion(format!("{} == {}", $v0, $v1))); }
+        if $v0 == $v1 {
+            return Err($crate::CorvoError::assertion(format!("{} == {}", $v0, $v1)));
+        }
     };
     (gt, $v0:expr, $v1:expr) => {
-        if $v0.as_number().unwrap_or(0.0) <= $v1.as_number().unwrap_or(0.0) { return Err($crate::CorvoError::assertion(format!("{} <= {}", $v0, $v1))); }
+        if $v0.as_number().unwrap_or(0.0) <= $v1.as_number().unwrap_or(0.0) {
+            return Err($crate::CorvoError::assertion(format!("{} <= {}", $v0, $v1)));
+        }
     };
     (lt, $v0:expr, $v1:expr) => {
-        if $v0.as_number().unwrap_or(0.0) >= $v1.as_number().unwrap_or(0.0) { return Err($crate::CorvoError::assertion(format!("{} >= {}", $v0, $v1))); }
+        if $v0.as_number().unwrap_or(0.0) >= $v1.as_number().unwrap_or(0.0) {
+            return Err($crate::CorvoError::assertion(format!("{} >= {}", $v0, $v1)));
+        }
     };
     (ge, $v0:expr, $v1:expr) => {
-        if $v0.as_number().unwrap_or(0.0) < $v1.as_number().unwrap_or(0.0) { return Err($crate::CorvoError::assertion(format!("{} < {}", $v0, $v1))); }
+        if $v0.as_number().unwrap_or(0.0) < $v1.as_number().unwrap_or(0.0) {
+            return Err($crate::CorvoError::assertion(format!("{} < {}", $v0, $v1)));
+        }
     };
     (le, $v0:expr, $v1:expr) => {
-        if $v0.as_number().unwrap_or(0.0) > $v1.as_number().unwrap_or(0.0) { return Err($crate::CorvoError::assertion(format!("{} > {}", $v0, $v1))); }
+        if $v0.as_number().unwrap_or(0.0) > $v1.as_number().unwrap_or(0.0) {
+            return Err($crate::CorvoError::assertion(format!("{} > {}", $v0, $v1)));
+        }
     };
     (match, $v0:expr, $v1:expr) => {{
-        let pattern = $v0.as_string().ok_or_else(|| $crate::CorvoError::r#type("assert_match requires strings"))?;
-        let target = $v1.as_string().ok_or_else(|| $crate::CorvoError::r#type("assert_match requires strings"))?;
-        let re = regex::Regex::new(&pattern).map_err(|e| $crate::CorvoError::runtime(e.to_string()))?;
-        if !re.is_match(&target) { return Err($crate::CorvoError::assertion(format!("{} does not match {}", $v0, $v1))); }
+        let pattern = $v0
+            .as_string()
+            .ok_or_else(|| $crate::CorvoError::r#type("assert_match requires strings"))?;
+        let target = $v1
+            .as_string()
+            .ok_or_else(|| $crate::CorvoError::r#type("assert_match requires strings"))?;
+        let re =
+            regex::Regex::new(&pattern).map_err(|e| $crate::CorvoError::runtime(e.to_string()))?;
+        if !re.is_match(&target) {
+            return Err($crate::CorvoError::assertion(format!(
+                "{} does not match {}",
+                $v0, $v1
+            )));
+        }
     }};
 }
 
@@ -506,12 +550,17 @@ macro_rules! corvo_index {
                 if !idx.is_finite() || idx < 0.0 || idx.fract() != 0.0 {
                     return Err($crate::CorvoError::runtime("Invalid index"));
                 }
-                l.get(idx as usize).cloned().ok_or_else(|| $crate::CorvoError::runtime("Index out of bounds"))?
-            },
-            ($crate::type_system::Value::Map(m), $crate::type_system::Value::String(key)) => m.get(&key).cloned().ok_or_else(|| $crate::CorvoError::runtime(format!("Key not found: {}", key)))?,
-            _ => return Err($crate::CorvoError::r#type("index access error"))
+                l.get(idx as usize)
+                    .cloned()
+                    .ok_or_else(|| $crate::CorvoError::runtime("Index out of bounds"))?
+            }
+            ($crate::type_system::Value::Map(m), $crate::type_system::Value::String(key)) => m
+                .get(&key)
+                .cloned()
+                .ok_or_else(|| $crate::CorvoError::runtime(format!("Key not found: {}", key)))?,
+            _ => return Err($crate::CorvoError::r#type("index access error")),
         }
-    }
+    };
 }
 
 #[macro_export]
@@ -526,9 +575,11 @@ macro_rules! corvo_slice {
             $crate::type_system::Value::String(s) => {
                 let start = $start.unwrap_or(0);
                 let end = $end.unwrap_or(s.len());
-                $crate::type_system::Value::String(s[start.min(s.len())..end.min(s.len())].to_string())
+                $crate::type_system::Value::String(
+                    s[start.min(s.len())..end.min(s.len())].to_string(),
+                )
             }
-            _ => return Err($crate::CorvoError::r#type("slice access error"))
+            _ => return Err($crate::CorvoError::r#type("slice access error")),
         }
-    }
+    };
 }
