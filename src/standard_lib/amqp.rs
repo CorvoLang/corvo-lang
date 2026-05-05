@@ -31,7 +31,9 @@ where
                 std::thread::scope(|s| {
                     s.spawn(|| rt.block_on(run_with_channel(conn, f)))
                         .join()
-                        .unwrap_or_else(|_| Err(CorvoError::runtime("Thread panicked during AMQP operation")))
+                        .unwrap_or_else(|_| {
+                            Err(CorvoError::runtime("Thread panicked during AMQP operation"))
+                        })
                 })
             } else {
                 rt.block_on(run_with_channel(conn, f))
@@ -62,7 +64,9 @@ where
                         })
                     })
                     .join()
-                    .unwrap_or_else(|_| Err(CorvoError::runtime("Thread panicked during AMQP operation")))
+                    .unwrap_or_else(|_| {
+                        Err(CorvoError::runtime("Thread panicked during AMQP operation"))
+                    })
                 })
             } else {
                 let rt = tokio::runtime::Builder::new_current_thread()
