@@ -657,7 +657,7 @@ impl Evaluator {
             })
         };
 
-        match conn_val {
+        let result = match conn_val {
             Value::AmqpConnection(c) => run_loop(Arc::clone(&c.0), Arc::clone(&c.1)),
             Value::String(url) => {
                 let rt = tokio::runtime::Builder::new_current_thread()
@@ -681,7 +681,14 @@ impl Evaluator {
             _ => Err(CorvoError::r#type(
                 "amqp_consume expects an AMQP connection or URL string as the first argument",
             )),
+        };
+
+        for (i, arc) in shared_arcs.iter().enumerate() {
+            let final_val = arc.lock().unwrap().clone();
+            state.var_set(shared_vars[i].to_string(), final_val);
         }
+
+        result
     }
 
     #[allow(clippy::type_complexity)]
