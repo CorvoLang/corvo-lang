@@ -8,6 +8,9 @@
 #         corvo coreutils/mkdir.corvo -- -p a/b/c
 
 # ── Argument-parser spec ──────────────────────────────────────────────────────
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @_mkdir_spec = {
   "aliases": {
     "p": "parents",
@@ -45,7 +48,7 @@ if (@o.get("help", false)) {
 
 # ── Handle --version ──────────────────────────────────────────────────────────
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("mkdir (Corvo coreutils) 0.1.0")
+  sys.echo("mkdir (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 

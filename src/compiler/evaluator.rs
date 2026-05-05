@@ -1295,25 +1295,36 @@ impl Evaluator {
                     BinaryOp::Gt => Ok(Value::Boolean(l > r)),
                     BinaryOp::Ge => Ok(Value::Boolean(l >= r)),
                     _ => {
-                        let (ln, rn) = match (l, r) {
-                            (Value::Number(a), Value::Number(b)) => (a, b),
-                            (a, b) => {
-                                return Err(CorvoError::r#type(format!(
-                                    "Arithmetic expects numbers, got {} and {}",
+                        if *op == BinaryOp::Add {
+                            match (l, r) {
+                                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
+                                (Value::String(a), Value::String(b)) => Ok(Value::String(format!("{}{}", a, b))),
+                                (a, b) => Err(CorvoError::r#type(format!(
+                                    "Arithmetic addition expects two numbers or two strings, got {} and {}",
                                     a.r#type(),
                                     b.r#type()
-                                )));
+                                ))),
                             }
-                        };
-                        let out = match op {
-                            BinaryOp::Add => ln + rn,
-                            BinaryOp::Sub => ln - rn,
-                            BinaryOp::Mul => ln * rn,
-                            BinaryOp::Div => ln / rn,
-                            BinaryOp::Mod => ln % rn,
-                            _ => unreachable!(),
-                        };
-                        Ok(Value::Number(out))
+                        } else {
+                            let (ln, rn) = match (l, r) {
+                                (Value::Number(a), Value::Number(b)) => (a, b),
+                                (a, b) => {
+                                    return Err(CorvoError::r#type(format!(
+                                        "Arithmetic expects numbers, got {} and {}",
+                                        a.r#type(),
+                                        b.r#type()
+                                    )));
+                                }
+                            };
+                            let out = match op {
+                                BinaryOp::Sub => ln - rn,
+                                BinaryOp::Mul => ln * rn,
+                                BinaryOp::Div => ln / rn,
+                                BinaryOp::Mod => ln % rn,
+                                _ => unreachable!(),
+                            };
+                            Ok(Value::Number(out))
+                        }
                     }
                 }
             }

@@ -1,5 +1,8 @@
 # coreutils/numfmt.corvo — GNU-compatible `numfmt`
 # Run: `corvo coreutils/numfmt.corvo [OPTION]... [NUMBER]...`
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @spec = {
   "aliases": { "d": "delimiter", "p": "padding" },
   "short_values": ["d", "p"],
@@ -25,7 +28,7 @@ if (@o.get("help", false)) {
 }
 
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("numfmt (Corvo coreutils) 0.1.0")
+  sys.echo("numfmt (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 

@@ -1,4 +1,7 @@
 # Display a line of text.
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @parsed = args.scan(os.argv())
 @pos = @parsed["positional"]
 if (list.len(@pos) == 1) {
@@ -10,6 +13,10 @@ if (list.len(@pos) == 1) {
     sys.echo("  -n             do not output the trailing newline")
     sys.echo("      --help     display this help and exit")
     sys.echo("      --version  output version information and exit")
+    sys.exit(0)
+  }
+  if (list.get(@pos, 0) == "--version") {
+    sys.echo("echo (Corvo coreutils) " + static.get("version"))
     sys.exit(0)
   }
 }

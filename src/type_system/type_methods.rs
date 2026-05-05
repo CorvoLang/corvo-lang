@@ -1895,3 +1895,943 @@ mod tests {
         assert!(call_map_method("map.column", &[Value::Map(map)]).is_err());
     }
 }
+
+#[macro_export]
+macro_rules! re_match {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.match", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.match", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! re_find {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.find", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.find", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! re_find_all {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.find_all", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.find_all", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! re_replace {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.replace", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.replace", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! re_replace_all {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.replace_all", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.replace_all", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! re_split {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.split", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.split", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! re_new {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.new", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.new", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_concat {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.concat", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.concat", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_replace {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.replace", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.replace", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_split {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.split", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.split", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_trim {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.trim", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.trim", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_trim_start {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.trim_start", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.trim_start", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_trim_end {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.trim_end", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.trim_end", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_contains {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.contains", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.contains", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_starts_with {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.starts_with", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.starts_with", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_ends_with {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.ends_with", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.ends_with", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_to_lower {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.to_lower", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.to_lower", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_to_upper {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.to_upper", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.to_upper", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_len {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.len", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.len", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_reverse {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.reverse", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.reverse", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_is_empty {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.is_empty", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.is_empty", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_pad_start {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.pad_start", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.pad_start", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_pad_end {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.pad_end", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.pad_end", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_fnmatch {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.fnmatch", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.fnmatch", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_byte_slice {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.byte_slice", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.byte_slice", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_substring {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.substring", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.substring", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_index_of {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.index_of", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.index_of", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_last_index_of {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.last_index_of", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.last_index_of", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_char_at {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.char_at", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.char_at", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_repeat {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.repeat", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.repeat", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_replace_first {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.replace_first", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.replace_first", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_count {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.count", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.count", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_chars {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.chars", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.chars", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_base64_encode {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.base64_encode", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.base64_encode", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_base64_decode {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.base64_decode", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.base64_decode", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_base32_encode {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.base32_encode", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.base32_encode", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_base32_decode {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.base32_decode", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.base32_decode", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_base32hex_encode {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.base32hex_encode", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.base32hex_encode", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_base32hex_decode {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.base32hex_decode", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.base32hex_decode", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_hex_encode {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.hex_encode", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.hex_encode", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! string_hex_decode {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.hex_decode", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("string.hex_decode", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! number_to_string {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.to_string", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.to_string", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! number_parse {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.parse", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.parse", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! number_is_nan {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.is_nan", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.is_nan", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! number_is_infinite {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.is_infinite", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.is_infinite", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! number_is_finite {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.is_finite", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.is_finite", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! number_abs {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.abs", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.abs", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! number_floor {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.floor", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.floor", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! number_ceil {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.ceil", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.ceil", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! number_round {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.round", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.round", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! number_sqrt {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.sqrt", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.sqrt", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! number_pow {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.pow", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.pow", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! number_min {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.min", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.min", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! number_max {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.max", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.max", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! number_clamp {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.clamp", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("number.clamp", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_push {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.push", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.push", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_pop {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.pop", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.pop", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_get {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.get", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.get", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_set {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.set", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.set", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_len {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.len", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.len", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_first {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.first", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.first", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_last {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.last", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.last", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_concat {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.concat", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.concat", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_is_empty {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.is_empty", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.is_empty", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_contains {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.contains", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.contains", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_delete {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.delete", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.delete", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_filter {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.filter", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.filter", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_map {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.map", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.map", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_reduce {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.reduce", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.reduce", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_find {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.find", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.find", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_sort {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.sort", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.sort", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_sort_version {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.sort_version", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.sort_version", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_sort_maps_by_key {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.sort_maps_by_key", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.sort_maps_by_key", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_columnate {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.columnate", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.columnate", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_reverse {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.reverse", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.reverse", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_flatten {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.flatten", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.flatten", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_unique {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.unique", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.unique", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_join {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.join", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.join", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_slice {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.slice", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.slice", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! list_new {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.new", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("list.new", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! map_get {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.get", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.get", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! map_set {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.set", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.set", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! map_has {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.has", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.has", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! map_has_key {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.has_key", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.has_key", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! map_delete {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.delete", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.delete", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! map_remove {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.remove", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.remove", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! map_keys {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.keys", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.keys", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! map_values {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.values", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.values", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! map_entries {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.entries", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.entries", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! map_len {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.len", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.len", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! map_is_empty {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.is_empty", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.is_empty", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! map_merge {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.merge", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.merge", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! map_new {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.new", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.new", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! map_column {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.column", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("map.column", &[$($arg),*], &$kwargs, $state)
+    };
+}

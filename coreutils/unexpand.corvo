@@ -1,5 +1,8 @@
 # coreutils/unexpand.corvo — GNU-compatible `unexpand`
 # Run: `corvo coreutils/unexpand.corvo [OPTION]... [FILE]...`
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @_unexpand_spec = {
   "aliases": {
     "a": "all",
@@ -25,7 +28,7 @@ if (@o.get("help", false)) {
 }
 
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("unexpand (Corvo coreutils) 0.1.0")
+  sys.echo("unexpand (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 

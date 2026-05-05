@@ -97,3 +97,7 @@ Corvo is entirely written in Rust and is designed with a modern compiler archite
 * **Compiler:** Orchestrates the transpilation and uses `rustc` under the hood to generate the final standalone binary.
 
 To explore the compiler, transpiler, and interpreter, check the [`src/`](src/) directory. For an extensive collection of Corvo scripts, see the [`examples/`](examples/) and [`coreutils/`](coreutils/) directories.
+
+## 🔍 AGENTS.md
+
+Please refer to the [`AGENTS.md`](AGENTS.md) or [`copilot-instructions.md`](copilot-instructions.md) files for detailed code guidelines for development in this repository.

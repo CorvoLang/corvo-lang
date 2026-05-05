@@ -8,6 +8,9 @@
 #         corvo coreutils/uptime.corvo -- -p
 
 # -- Argument-parser spec ------------------------------------------------------
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @_uptime_spec = {
   "aliases": {
     "p": "pretty",
@@ -38,7 +41,7 @@ if (@o.get("help", false)) {
 
 # -- Handle --version ----------------------------------------------------------
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("uptime (Corvo coreutils) 0.1.0")
+  sys.echo("uptime (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 

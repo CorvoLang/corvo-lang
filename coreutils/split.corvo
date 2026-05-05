@@ -1,5 +1,8 @@
 # coreutils/split.corvo — GNU-compatible `split`
 # Run: `corvo coreutils/split.corvo [OPTION]... [FILE [PREFIX]]`
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @spec = {
   "aliases": { "l": "lines", "b": "bytes", "d": "numeric_suffixes", "a": "suffix_length" },
   "short_values": ["l", "b", "a"],
@@ -25,7 +28,7 @@ if (@o.get("help", false)) {
 }
 
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("split (Corvo coreutils) 0.1.0")
+  sys.echo("split (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 

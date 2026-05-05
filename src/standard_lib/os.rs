@@ -749,3 +749,223 @@ mod tests {
         assert!(argv(&args, &empty_args(), &state).is_err());
     }
 }
+
+#[macro_export]
+macro_rules! os_get_env {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.get_env", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.get_env", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_set_env {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.set_env", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.set_env", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_exec {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.exec", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.exec", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_info {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.info", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.info", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_environ {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.environ", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.environ", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_groups {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.groups", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.groups", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_hostid {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.hostid", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.hostid", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_nproc {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.nproc", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.nproc", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_df {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.df", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.df", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_argv {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.argv", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.argv", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_getcwd {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.getcwd", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.getcwd", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_username {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.username", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.username", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_ttyname {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.ttyname", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.ttyname", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_uptime {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.uptime", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.uptime", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_load_average {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.load_average", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.load_average", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_user_count {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.user_count", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.user_count", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_users {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.users", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.users", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_user_id {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.user_id", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.user_id", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_group_id {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.group_id", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.group_id", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_tty_get_mode {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.tty_get_mode", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.tty_get_mode", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_tty_set_mode {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.tty_set_mode", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.tty_set_mode", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! os_temp_dir {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.temp_dir", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("os.temp_dir", &[$($arg),*], &$kwargs, $state)
+    };
+}

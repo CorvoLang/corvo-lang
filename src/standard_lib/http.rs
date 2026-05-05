@@ -127,3 +127,43 @@ pub fn delete(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResu
 
     Ok(Value::Map(result))
 }
+
+#[macro_export]
+macro_rules! http_get {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("http.get", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("http.get", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! http_post {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("http.post", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("http.post", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! http_put {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("http.put", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("http.put", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! http_delete {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("http.delete", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("http.delete", &[$($arg),*], &$kwargs, $state)
+    };
+}

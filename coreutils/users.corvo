@@ -1,4 +1,7 @@
 # Output who is currently logged in to the current host.
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @parsed = args.parse(os.argv(), {})
 @o = @parsed["options"]
 if (@o.get("help", false)) {
@@ -10,7 +13,7 @@ if (@o.get("help", false)) {
   sys.exit(0)
 }
 if (@o.get("version", false)) {
-  sys.echo("users (Corvo coreutils) 0.1.0")
+  sys.echo("users (Corvo coreutils) " + static.get("version"))
   sys.exit(0)
 }
 @names = list.new()

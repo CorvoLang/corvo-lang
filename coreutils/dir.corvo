@@ -3,6 +3,9 @@
 # Equivalent to `ls -C -b`.
 
 # ── Argument-parser spec ─────────────────────────────────────────────────────
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @_ls_spec = {
   "aliases": {
     "a": "all",             "A": "almost_all",     "b": "escape",
@@ -178,7 +181,7 @@ try {
 
 try {
   assert_eq(@o.get("version", false), true)
-  sys.echo("dir (Corvo coreutils) 0.1.0")
+  sys.echo("dir (Corvo coreutils) " + static.get("version"))
   @_ls_skip = true
 } fallback {}
 

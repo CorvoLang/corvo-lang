@@ -276,3 +276,43 @@ mod tests {
         close(&args_close, &HashMap::new()).unwrap();
     }
 }
+
+#[macro_export]
+macro_rules! db_connect {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("db.connect", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("db.connect", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! db_query {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("db.query", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("db.query", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! db_execute {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("db.execute", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("db.execute", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! db_close {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("db.close", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("db.close", &[$($arg),*], &$kwargs, $state)
+    };
+}

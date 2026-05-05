@@ -1,4 +1,7 @@
 # Run COMMAND or shell with root directory set to NEWROOT.
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @parsed = args.parse(os.argv(), {})
 @o = @parsed["options"]
 @pos = @parsed["positional"]
@@ -14,7 +17,7 @@ if (@o.get("help", false)) {
 }
 
 if (@o.get("version", false)) {
-  sys.echo("chroot (Corvo coreutils) 0.1.0")
+  sys.echo("chroot (Corvo coreutils) " + static.get("version"))
   sys.exit(0)
 }
 

@@ -9,6 +9,9 @@
 #         corvo coreutils/cat.corvo -- -n file.txt
 
 # ── Argument-parser spec ──────────────────────────────────────────────────────
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @_cat_spec = {
   "aliases": {
     "n": "number",
@@ -61,7 +64,7 @@ if (@o.get("help", false)) {
 
 # ── Handle --version ──────────────────────────────────────────────────────────
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("cat (Corvo coreutils) 0.1.0")
+  sys.echo("cat (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 

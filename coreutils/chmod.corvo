@@ -3,6 +3,9 @@
 # Or:  `corvo coreutils/chmod.corvo -- [OPTION]... --reference=RFILE FILE...`
 
 # ── Argument-parser spec ──────────────────────────────────────────────────────
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @_chmod_spec = {
   "aliases": {
     "R": "recursive",
@@ -42,7 +45,7 @@ if (@o.get("help", false)) {
 
 # ── Handle --version ──────────────────────────────────────────────────────────
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("chmod (Corvo coreutils) 0.1.0")
+  sys.echo("chmod (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 

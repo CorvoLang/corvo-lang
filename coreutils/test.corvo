@@ -1,4 +1,7 @@
 # Check file types and compare values.
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @pos = args.scan(os.argv())["positional"]
 @len = list.len(@pos)
 

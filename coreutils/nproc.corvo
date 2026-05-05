@@ -1,4 +1,7 @@
 # Print the number of processing units available to the current process.
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @parsed = args.parse(os.argv(), {})
 @o = @parsed["options"]
 if (@o.get("help", false)) {
@@ -11,7 +14,7 @@ if (@o.get("help", false)) {
   sys.exit(0)
 }
 if (@o.get("version", false)) {
-  sys.echo("nproc (Corvo coreutils) 0.1.0")
+  sys.echo("nproc (Corvo coreutils) " + static.get("version"))
   sys.exit(0)
 }
 sys.echo(number.to_string(os.nproc()))

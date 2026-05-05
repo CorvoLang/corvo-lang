@@ -1,4 +1,7 @@
 # coreutils/md5sum.corvo
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @spec = {
   "aliases": {
     "c": "check",

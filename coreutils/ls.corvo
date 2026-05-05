@@ -3,6 +3,9 @@
 # For deterministic diffs vs GNU ls: `LC_ALL=C TZ=UTC` and `--time-style=long-iso`.
 
 # ── Argument-parser spec ─────────────────────────────────────────────────────
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @_ls_spec = {
   "aliases": {
     "a": "all",             "A": "almost_all",     "b": "escape",
@@ -146,7 +149,7 @@ if (@o.get("help", false)) {
 }
 
 if (!@_ls_skip && @o.get("version", false)) {
-  sys.echo("ls (Corvo coreutils) 0.1.0")
+  sys.echo("ls (Corvo coreutils) " + static.get("version"))
   @_ls_skip = true
 }
 

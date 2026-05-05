@@ -1512,3 +1512,313 @@ mod tests {
         let _ = fs::remove_file(&path);
     }
 }
+
+#[macro_export]
+macro_rules! fs_read {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.read", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.read", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_read_lines {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.read_lines", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.read_lines", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_write {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.write", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.write", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_append {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.append", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.append", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_delete {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.delete", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.delete", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_exists {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.exists", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.exists", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_mkdir {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.mkdir", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.mkdir", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_mkfifo {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.mkfifo", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.mkfifo", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_mknod {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.mknod", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.mknod", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_list_dir {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.list_dir", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.list_dir", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_copy {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.copy", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.copy", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_move {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.move", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.move", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_link {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.link", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.link", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_symlink {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.symlink", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.symlink", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_realpath {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.realpath", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.realpath", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_truncate {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.truncate", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.truncate", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_stat {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.stat", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.stat", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_read_link {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.read_link", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.read_link", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_read_dir_meta {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.read_dir_meta", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.read_dir_meta", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_mktemp {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.mktemp", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.mktemp", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_read_hex {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.read_hex", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.read_hex", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_write_hex {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.write_hex", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.write_hex", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_read_meta {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.read_meta", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.read_meta", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_path_filename {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.path_filename", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.path_filename", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_path_parent {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.path_parent", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.path_parent", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_path_join {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.path_join", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.path_join", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_path_relative {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.path_relative", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.path_relative", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_chmod {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.chmod", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.chmod", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_chown {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.chown", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.chown", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_selinux_context_get {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.selinux_context_get", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.selinux_context_get", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! fs_selinux_context_set {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.selinux_context_set", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.selinux_context_set", &[$($arg),*], &$kwargs, $state)
+    };
+}

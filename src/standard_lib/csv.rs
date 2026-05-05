@@ -32,3 +32,13 @@ pub fn parse_value(args: &[Value], _named_args: &HashMap<String, Value>) -> Corv
 
     Ok(Value::List(result))
 }
+
+#[macro_export]
+macro_rules! csv_parse {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("csv.parse", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("csv.parse", &[$($arg),*], &$kwargs, $state)
+    };
+}

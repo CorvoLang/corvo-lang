@@ -31,3 +31,23 @@ pub fn lookup(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResu
 
     Ok(Value::String(hostname))
 }
+
+#[macro_export]
+macro_rules! dns_resolve {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("dns.resolve", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("dns.resolve", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! dns_lookup {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("dns.lookup", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("dns.lookup", &[$($arg),*], &$kwargs, $state)
+    };
+}

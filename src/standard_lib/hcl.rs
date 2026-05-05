@@ -18,3 +18,23 @@ pub fn stringify(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoR
 
     Ok(Value::String(value.to_string()))
 }
+
+#[macro_export]
+macro_rules! hcl_parse {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("hcl.parse", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("hcl.parse", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! hcl_stringify {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("hcl.stringify", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("hcl.stringify", &[$($arg),*], &$kwargs, $state)
+    };
+}

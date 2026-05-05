@@ -148,3 +148,23 @@ mod tests {
         assert!(render_file(&args, &empty_named()).is_err());
     }
 }
+
+#[macro_export]
+macro_rules! template_render {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("template.render", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("template.render", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! template_render_file {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("template.render_file", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("template.render_file", &[$($arg),*], &$kwargs, $state)
+    };
+}

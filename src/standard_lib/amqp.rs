@@ -194,3 +194,43 @@ pub fn queue_purge(args: &[Value], _named_args: &HashMap<String, Value>) -> Corv
         Ok(Value::Number(count as f64))
     })
 }
+
+#[macro_export]
+macro_rules! amqp_connect {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("amqp.connect", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("amqp.connect", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! amqp_publish {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("amqp.publish", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("amqp.publish", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! amqp_queue_delete {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("amqp.queue_delete", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("amqp.queue_delete", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! amqp_queue_purge {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("amqp.queue_purge", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("amqp.queue_purge", &[$($arg),*], &$kwargs, $state)
+    };
+}

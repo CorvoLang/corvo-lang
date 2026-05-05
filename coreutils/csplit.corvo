@@ -1,5 +1,8 @@
 # coreutils/csplit.corvo — GNU-compatible `csplit`
 # Run: `corvo coreutils/csplit.corvo [OPTION]... FILE PATTERN...`
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @spec = {
   "aliases": { "f": "prefix", "n": "digits" },
   "short_values": ["f", "n"],
@@ -23,7 +26,7 @@ if (@o.get("help", false)) {
 }
 
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("csplit (Corvo coreutils) 0.1.0")
+  sys.echo("csplit (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 
@@ -79,7 +82,8 @@ if (!@skip_main) {
       @found = true
     }
 
-    @fname = "${@prefix}${string.pad_start(number.to_string(@part), @digits, \"0\")}"
+    @pad = "0"
+    @fname = "${@prefix}${string.pad_start(number.to_string(@part), @digits, @pad)}"
     fs.write(@fname, list.join(@chunk, "\n"))
     sys.echo(number.to_string(string.len(list.join(@chunk, "\n"))))
     @part += 1
@@ -88,7 +92,8 @@ if (!@skip_main) {
   # Write remainder
   if (@curr_line < list.len(@lines)) {
     @chunk = list.slice(@lines, @curr_line, list.len(@lines))
-    @fname = "${@prefix}${string.pad_start(number.to_string(@part), @digits, \"0\")}"
+    @pad = "0"
+    @fname = "${@prefix}${string.pad_start(number.to_string(@part), @digits, @pad)}"
     fs.write(@fname, list.join(@chunk, "\n"))
     sys.echo(number.to_string(string.len(list.join(@chunk, "\n"))))
   }

@@ -757,3 +757,23 @@ mod tests {
         assert_eq!(opts.get("w"), Some(&Value::String("80".to_string())));
     }
 }
+
+#[macro_export]
+macro_rules! args_scan {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("args.scan", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("args.scan", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! args_parse {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("args.parse", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("args.parse", &[$($arg),*], &$kwargs, $state)
+    };
+}

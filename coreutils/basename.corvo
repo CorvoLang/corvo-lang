@@ -1,5 +1,8 @@
 # Strip directory and suffix from filenames.
 # Usage: basename NAME [SUFFIX]
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @spec = {
   "aliases": { "a": "multiple", "s": "suffix", "z": "zero" }
 }
@@ -23,7 +26,7 @@ if (@o.get("help", false)) {
 }
 
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("basename (Corvo coreutils) 0.1.0")
+  sys.echo("basename (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 

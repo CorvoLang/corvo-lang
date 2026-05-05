@@ -200,3 +200,23 @@ mod tests {
         assert!(stringify(&[], &empty_args()).is_err());
     }
 }
+
+#[macro_export]
+macro_rules! json_parse {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("json.parse", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("json.parse", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! json_stringify {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("json.stringify", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("json.stringify", &[$($arg),*], &$kwargs, $state)
+    };
+}

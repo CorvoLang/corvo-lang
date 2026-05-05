@@ -1,4 +1,7 @@
 # coreutils/sort.corvo — Sort lines of text files
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @spec = {
   "aliases": { "r": "reverse", "u": "unique", "n": "numeric" }
 }
@@ -20,7 +23,7 @@ if (@o.get("help", false)) {
 }
 
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("sort (Corvo coreutils) 0.1.0")
+  sys.echo("sort (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 

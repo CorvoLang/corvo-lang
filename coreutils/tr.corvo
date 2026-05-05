@@ -1,5 +1,8 @@
 # coreutils/tr.corvo — GNU-compatible `tr`
 # Run: `corvo coreutils/tr.corvo [OPTION]... SET1 [SET2]`
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @spec = {
   "aliases": { "d": "delete", "s": "squeeze-repeats", "c": "complement" }
 }
@@ -23,7 +26,7 @@ if (@o.get("help", false)) {
 }
 
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("tr (Corvo coreutils) 0.1.0")
+  sys.echo("tr (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 

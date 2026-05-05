@@ -201,3 +201,13 @@ mod tests {
         assert!(parse_value(&args, &empty_named_args()).is_err());
     }
 }
+
+#[macro_export]
+macro_rules! env_parse {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("env.parse", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("env.parse", &[$($arg),*], &$kwargs, $state)
+    };
+}

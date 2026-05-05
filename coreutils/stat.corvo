@@ -1,4 +1,7 @@
 # Display file or file system status.
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @parsed = args.parse(os.argv(), {})
 @o = @parsed["options"]
 @pos = @parsed["positional"]
@@ -17,7 +20,7 @@ if (@o.get("help", false)) {
 }
 
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("stat (Corvo coreutils) 0.1.0")
+  sys.echo("stat (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 

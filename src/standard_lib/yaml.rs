@@ -104,3 +104,23 @@ fn value_to_yaml_value(value: &Value) -> CorvoResult<serde_yaml::Value> {
         )),
     }
 }
+
+#[macro_export]
+macro_rules! yaml_parse {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("yaml.parse", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("yaml.parse", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! yaml_stringify {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("yaml.stringify", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("yaml.stringify", &[$($arg),*], &$kwargs, $state)
+    };
+}

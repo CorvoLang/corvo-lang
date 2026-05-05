@@ -495,3 +495,93 @@ mod tests {
         }
     }
 }
+
+#[macro_export]
+macro_rules! crypto_hash {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.hash", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.hash", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! crypto_hash_file {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.hash_file", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.hash_file", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! crypto_hash_stdin {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.hash_stdin", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.hash_stdin", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! crypto_checksum {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.checksum", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.checksum", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! crypto_crc32_file {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.crc32_file", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.crc32_file", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! crypto_crc32_stdin {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.crc32_stdin", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.crc32_stdin", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! crypto_encrypt {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.encrypt", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.encrypt", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! crypto_decrypt {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.decrypt", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.decrypt", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! crypto_uuid {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.uuid", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("crypto.uuid", &[$($arg),*], &$kwargs, $state)
+    };
+}

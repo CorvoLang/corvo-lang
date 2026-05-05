@@ -1,4 +1,7 @@
 # Print the numeric identifier for the current host.
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @parsed = args.parse(os.argv(), {})
 @o = @parsed["options"]
 if (@o.get("help", false)) {
@@ -7,7 +10,7 @@ if (@o.get("help", false)) {
   sys.exit(0)
 }
 if (@o.get("version", false)) {
-  sys.echo("hostid (Corvo coreutils) 0.1.0")
+  sys.echo("hostid (Corvo coreutils) " + static.get("version"))
   sys.exit(0)
 }
 sys.echo(os.hostid())

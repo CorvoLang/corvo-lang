@@ -13,3 +13,13 @@ pub fn parse_value(args: &[Value], _named_args: &HashMap<String, Value>) -> Corv
 
     crate::standard_lib::json::json_to_value(&parsed)
 }
+
+#[macro_export]
+macro_rules! xml_parse {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("xml.parse", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("xml.parse", &[$($arg),*], &$kwargs, $state)
+    };
+}

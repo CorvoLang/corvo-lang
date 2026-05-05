@@ -1,5 +1,8 @@
 # coreutils/comm.corvo — GNU-compatible `comm`
 # Run: `corvo coreutils/comm.corvo [OPTION]... FILE1 FILE2`
+prep {
+  static.set("version", os.get_env("COREUTILS_VERSION", "0.0.0-dev"))
+}
 @spec = {
   "aliases": { "1": "suppress_1", "2": "suppress_2", "3": "suppress_3", "i": "ignore_case" },
   "long_values": ["output-delimiter"]
@@ -24,7 +27,7 @@ if (@o.get("help", false)) {
 }
 
 if (!@skip_main && @o.get("version", false)) {
-  sys.echo("comm (Corvo coreutils) 0.1.0")
+  sys.echo("comm (Corvo coreutils) " + static.get("version"))
   @skip_main = true
 }
 
