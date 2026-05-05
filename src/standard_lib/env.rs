@@ -46,6 +46,16 @@ pub fn parse_value(args: &[Value], _named_args: &HashMap<String, Value>) -> Corv
     Ok(Value::Map(map))
 }
 
+#[macro_export]
+macro_rules! env_parse {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("env.parse", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("env.parse", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,14 +210,4 @@ mod tests {
         let args = vec![Value::String(input.to_string())];
         assert!(parse_value(&args, &empty_named_args()).is_err());
     }
-}
-
-#[macro_export]
-macro_rules! env_parse {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("env.parse", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("env.parse", &[$($arg),*], &$kwargs, $state)
-    };
 }

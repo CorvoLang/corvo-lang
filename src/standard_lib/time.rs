@@ -263,6 +263,56 @@ pub fn boot_time(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoR
     ))
 }
 
+#[macro_export]
+macro_rules! time_format_local {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("time.format_local", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("time.format_local", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! time_format_utc {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("time.format_utc", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("time.format_utc", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! time_unix_now {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("time.unix_now", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("time.unix_now", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! time_parse_date {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("time.parse_date", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("time.parse_date", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! time_boot_time {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("time.boot_time", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("time.boot_time", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -323,54 +373,4 @@ mod tests {
         // Allow for timezone offset (up to 14 hours = 50400 seconds)
         assert!(ts.abs() < 60000.0);
     }
-}
-
-#[macro_export]
-macro_rules! time_format_local {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("time.format_local", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("time.format_local", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! time_format_utc {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("time.format_utc", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("time.format_utc", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! time_unix_now {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("time.unix_now", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("time.unix_now", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! time_parse_date {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("time.parse_date", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("time.parse_date", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! time_boot_time {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("time.boot_time", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("time.boot_time", &[$($arg),*], &$kwargs, $state)
-    };
 }

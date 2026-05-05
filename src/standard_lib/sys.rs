@@ -460,6 +460,157 @@ pub fn sync(_args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
         Ok(Value::Boolean(true)) // Optional: implement flush on windows?
     }
 }
+
+#[macro_export]
+macro_rules! sys_echo {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.echo", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.echo", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! sys_printf {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.printf", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.printf", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! sys_print {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.print", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.print", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! sys_eprint {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.eprint", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.eprint", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! sys_read_line {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.read_line", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.read_line", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! sys_sleep {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.sleep", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.sleep", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! sys_panic {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.panic", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.panic", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! sys_exit {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.exit", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.exit", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! sys_exec {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.exec", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.exec", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! sys_read_all {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.read_all", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.read_all", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! sys_chroot {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.chroot", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.chroot", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! sys_nice {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.nice", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.nice", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! sys_sync {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.sync", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.sync", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! sys_stdin_isatty {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.stdin_isatty", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.stdin_isatty", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! sys_stdout_isatty {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.stdout_isatty", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("sys.stdout_isatty", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -692,154 +843,4 @@ mod tests {
         let args = vec![Value::String("echo hello".to_string())];
         assert!(exec(&args, &empty_args()).is_err());
     }
-}
-
-#[macro_export]
-macro_rules! sys_echo {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.echo", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.echo", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! sys_printf {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.printf", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.printf", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! sys_print {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.print", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.print", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! sys_eprint {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.eprint", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.eprint", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! sys_read_line {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.read_line", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.read_line", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! sys_sleep {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.sleep", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.sleep", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! sys_panic {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.panic", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.panic", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! sys_exit {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.exit", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.exit", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! sys_exec {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.exec", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.exec", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! sys_read_all {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.read_all", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.read_all", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! sys_chroot {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.chroot", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.chroot", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! sys_nice {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.nice", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.nice", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! sys_sync {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.sync", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.sync", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! sys_stdin_isatty {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.stdin_isatty", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.stdin_isatty", &[$($arg),*], &$kwargs, $state)
-    };
-}
-
-#[macro_export]
-macro_rules! sys_stdout_isatty {
-    ($state:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.stdout_isatty", &[$($arg),*], &std::collections::HashMap::new(), $state)
-    };
-    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
-        $crate::standard_lib::call("sys.stdout_isatty", &[$($arg),*], &$kwargs, $state)
-    };
 }

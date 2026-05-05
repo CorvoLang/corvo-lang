@@ -334,106 +334,6 @@ pub fn range(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
     Ok(Value::List(result))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn empty_args() -> HashMap<String, Value> {
-        HashMap::new()
-    }
-
-    #[test]
-    fn test_max() {
-        let args = vec![Value::Number(2.0), Value::Number(5.0), Value::Number(3.0)];
-        assert_eq!(max(&args, &empty_args()).unwrap(), Value::Number(5.0));
-    }
-
-    #[test]
-    fn test_add() {
-        let args = vec![Value::Number(2.0), Value::Number(3.0)];
-        assert_eq!(add(&args, &empty_args()).unwrap(), Value::Number(5.0));
-    }
-
-    #[test]
-    fn test_add_negative() {
-        let args = vec![Value::Number(-1.0), Value::Number(3.0)];
-        assert_eq!(add(&args, &empty_args()).unwrap(), Value::Number(2.0));
-    }
-
-    #[test]
-    fn test_sub() {
-        let args = vec![Value::Number(10.0), Value::Number(3.0)];
-        assert_eq!(sub(&args, &empty_args()).unwrap(), Value::Number(7.0));
-    }
-
-    #[test]
-    fn test_mul() {
-        let args = vec![Value::Number(4.0), Value::Number(5.0)];
-        assert_eq!(mul(&args, &empty_args()).unwrap(), Value::Number(20.0));
-    }
-
-    #[test]
-    fn test_div() {
-        let args = vec![Value::Number(10.0), Value::Number(2.0)];
-        assert_eq!(div(&args, &empty_args()).unwrap(), Value::Number(5.0));
-    }
-
-    #[test]
-    fn test_div_by_zero() {
-        let args = vec![Value::Number(10.0), Value::Number(0.0)];
-        assert!(div(&args, &empty_args()).is_err());
-    }
-
-    #[test]
-    fn test_modulo() {
-        let args = vec![Value::Number(10.0), Value::Number(3.0)];
-        assert_eq!(modulo(&args, &empty_args()).unwrap(), Value::Number(1.0));
-    }
-
-    #[test]
-    fn test_mod_by_zero() {
-        let args = vec![Value::Number(10.0), Value::Number(0.0)];
-        assert!(modulo(&args, &empty_args()).is_err());
-    }
-
-    #[test]
-    fn test_add_wrong_type() {
-        let args = vec![Value::String("a".to_string()), Value::Number(1.0)];
-        assert!(add(&args, &empty_args()).is_err());
-    }
-
-    #[test]
-    fn test_add_too_few_args() {
-        let args = vec![Value::Number(1.0)];
-        assert!(add(&args, &empty_args()).is_err());
-    }
-
-    #[test]
-    fn test_add_zero() {
-        let args = vec![Value::Number(5.0), Value::Number(0.0)];
-        assert_eq!(add(&args, &empty_args()).unwrap(), Value::Number(5.0));
-    }
-
-    #[test]
-    fn test_mul_by_zero() {
-        let args = vec![Value::Number(5.0), Value::Number(0.0)];
-        assert_eq!(mul(&args, &empty_args()).unwrap(), Value::Number(0.0));
-    }
-
-    #[test]
-    fn test_div_float() {
-        let args = vec![Value::Number(7.0), Value::Number(2.0)];
-        assert_eq!(div(&args, &empty_args()).unwrap(), Value::Number(3.5));
-    }
-
-    #[test]
-    fn human_k() {
-        let args = vec![Value::Number(2048.0), Value::Boolean(false)];
-        let s = human_bytes(&args, &empty_args()).unwrap();
-        assert_eq!(s, Value::String("2.0K".to_string()));
-    }
-}
-
 #[macro_export]
 macro_rules! math_add {
     ($state:expr $(, $arg:expr)* $(,)?) => {
@@ -572,4 +472,104 @@ macro_rules! math_range {
     ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
         $crate::standard_lib::call("math.range", &[$($arg),*], &$kwargs, $state)
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_args() -> HashMap<String, Value> {
+        HashMap::new()
+    }
+
+    #[test]
+    fn test_max() {
+        let args = vec![Value::Number(2.0), Value::Number(5.0), Value::Number(3.0)];
+        assert_eq!(max(&args, &empty_args()).unwrap(), Value::Number(5.0));
+    }
+
+    #[test]
+    fn test_add() {
+        let args = vec![Value::Number(2.0), Value::Number(3.0)];
+        assert_eq!(add(&args, &empty_args()).unwrap(), Value::Number(5.0));
+    }
+
+    #[test]
+    fn test_add_negative() {
+        let args = vec![Value::Number(-1.0), Value::Number(3.0)];
+        assert_eq!(add(&args, &empty_args()).unwrap(), Value::Number(2.0));
+    }
+
+    #[test]
+    fn test_sub() {
+        let args = vec![Value::Number(10.0), Value::Number(3.0)];
+        assert_eq!(sub(&args, &empty_args()).unwrap(), Value::Number(7.0));
+    }
+
+    #[test]
+    fn test_mul() {
+        let args = vec![Value::Number(4.0), Value::Number(5.0)];
+        assert_eq!(mul(&args, &empty_args()).unwrap(), Value::Number(20.0));
+    }
+
+    #[test]
+    fn test_div() {
+        let args = vec![Value::Number(10.0), Value::Number(2.0)];
+        assert_eq!(div(&args, &empty_args()).unwrap(), Value::Number(5.0));
+    }
+
+    #[test]
+    fn test_div_by_zero() {
+        let args = vec![Value::Number(10.0), Value::Number(0.0)];
+        assert!(div(&args, &empty_args()).is_err());
+    }
+
+    #[test]
+    fn test_modulo() {
+        let args = vec![Value::Number(10.0), Value::Number(3.0)];
+        assert_eq!(modulo(&args, &empty_args()).unwrap(), Value::Number(1.0));
+    }
+
+    #[test]
+    fn test_mod_by_zero() {
+        let args = vec![Value::Number(10.0), Value::Number(0.0)];
+        assert!(modulo(&args, &empty_args()).is_err());
+    }
+
+    #[test]
+    fn test_add_wrong_type() {
+        let args = vec![Value::String("a".to_string()), Value::Number(1.0)];
+        assert!(add(&args, &empty_args()).is_err());
+    }
+
+    #[test]
+    fn test_add_too_few_args() {
+        let args = vec![Value::Number(1.0)];
+        assert!(add(&args, &empty_args()).is_err());
+    }
+
+    #[test]
+    fn test_add_zero() {
+        let args = vec![Value::Number(5.0), Value::Number(0.0)];
+        assert_eq!(add(&args, &empty_args()).unwrap(), Value::Number(5.0));
+    }
+
+    #[test]
+    fn test_mul_by_zero() {
+        let args = vec![Value::Number(5.0), Value::Number(0.0)];
+        assert_eq!(mul(&args, &empty_args()).unwrap(), Value::Number(0.0));
+    }
+
+    #[test]
+    fn test_div_float() {
+        let args = vec![Value::Number(7.0), Value::Number(2.0)];
+        assert_eq!(div(&args, &empty_args()).unwrap(), Value::Number(3.5));
+    }
+
+    #[test]
+    fn human_k() {
+        let args = vec![Value::Number(2048.0), Value::Boolean(false)];
+        let s = human_bytes(&args, &empty_args()).unwrap();
+        assert_eq!(s, Value::String("2.0K".to_string()));
+    }
 }

@@ -261,7 +261,7 @@ impl Transpiler {
             Stmt::VarOrAssign { name, candidates } => {
                 code.push_str(&format!("{}{{\n", self.indent()));
                 code.push_str(&format!(
-                    "{}    let mut current = {}.var_get(\"{}\").unwrap_or(Value::Null);\n",
+                    "{}    let mut current = {}.var_get(\"{}\").unwrap_or_else(|_| Value::Null);\n",
                     self.indent(),
                     state_var,
                     name
@@ -281,7 +281,6 @@ impl Transpiler {
                         state_var,
                         name
                     ));
-                    code.push_str(&format!("{}    current = val;\n", self.indent()));
                     code.push_str(&format!("{}    break 'or_assign;\n", self.indent()));
                     code.push_str(&format!("{}}}\n", self.indent()));
                 }
@@ -380,7 +379,7 @@ impl Transpiler {
                 self.closure_depth -= 1;
                 self.indent_level -= 2;
                 code.push_str(&format!("{}    }})();\n", self.indent()));
-                code.push_str(&format!("{}    if {}.var_get(\"_terminate_requested\").unwrap_or(Value::Boolean(false)).is_truthy() {{\n", self.indent(), state_var));
+                code.push_str(&format!("{}    if {}.var_get(\"_terminate_requested\").unwrap_or_else(|_| Value::Boolean(false)).is_truthy() {{\n", self.indent(), state_var));
                 if self.closure_depth > 0 {
                     code.push_str(&format!(
                         "{}        return Err(CorvoError::runtime(\"terminate\"));\n",
@@ -407,7 +406,7 @@ impl Transpiler {
                     self.closure_depth -= 1;
                     self.indent_level -= 1;
                     code.push_str(&format!("{}    }})();\n", self.indent()));
-                    code.push_str(&format!("{}    if {}.var_get(\"_terminate_requested\").unwrap_or(Value::Boolean(false)).is_truthy() {{\n", self.indent(), state_var));
+                    code.push_str(&format!("{}    if {}.var_get(\"_terminate_requested\").unwrap_or_else(|_| Value::Boolean(false)).is_truthy() {{\n", self.indent(), state_var));
                     if self.closure_depth > 0 {
                         code.push_str(&format!(
                             "{}        return Err(CorvoError::runtime(\"terminate\"));\n",
@@ -466,7 +465,7 @@ impl Transpiler {
                 self.closure_depth -= 1;
                 self.indent_level -= 2;
                 code.push_str(&format!("{}    }})();\n", self.indent()));
-                code.push_str(&format!("{}    if {}.var_get(\"_terminate_requested\").unwrap_or(Value::Boolean(false)).is_truthy() {{\n", self.indent(), state_var));
+                code.push_str(&format!("{}    if {}.var_get(\"_terminate_requested\").unwrap_or_else(|_| Value::Boolean(false)).is_truthy() {{\n", self.indent(), state_var));
                 if self.closure_depth > 0 {
                     code.push_str(&format!(
                         "{}        return Err(CorvoError::runtime(\"terminate\"));\n",
@@ -753,10 +752,10 @@ impl Transpiler {
                         format!(", {}", args_list.join(", "))
                     };
                     if named_map_items.is_empty() {
-                        format!("{}!(&{}{})?", macro_name, state_var, args_str)
+                        format!("corvo_lang::{}!(&{}{})?", macro_name, state_var, args_str)
                     } else {
                         format!(
-                            "{}!(&{}; kwargs: {}{})?",
+                            "corvo_lang::{}!(&{}; kwargs: {}{})?",
                             macro_name, state_var, named_map_code, args_str
                         )
                     }

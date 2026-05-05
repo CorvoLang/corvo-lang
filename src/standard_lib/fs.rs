@@ -1367,152 +1367,6 @@ pub fn selinux_context_set(
         "fs.selinux_context_set is only supported on Linux",
     ))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn empty_args() -> HashMap<String, Value> {
-        HashMap::new()
-    }
-
-    #[test]
-    fn test_write_and_read() {
-        let dir = std::env::temp_dir().join("corvo_test_write");
-        let path = dir.to_string_lossy().to_string();
-
-        let _ = fs::remove_file(&path);
-
-        let write_args = vec![
-            Value::String(path.clone()),
-            Value::String("hello world".to_string()),
-        ];
-        assert_eq!(
-            write(&write_args, &empty_args()).unwrap(),
-            Value::Boolean(true)
-        );
-
-        let read_args = vec![Value::String(path.clone())];
-        assert_eq!(
-            read(&read_args, &empty_args()).unwrap(),
-            Value::String("hello world".to_string())
-        );
-
-        let _ = fs::remove_file(&path);
-    }
-
-    #[test]
-    fn test_read_not_found() {
-        let args = vec![Value::String("/nonexistent/path/file.txt".to_string())];
-        assert!(read(&args, &empty_args()).is_err());
-    }
-
-    #[test]
-    fn test_exists_true() {
-        let tmp = std::env::temp_dir();
-        let args = vec![Value::String(tmp.to_string_lossy().to_string())];
-        assert_eq!(exists(&args, &empty_args()).unwrap(), Value::Boolean(true));
-    }
-
-    #[test]
-    fn test_exists_false() {
-        let args = vec![Value::String("/nonexistent/path".to_string())];
-        assert_eq!(exists(&args, &empty_args()).unwrap(), Value::Boolean(false));
-    }
-
-    #[test]
-    fn test_mkdir_and_list_dir() {
-        let dir = std::env::temp_dir().join("corvo_test_dir");
-        let path = dir.to_string_lossy().to_string();
-        let _ = fs::remove_dir_all(&path);
-
-        let mkdir_args = vec![Value::String(path.clone()), Value::Boolean(true)];
-        assert_eq!(
-            mkdir(&mkdir_args, &empty_args()).unwrap(),
-            Value::Boolean(true)
-        );
-
-        let _ = fs::remove_dir_all(&path);
-    }
-
-    #[test]
-    fn test_write_no_args() {
-        assert!(write(&[], &empty_args()).is_err());
-    }
-
-    #[test]
-    fn test_exists_no_args() {
-        assert!(exists(&[], &empty_args()).is_err());
-    }
-
-    #[test]
-    fn test_delete_no_args() {
-        assert!(delete(&[], &empty_args()).is_err());
-    }
-
-    #[test]
-    fn test_stat_directory() {
-        let tmp = std::env::temp_dir();
-        let args = vec![Value::String(tmp.to_string_lossy().to_string())];
-        let result = stat(&args, &empty_args()).unwrap();
-        match result {
-            Value::Map(m) => {
-                assert!(m.contains_key("size"));
-                assert!(m.contains_key("is_dir"));
-            }
-            _ => panic!("Expected Map"),
-        }
-    }
-
-    #[test]
-    fn test_path_parent_dot_is_parent_of_cwd() {
-        let expected = std::env::current_dir()
-            .ok()
-            .and_then(|c| c.parent().map(|p| p.to_string_lossy().to_string()))
-            .unwrap_or_default();
-        let args = vec![Value::String(".".to_string())];
-        assert_eq!(
-            path_parent(&args, &empty_args()).unwrap(),
-            Value::String(expected)
-        );
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn test_chmod_octal_and_symbolic() {
-        let file = std::env::temp_dir().join("corvo_test_chmod_file");
-        let path = file.to_string_lossy().to_string();
-        let _ = fs::remove_file(&path);
-        fs::write(&path, b"x").unwrap();
-
-        let chmod_args = vec![
-            Value::String(path.clone()),
-            Value::String("600".to_string()),
-            Value::Boolean(false),
-        ];
-        assert_eq!(
-            chmod(&chmod_args, &empty_args()).unwrap(),
-            Value::Boolean(true)
-        );
-        let mode = fs::symlink_metadata(&path).unwrap().mode() & 0o7777;
-        assert_eq!(mode, 0o600);
-
-        let chmod_sym = vec![
-            Value::String(path.clone()),
-            Value::String("u+x".to_string()),
-            Value::Boolean(false),
-        ];
-        assert_eq!(
-            chmod(&chmod_sym, &empty_args()).unwrap(),
-            Value::Boolean(true)
-        );
-        let mode2 = fs::symlink_metadata(&path).unwrap().mode() & 0o7777;
-        assert_eq!(mode2, 0o700);
-
-        let _ = fs::remove_file(&path);
-    }
-}
-
 #[macro_export]
 macro_rules! fs_read {
     ($state:expr $(, $arg:expr)* $(,)?) => {
@@ -1821,4 +1675,149 @@ macro_rules! fs_selinux_context_set {
     ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
         $crate::standard_lib::call("fs.selinux_context_set", &[$($arg),*], &$kwargs, $state)
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_args() -> HashMap<String, Value> {
+        HashMap::new()
+    }
+
+    #[test]
+    fn test_write_and_read() {
+        let dir = std::env::temp_dir().join("corvo_test_write");
+        let path = dir.to_string_lossy().to_string();
+
+        let _ = fs::remove_file(&path);
+
+        let write_args = vec![
+            Value::String(path.clone()),
+            Value::String("hello world".to_string()),
+        ];
+        assert_eq!(
+            write(&write_args, &empty_args()).unwrap(),
+            Value::Boolean(true)
+        );
+
+        let read_args = vec![Value::String(path.clone())];
+        assert_eq!(
+            read(&read_args, &empty_args()).unwrap(),
+            Value::String("hello world".to_string())
+        );
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_read_not_found() {
+        let args = vec![Value::String("/nonexistent/path/file.txt".to_string())];
+        assert!(read(&args, &empty_args()).is_err());
+    }
+
+    #[test]
+    fn test_exists_true() {
+        let tmp = std::env::temp_dir();
+        let args = vec![Value::String(tmp.to_string_lossy().to_string())];
+        assert_eq!(exists(&args, &empty_args()).unwrap(), Value::Boolean(true));
+    }
+
+    #[test]
+    fn test_exists_false() {
+        let args = vec![Value::String("/nonexistent/path".to_string())];
+        assert_eq!(exists(&args, &empty_args()).unwrap(), Value::Boolean(false));
+    }
+
+    #[test]
+    fn test_mkdir_and_list_dir() {
+        let dir = std::env::temp_dir().join("corvo_test_dir");
+        let path = dir.to_string_lossy().to_string();
+        let _ = fs::remove_dir_all(&path);
+
+        let mkdir_args = vec![Value::String(path.clone()), Value::Boolean(true)];
+        assert_eq!(
+            mkdir(&mkdir_args, &empty_args()).unwrap(),
+            Value::Boolean(true)
+        );
+
+        let _ = fs::remove_dir_all(&path);
+    }
+
+    #[test]
+    fn test_write_no_args() {
+        assert!(write(&[], &empty_args()).is_err());
+    }
+
+    #[test]
+    fn test_exists_no_args() {
+        assert!(exists(&[], &empty_args()).is_err());
+    }
+
+    #[test]
+    fn test_delete_no_args() {
+        assert!(delete(&[], &empty_args()).is_err());
+    }
+
+    #[test]
+    fn test_stat_directory() {
+        let tmp = std::env::temp_dir();
+        let args = vec![Value::String(tmp.to_string_lossy().to_string())];
+        let result = stat(&args, &empty_args()).unwrap();
+        match result {
+            Value::Map(m) => {
+                assert!(m.contains_key("size"));
+                assert!(m.contains_key("is_dir"));
+            }
+            _ => panic!("Expected Map"),
+        }
+    }
+
+    #[test]
+    fn test_path_parent_dot_is_parent_of_cwd() {
+        let expected = std::env::current_dir()
+            .ok()
+            .and_then(|c| c.parent().map(|p| p.to_string_lossy().to_string()))
+            .unwrap_or_default();
+        let args = vec![Value::String(".".to_string())];
+        assert_eq!(
+            path_parent(&args, &empty_args()).unwrap(),
+            Value::String(expected)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_chmod_octal_and_symbolic() {
+        let file = std::env::temp_dir().join("corvo_test_chmod_file");
+        let path = file.to_string_lossy().to_string();
+        let _ = fs::remove_file(&path);
+        fs::write(&path, b"x").unwrap();
+
+        let chmod_args = vec![
+            Value::String(path.clone()),
+            Value::String("600".to_string()),
+            Value::Boolean(false),
+        ];
+        assert_eq!(
+            chmod(&chmod_args, &empty_args()).unwrap(),
+            Value::Boolean(true)
+        );
+        let mode = fs::symlink_metadata(&path).unwrap().mode() & 0o7777;
+        assert_eq!(mode, 0o600);
+
+        let chmod_sym = vec![
+            Value::String(path.clone()),
+            Value::String("u+x".to_string()),
+            Value::Boolean(false),
+        ];
+        assert_eq!(
+            chmod(&chmod_sym, &empty_args()).unwrap(),
+            Value::Boolean(true)
+        );
+        let mode2 = fs::symlink_metadata(&path).unwrap().mode() & 0o7777;
+        assert_eq!(mode2, 0o700);
+
+        let _ = fs::remove_file(&path);
+    }
 }
