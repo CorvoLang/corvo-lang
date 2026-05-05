@@ -38,9 +38,13 @@ impl Transpiler {
         rust_code.push_str("#![allow(clippy::never_loop)]\n");
         rust_code.push_str("#![allow(clippy::useless_vec)]\n");
         rust_code.push_str("#![allow(clippy::collapsible_if)]\n");
+        rust_code.push_str("#![allow(clippy::collapsible_else_if)]\n");
+        rust_code.push_str("#![allow(clippy::needless_if)]\n");
+        rust_code.push_str("#![allow(clippy::if_same_then_else)]\n");
         rust_code.push_str("#![allow(clippy::len_zero)]\n");
         rust_code.push_str("#![allow(unused_mut)]\n");
-        rust_code.push_str("#[allow(unused_imports)]\n");
+        rust_code.push_str("#![allow(unused_imports)]\n");
+        rust_code.push_str("#![allow(unreachable_code)]\n");
         rust_code.push_str("use corvo_lang::type_system::Value;\n");
         rust_code.push_str("use corvo_lang::RuntimeState;\n");
         rust_code.push_str("use corvo_lang::CorvoError;\n");
