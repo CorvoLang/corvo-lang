@@ -129,6 +129,7 @@ pub fn lint_program(program: &Program) -> Vec<LintDiagnostic> {
     diags
 }
 
+// skipcq: RS-R1000
 fn lint_stmt(stmt: &Stmt, out: &mut Vec<LintDiagnostic>) {
     match stmt {
         Stmt::ExprStmt { expr } => lint_expr(expr, out),
@@ -200,6 +201,31 @@ fn lint_stmt(stmt: &Stmt, out: &mut Vec<LintDiagnostic>) {
                         .to_string(),
                     help: Some(
                         "Write-back order is non-deterministic between concurrent requests. \
+                         Ensure the state accumulation is order-independent."
+                            .to_string(),
+                    ),
+                    severity: LintSeverity::Warning,
+                });
+            }
+            for s in body {
+                lint_stmt(s, out);
+            }
+        }
+        Stmt::AmqpConsume {
+            connection,
+            queue,
+            shared_vars,
+            body,
+            ..
+        } => {
+            lint_expr(connection, out);
+            lint_expr(queue, out);
+            if !shared_vars.is_empty() {
+                out.push(LintDiagnostic {
+                    message: "amqp_consume: shared variables are serialized at write-back"
+                        .to_string(),
+                    help: Some(
+                        "Write-back order is non-deterministic between concurrent messages. \
                          Ensure the state accumulation is order-independent."
                             .to_string(),
                     ),
@@ -365,6 +391,7 @@ const KNOWN_NAMESPACES: &[&str] = &[
     "map",
     "var",
     "static",
+    "amqp",
 ];
 
 /// All functions recognised by the standard library and type system.
@@ -496,6 +523,11 @@ pub const KNOWN_FUNCTIONS: &[&str] = &[
     "db.query",
     "db.execute",
     "db.close",
+    // amqp
+    "amqp.connect",
+    "amqp.publish",
+    "amqp.queue_delete",
+    "amqp.queue_purge",
     // xml
     "xml.parse",
     // env

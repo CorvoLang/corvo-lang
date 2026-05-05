@@ -1,0 +1,11 @@
+version = 1
+
+[[analyzers]]
+name = "rust"
+enabled = true
+
+  [analyzers.meta]
+  skip_rules = [
+    "RS-R1000", # Cyclomatic complexity is high (expected in parsers and AST visitors)
+    "RS-W1079"  # Empty call to new() (String::new() and other idiomatic new() calls)
+  ]

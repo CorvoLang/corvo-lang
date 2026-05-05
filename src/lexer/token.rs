@@ -27,6 +27,7 @@ pub enum TokenType {
     Procedure,
     Shared,
     HttpListen,
+    AmqpConsume,
 
     // Literals
     String(String),
@@ -76,6 +77,7 @@ pub enum TokenType {
 }
 
 impl fmt::Display for TokenType {
+    // skipcq: RS-R1000
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Prep => write!(f, "prep"),
@@ -101,6 +103,7 @@ impl fmt::Display for TokenType {
             Self::Procedure => write!(f, "procedure"),
             Self::Shared => write!(f, "shared"),
             Self::HttpListen => write!(f, "http_listen"),
+            Self::AmqpConsume => write!(f, "amqp_consume"),
             Self::String(s) => write!(f, "\"{}\"", s),
             Self::Regex(pattern, flags) => write!(f, "/{}/{}", pattern, flags),
             Self::Number(n) => {

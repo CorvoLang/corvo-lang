@@ -518,6 +518,9 @@ fn value_to_json_value(v: &Value) -> serde_json::Value {
         Value::DatabasePool(_) => {
             panic!("database pools cannot be serialized as statics")
         }
+        Value::AmqpConnection(_) => {
+            panic!("AMQP connections cannot be serialized as statics")
+        }
     }
 }
 
@@ -733,6 +736,9 @@ fn value_to_rust_code(value: &Value) -> String {
         }
         Value::DatabasePool(_) => {
             panic!("database pools cannot be compiled to Rust source literals")
+        }
+        Value::AmqpConnection(_) => {
+            panic!("AMQP connections cannot be compiled to Rust source literals")
         }
     }
 }

@@ -211,6 +211,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    // skipcq: RS-R1000
     fn scan_interpolation_expr(&mut self, string_start: Position) -> CorvoResult<Vec<Token>> {
         let mut tokens = Vec::new();
         let mut brace_depth: usize = 1;
@@ -413,6 +414,7 @@ impl<'a> Lexer<'a> {
                         "procedure" => TokenType::Procedure,
                         "shared" => TokenType::Shared,
                         "http_listen" => TokenType::HttpListen,
+                        "amqp_consume" => TokenType::AmqpConsume,
                         "true" => TokenType::Boolean(true),
                         "false" => TokenType::Boolean(false),
                         _ => TokenType::Identifier(name),
@@ -565,6 +567,7 @@ impl<'a> Lexer<'a> {
         Ok(Token::number(num, start, self.pos))
     }
 
+    // skipcq: RS-R1000
     fn scan_identifier(&mut self) -> CorvoResult<Token> {
         let start = self.pos;
         let mut name = String::new();
@@ -603,6 +606,7 @@ impl<'a> Lexer<'a> {
             "procedure" => TokenType::Procedure,
             "shared" => TokenType::Shared,
             "http_listen" => TokenType::HttpListen,
+            "amqp_consume" => TokenType::AmqpConsume,
             "true" => TokenType::Boolean(true),
             "false" => TokenType::Boolean(false),
             _ => TokenType::Identifier(name),

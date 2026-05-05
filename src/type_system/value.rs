@@ -87,6 +87,32 @@ impl<'de> Deserialize<'de> for DatabasePoolValue {
     }
 }
 
+/// A wrapper for an active AMQP connection and its associated Tokio runtime.
+#[derive(Debug, Clone)]
+pub struct AmqpConnectionValue(pub Arc<tokio::runtime::Runtime>, pub Arc<lapin::Connection>);
+
+impl PartialEq for AmqpConnectionValue {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.1, &other.1)
+    }
+}
+
+impl Serialize for AmqpConnectionValue {
+    fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
+        Err(serde::ser::Error::custom(
+            "AMQP connections cannot be serialized as statics",
+        ))
+    }
+}
+
+impl<'de> Deserialize<'de> for AmqpConnectionValue {
+    fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
+        Err(serde::de::Error::custom(
+            "AMQP connections cannot be deserialized",
+        ))
+    }
+}
+
 pub type NativeCallback = Arc<
     dyn Fn(&[Value], &mut crate::runtime::RuntimeState) -> crate::CorvoResult<Value> + Send + Sync,
 >;
@@ -113,6 +139,8 @@ pub enum Value {
     Shared(Box<SharedValue>),
     /// A database connection pool.
     DatabasePool(Box<DatabasePoolValue>),
+    /// An AMQP connection.
+    AmqpConnection(Box<AmqpConnectionValue>),
 }
 
 impl fmt::Debug for Value {
@@ -129,6 +157,7 @@ impl fmt::Debug for Value {
             Self::NativeProcedure { .. } => f.write_str("NativeProcedure(<native closure>)"),
             Self::Shared(s) => f.debug_tuple("Shared").field(s).finish(),
             Self::DatabasePool(d) => f.debug_tuple("DatabasePool").field(d).finish(),
+            Self::AmqpConnection(c) => f.debug_tuple("AmqpConnection").field(c).finish(),
         }
     }
 }
@@ -156,6 +185,7 @@ impl PartialEq for Value {
             ) => ap == bp && Arc::ptr_eq(ac, bc),
             (Self::Shared(a), Self::Shared(b)) => a == b,
             (Self::DatabasePool(a), Self::DatabasePool(b)) => a == b,
+            (Self::AmqpConnection(a), Self::AmqpConnection(b)) => a == b,
             _ => false,
         }
     }
@@ -200,6 +230,9 @@ impl Serialize for Value {
             )),
             Self::DatabasePool(_) => Err(serde::ser::Error::custom(
                 "database pools cannot be serialized",
+            )),
+            Self::AmqpConnection(_) => Err(serde::ser::Error::custom(
+                "AMQP connections cannot be serialized",
             )),
         }
     }
@@ -292,6 +325,7 @@ impl Value {
             Self::Procedure(_) | Self::NativeProcedure { .. } => Type::Procedure,
             Self::Shared(sv) => sv.0.lock().unwrap().r#type(),
             Self::DatabasePool(_) => Type::DatabasePool,
+            Self::AmqpConnection(_) => Type::AmqpConnection,
         }
     }
 
@@ -349,6 +383,7 @@ impl Value {
             Self::Procedure(_) | Self::NativeProcedure { .. } => true,
             Self::Shared(sv) => sv.0.lock().unwrap().is_truthy(),
             Self::DatabasePool(_) => true,
+            Self::AmqpConnection(_) => true,
         }
     }
 }
@@ -379,6 +414,7 @@ impl fmt::Display for Value {
             Self::Procedure(_) | Self::NativeProcedure { .. } => write!(f, "<procedure>"),
             Self::Shared(sv) => write!(f, "{}", sv.0.lock().unwrap()),
             Self::DatabasePool(_) => write!(f, "<database_pool>"),
+            Self::AmqpConnection(_) => write!(f, "<amqp_connection>"),
         }
     }
 }

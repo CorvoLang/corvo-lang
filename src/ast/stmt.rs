@@ -77,6 +77,13 @@ pub enum Stmt {
         shared_vars: Vec<String>,
         body: Vec<Stmt>,
     },
+    AmqpConsume {
+        connection: Box<Expr>,
+        queue: Box<Expr>,
+        msg_ident: String,
+        shared_vars: Vec<String>,
+        body: Vec<Stmt>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -78,6 +78,7 @@ impl Transpiler {
         "    ".repeat(self.indent_level)
     }
 
+    // skipcq: RS-R1000
     fn transpile_stmt(&mut self, stmt: &Stmt, state_var: &str) -> String {
         let mut code = String::new();
         match stmt {
@@ -549,12 +550,12 @@ impl Transpiler {
                     .map(|v| format!("{:?}.to_string()", v))
                     .collect::<Vec<_>>()
                     .join(", ");
-                let mut body_code = String::new();
                 let old_indent = self.indent_level;
                 self.indent_level += 2;
-                for s in body {
-                    body_code.push_str(&self.transpile_stmt(s, state_var));
-                }
+                let mut body_code: String = body
+                    .iter()
+                    .map(|s| self.transpile_stmt(s, state_var))
+                    .collect();
                 body_code.push_str(&format!("{}Ok(Value::Null)\n", self.indent()));
                 self.indent_level = old_indent;
                 code.push_str(&format!(
@@ -575,6 +576,57 @@ impl Transpiler {
                     req_ident,
                     self.indent(),
                     resp_ident,
+                    self.indent(),
+                    shared_list,
+                    self.indent(),
+                    state_var,
+                    body_code,
+                    self.indent(),
+                    self.indent(),
+                    state_var,
+                    self.indent()
+                ));
+            }
+            Stmt::AmqpConsume {
+                connection,
+                queue,
+                msg_ident,
+                shared_vars,
+                body,
+            } => {
+                let conn_expr = self.transpile_expr(connection, state_var);
+                let queue_expr = self.transpile_expr(queue, state_var);
+                let shared_list = shared_vars
+                    .iter()
+                    .map(|v| format!("{:?}", v))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let old_indent = self.indent_level;
+                self.indent_level += 2;
+                let mut body_code: String = body
+                    .iter()
+                    .map(|s| self.transpile_stmt(s, state_var))
+                    .collect();
+                body_code.push_str(&format!("{}Ok(())\n", self.indent()));
+                self.indent_level = old_indent;
+                code.push_str(&format!(
+                    "{}corvo_lang::compiler::Evaluator::new().exec_amqp_consume_native(\n\
+                     {}    {},\n\
+                     {}    {},\n\
+                     {}    {:?},\n\
+                     {}    &[{}],\n\
+                     {}    std::sync::Arc::new(move |{}| {{\n\
+                     {}\
+                     {}    }}),\n\
+                     {}    &mut {}\n\
+                     {})?;\n",
+                    self.indent(),
+                    self.indent(),
+                    conn_expr,
+                    self.indent(),
+                    queue_expr,
+                    self.indent(),
+                    msg_ident,
                     self.indent(),
                     shared_list,
                     self.indent(),
@@ -774,6 +826,7 @@ impl Transpiler {
                             Value::Map(_) => \"map\",\n            \
                             Value::Regex(_, _) => \"re\",\n            \
                             Value::DatabasePool(_) => \"db\",\n            \
+                            Value::AmqpConnection(_) => \"amqp\",\n            \
                             Value::Procedure(_) | Value::NativeProcedure {{ .. }} => \"procedure\",\n            \
                             _ => return Err(CorvoError::r#type(\"method call error\"))\n        }};\n        \
                         corvo_lang::standard_lib::call(&format!(\"{{}}.{{}}\", ns, {:?}), &a, &{}, &{})?\n\
