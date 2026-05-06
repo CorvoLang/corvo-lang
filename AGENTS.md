@@ -6,7 +6,7 @@ Welcome, AI Agent! You are contributing to the **Corvo** language, a modern scri
 Always consult the following resources before generating or modifying code:
 - **[README.md](README.md)**: For the core philosophy ("Write scripts like prose. Ship them like binaries. Trust them like Rust."), project setup, and high-level architecture.
 - **[CHEATSHEET.md](CHEATSHEET.md)**: For the definitive list of all standard library functions, namespaces, built-in blocks (`browse`, `loop`, `http_listen`, etc.), and shorthands. **Do not hallucinate functions** that are not in this list.
-- **[`examples/`](examples/) and [`coreutils/`](coreutils/)**: Review these directories for practical, working implementations of Corvo scripts covering various use cases and complete CLI utility rewrites.
+- **[`examples/`](examples/)**: Review this directory for practical, working implementations of Corvo scripts covering various use cases. For complete CLI utility rewrites (coreutils), see the [`futils`](https://github.com/CorvoLang/futils) repository.
 
 ## 2. Implementing New Features (Rust Source)
 

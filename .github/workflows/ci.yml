@@ -52,26 +52,3 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
       - run: cargo test --all-features
 
-  coreutils-parity:
-    timeout-minutes: 20
-    name: Coreutils parity (Docker)
-    runs-on: ubuntu-latest
-    needs: [fmt, clippy]
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v6
-      - name: Run coreutils parity vs GNU coreutils and uutils in container
-        run: ./coreutils/tests/run-parity.sh --require-docker
-
-  coreutils-parity-matrix:
-    name: Coreutils parity matrix (Docker)
-    runs-on: ubuntu-latest
-    needs: [fmt, clippy]
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v6
-      - name: Run extended coreutils flag-combination matrix in container
-        run: ./coreutils/tests/run-parity-matrix.sh --require-docker

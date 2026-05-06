@@ -1,6 +1,6 @@
-.PHONY: transpile transpile-examples transpile-coreutils
+.PHONY: transpile transpile-examples
 
-transpile: transpile-examples transpile-coreutils
+transpile: transpile-examples
 
 transpile-examples:
 	@echo "Transpiling examples..."
@@ -15,22 +15,7 @@ transpile-examples:
 	@echo "Examples transpiled to examples/transpiled"
 	cd examples/transpiled && cargo fmt && cargo clippy
 
-
-
-transpile-coreutils:
-	@echo "Transpiling coreutils..."
-	@rm -rf coreutils/transpiled || true
-	@mkdir -p coreutils/transpiled
-	@for file in coreutils/*.corvo; do \
-		cargo run --quiet -- --transpile $$file -o coreutils/transpiled > /dev/null; \
-	done
-	@if ! grep -q "\[patch.crates-io\]" coreutils/transpiled/Cargo.toml; then \
-		printf "\n[patch.crates-io]\ncorvo-lang = { path = \"../../\" }\n" >> coreutils/transpiled/Cargo.toml; \
-	fi
-	@echo "Coreutils transpiled to coreutils/transpiled"
-	cd coreutils/transpiled && cargo fmt && cargo clippy
-
 # Clean all generated files
 .PHONY: clean
 clean:
-	@rm -rf examples/transpiled coreutils/transpiled
+	@rm -rf examples/transpiled

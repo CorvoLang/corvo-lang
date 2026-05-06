@@ -10,7 +10,7 @@ Corvo is a modern scripting language that compiles to standalone Rust binaries. 
 * **Batteries Included:** Built-in support for HTTP (client and server), JSON, YAML, CSV, Cryptography, File System operations, OS integrations, and more.
 * **Zero Dependencies:** No package managers (no `npm`, `pip`, or `cargo` required for scripts). Everything you need is built into the language.
 * **Familiar & Clean Syntax:** Designed to be highly readable and easy to audit, using straightforward variables (`@name = "Corvo"`) and procedures.
-* **Robust Coreutils:** Corvo ships with its own implementations of standard Unix utilities (like `ls`, `cat`, `cp`, `rm`, `chmod`) written entirely in Corvo, proving the language's capability.
+* **Robust Coreutils:** The [futils](https://github.com/CorvoLang/futils) repository contains complete reimplementations of standard Unix utilities (like `ls`, `cat`, `cp`, `rm`, `chmod`) written entirely in Corvo, proving the language's capability.
 * **Built-in Linter & Safety:** Includes an AST-based linter (`--lint`) that catches issues before you run or compile your code, similar to Cargo Clippy.
 
 ## 📦 Installation
@@ -96,7 +96,7 @@ Corvo is entirely written in Rust and is designed with a modern compiler archite
 * **Transpiler:** Converts Corvo Abstract Syntax Tree (AST) into idiomatic Rust code.
 * **Compiler:** Orchestrates the transpilation and uses `rustc` under the hood to generate the final standalone binary.
 
-To explore the compiler, transpiler, and interpreter, check the [`src/`](src/) directory. For an extensive collection of Corvo scripts, see the [`examples/`](examples/) and [`coreutils/`](coreutils/) directories.
+To explore the compiler, transpiler, and interpreter, check the [`src/`](src/) directory. For an extensive collection of Corvo scripts, see the [`examples/`](examples/) directory. For complete CLI utility reimplementations, see the [`futils`](https://github.com/CorvoLang/futils) repository.
 
 ## 🔍 AGENTS.md
 
