@@ -10,7 +10,7 @@ use structopt::StructOpt;
         structopt::clap::AppSettings::AllowLeadingHyphen,
         structopt::clap::AppSettings::DisableHelpFlags,
     ],
-    after_help = "Corvo CLI help (no script):\n  corvo -h | corvo --help\n\nExamples:\n  corvo script.corvo              Run a file\n  corvo script.corvo -lh /        Run a script with args (e.g. coreutils/ls.corvo; same flag ordering as GNU ls)\n  corvo --repl                    Start interactive REPL\n  corvo --eval 'sys.echo(\"hi\")'  Evaluate an expression\n  corvo --compile script.corvo    Compile to standalone executable\n  corvo --check script.corvo      Check syntax\n  corvo --lint script.corvo       Analyse code for errors and unknown functions"
+    after_help = "Corvo CLI help (no script):\n  corvo -h | corvo --help\n\nExamples:\n  corvo script.corvo              Run a file\n  corvo script.corvo -lh /        Run a script with args (same flag ordering as GNU ls)\n  corvo --repl                    Start interactive REPL\n  corvo --eval 'sys.echo(\"hi\")'  Evaluate an expression\n  corvo --compile script.corvo    Compile to standalone executable\n  corvo --check script.corvo      Check syntax\n  corvo --lint script.corvo       Analyse code for errors and unknown functions"
 )]
 struct Args {
     #[structopt(help = "Corvo file to execute or compile")]
