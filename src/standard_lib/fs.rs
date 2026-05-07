@@ -116,18 +116,29 @@ pub fn mkdir(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
 
     let recursive = args.get(1).and_then(|v| v.as_bool()).unwrap_or(false);
 
-    let mode_opt = match args.get(2) {
-        Some(Value::Number(n)) => Some(*n),
-        Some(_) => {
-            return Err(CorvoError::invalid_argument(
-                "fs.mkdir: mode must be a number between 0 and 4095 (0o7777)",
+    #[cfg(not(unix))]
+    {
+        if args.get(2).is_some() {
+            return Err(CorvoError::runtime(
+                "fs.mkdir mode argument is only supported on Unix",
             ));
         }
-        None => None,
-    };
+        mkdir_without_mode(path, recursive)?;
+        return Ok(Value::Boolean(true));
+    }
 
     #[cfg(unix)]
     {
+        let mode_opt = match args.get(2) {
+            Some(Value::Number(n)) => Some(*n),
+            Some(_) => {
+                return Err(CorvoError::invalid_argument(
+                    "fs.mkdir: mode must be a number between 0 and 4095 (0o7777)",
+                ));
+            }
+            None => None,
+        };
+
         if let Some(mode_f) = mode_opt {
             if !mode_f.is_finite() || !(0.0..=4095.0).contains(&mode_f) {
                 return Err(CorvoError::invalid_argument(
@@ -150,16 +161,6 @@ pub fn mkdir(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
             mkdir_without_mode(path, recursive)?;
             Ok(Value::Boolean(true))
         }
-    }
-    #[cfg(not(unix))]
-    {
-        if mode_opt.is_some() {
-            return Err(CorvoError::runtime(
-                "fs.mkdir mode argument is only supported on Unix",
-            ));
-        }
-        mkdir_without_mode(path, recursive)?;
-        Ok(Value::Boolean(true))
     }
 }
 
@@ -1728,6 +1729,27 @@ macro_rules! fs_selinux_context_set {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
+    struct UnixTestUmaskGuard(libc::mode_t);
+
+    #[cfg(unix)]
+    impl UnixTestUmaskGuard {
+        /// Temporarily set the process umask; previous mask is restored on drop.
+        fn set(mask: libc::mode_t) -> Self {
+            let previous = unsafe { libc::umask(mask) };
+            Self(previous)
+        }
+    }
+
+    #[cfg(unix)]
+    impl Drop for UnixTestUmaskGuard {
+        fn drop(&mut self) {
+            unsafe {
+                libc::umask(self.0);
+            }
+        }
+    }
+
     fn empty_args() -> HashMap<String, Value> {
         HashMap::new()
     }
@@ -1797,16 +1819,22 @@ mod tests {
         let path = dir.to_string_lossy().to_string();
         let _ = fs::remove_dir_all(&path);
 
-        let args = vec![
+        let args_str_mode = vec![
             Value::String(path.clone()),
             Value::Boolean(false),
             Value::String("700".to_string()),
         ];
-        let err = mkdir(&args, &empty_args()).unwrap_err();
+        let err = mkdir(&args_str_mode, &empty_args()).unwrap_err();
         let msg = err.to_string();
+        #[cfg(unix)]
         assert!(
             msg.contains("mode") && msg.contains("number"),
             "unexpected mkdir error: {msg}",
+        );
+        #[cfg(not(unix))]
+        assert!(
+            msg.to_lowercase().contains("unix"),
+            "unexpected mkdir error on non-unix: {msg}",
         );
 
         let args_bool_mode = vec![
@@ -1814,13 +1842,26 @@ mod tests {
             Value::Boolean(false),
             Value::Boolean(true),
         ];
-        assert!(mkdir(&args_bool_mode, &empty_args()).is_err());
+        let err_b = mkdir(&args_bool_mode, &empty_args()).unwrap_err();
+        let msg_b = err_b.to_string();
+        #[cfg(unix)]
+        assert!(
+            msg_b.contains("mode") && msg_b.contains("number"),
+            "unexpected mkdir error: {msg_b}",
+        );
+        #[cfg(not(unix))]
+        assert!(
+            msg_b.to_lowercase().contains("unix"),
+            "unexpected mkdir error on non-unix: {msg_b}",
+        );
     }
 
     #[cfg(unix)]
     #[test]
     fn test_mkdir_applies_mode_at_creation() {
         use std::os::unix::fs::MetadataExt;
+
+        let _umask_guard = UnixTestUmaskGuard::set(0);
 
         let dir = std::env::temp_dir().join("corvo_test_mkdir_mode");
         let path = dir.to_string_lossy().to_string();
@@ -1838,7 +1879,7 @@ mod tests {
         let mode = fs::symlink_metadata(&path).unwrap().mode() & 0o7777;
         assert_eq!(
             mode, 0o700,
-            "directory mode should reflect the requested mkdir(2) mode under umask (not default 0755-only behavior)"
+            "with umask 0, directory mode should match requested mkdir(2) mode exactly"
         );
 
         let _ = fs::remove_dir_all(&path);
@@ -1848,6 +1889,8 @@ mod tests {
     #[test]
     fn test_mkdir_recursive_applies_mode_to_components() {
         use std::os::unix::fs::MetadataExt;
+
+        let _umask_guard = UnixTestUmaskGuard::set(0);
 
         let base = std::env::temp_dir().join("corvo_test_mkdir_mode_recursive");
         let leaf = base.join("nested").join("leaf");
