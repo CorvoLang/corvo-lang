@@ -99,6 +99,15 @@ pub fn exists(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResu
     Ok(Value::Boolean(Path::new(path).exists()))
 }
 
+fn mkdir_without_mode(path: &str, recursive: bool) -> CorvoResult<()> {
+    let res = if recursive {
+        fs::create_dir_all(path)
+    } else {
+        fs::create_dir(path)
+    };
+    res.map_err(|e| CorvoError::file_system(e.to_string()))
+}
+
 pub fn mkdir(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     let path = args
         .first()
@@ -114,24 +123,24 @@ pub fn mkdir(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
         if let Some(mode_f) = mode_opt {
             if !mode_f.is_finite() || !(0.0..=4095.0).contains(&mode_f) {
                 return Err(CorvoError::invalid_argument(
-                    "fs.mkdir: mode must be a finite number between 0 and 4095 (0o7777)",
+                    "fs.mkdir: mode must be a finite integer between 0 and 4095 (0o7777)",
                 ));
             }
-            let mode_u32 = (mode_f.trunc() as u32) & 0o7777;
+            if mode_f.fract() != 0.0 {
+                return Err(CorvoError::invalid_argument(
+                    "fs.mkdir: mode must be an integer (no fractional part)",
+                ));
+            }
+            let mode_u32 = (mode_f as u32) & 0o7777;
             fs::DirBuilder::new()
                 .recursive(recursive)
                 .mode(mode_u32)
                 .create(path)
                 .map(|_| Value::Boolean(true))
                 .map_err(|e| CorvoError::file_system(e.to_string()))
-        } else if recursive {
-            fs::create_dir_all(path)
-                .map(|_| Value::Boolean(true))
-                .map_err(|e| CorvoError::file_system(e.to_string()))
         } else {
-            fs::create_dir(path)
-                .map(|_| Value::Boolean(true))
-                .map_err(|e| CorvoError::file_system(e.to_string()))
+            mkdir_without_mode(path, recursive)?;
+            Ok(Value::Boolean(true))
         }
     }
     #[cfg(not(unix))]
@@ -141,15 +150,8 @@ pub fn mkdir(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
                 "fs.mkdir mode argument is only supported on Unix",
             ));
         }
-        if recursive {
-            fs::create_dir_all(path)
-                .map(|_| Value::Boolean(true))
-                .map_err(|e| CorvoError::file_system(e.to_string()))
-        } else {
-            fs::create_dir(path)
-                .map(|_| Value::Boolean(true))
-                .map_err(|e| CorvoError::file_system(e.to_string()))
-        }
+        mkdir_without_mode(path, recursive)?;
+        Ok(Value::Boolean(true))
     }
 }
 
@@ -1802,7 +1804,7 @@ mod tests {
         let mode = fs::symlink_metadata(&path).unwrap().mode() & 0o7777;
         assert_eq!(
             mode, 0o700,
-            "directory mode should match mkdir mode argument (not only umask default)"
+            "directory mode should reflect the requested mkdir(2) mode under umask (not default 0755-only behavior)"
         );
 
         let _ = fs::remove_dir_all(&path);
@@ -1827,7 +1829,7 @@ mod tests {
             Value::Boolean(true)
         );
 
-        for component in [base.join("nested"), leaf] {
+        for component in [base.clone(), base.join("nested"), leaf] {
             let meta = fs::symlink_metadata(&component).unwrap();
             assert!(meta.is_dir());
             assert_eq!(meta.mode() & 0o7777, 0o750);
@@ -1856,6 +1858,13 @@ mod tests {
             Value::Number(f64::NAN),
         ];
         assert!(mkdir(&args_nan, &empty_args()).is_err());
+
+        let args_fract = vec![
+            Value::String(path.clone()),
+            Value::Boolean(false),
+            Value::Number(448.9),
+        ];
+        assert!(mkdir(&args_fract, &empty_args()).is_err());
     }
 
     #[cfg(not(unix))]

@@ -59,7 +59,7 @@
 | `fs.append` | `path, content` | `Boolean` | Appends to file | `examples/fs_example.corvo` |
 | `fs.delete` | `path` | `Boolean` | Deletes file or directory | `examples/fs_example.corvo` |
 | `fs.exists` | `path` | `Boolean` | Checks if path exists | `examples/fs_example.corvo` |
-| `fs.mkdir` | `path, [recursive], [mode]` | `Boolean` | Creates directory; optional Unix `mode` (0–4095, same as `st_mode & 07777`) is applied at creation via `mkdir` | `examples/fs_example.corvo` |
+| `fs.mkdir` | `path, [recursive], [mode]` | `Boolean` | Creates directory; optional Unix integer `mode` (0–4095, bits like `st_mode & 07777`) is passed to `mkdir(2)` via `DirBuilder::mode`, so effective permissions follow POSIX (`mode & ~umask`); use `fs.chmod` after creation if you need exact bits independent of umask | `examples/fs_example.corvo` |
 | `fs.mkfifo` | `path` | `Boolean` | Creates FIFO special file | `examples/fs_example.corvo` |
 | `fs.mknod` | `path, type` | `Boolean` | Creates block/char device | `examples/fs_example.corvo` |
 | `fs.list_dir` | `path` | `List` | Lists directory contents | `examples/fs_example.corvo` |
