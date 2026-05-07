@@ -5,7 +5,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 #[cfg(unix)]
-use std::os::unix::fs::{chown as unix_chown, lchown, FileTypeExt, MetadataExt, PermissionsExt};
+use std::os::unix::fs::{
+    chown as unix_chown, lchown, DirBuilderExt, FileTypeExt, MetadataExt, PermissionsExt,
+};
 
 #[cfg(target_os = "linux")]
 use libc;
@@ -97,6 +99,15 @@ pub fn exists(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResu
     Ok(Value::Boolean(Path::new(path).exists()))
 }
 
+fn mkdir_without_mode(path: &str, recursive: bool) -> CorvoResult<()> {
+    let res = if recursive {
+        fs::create_dir_all(path)
+    } else {
+        fs::create_dir(path)
+    };
+    res.map_err(|e| CorvoError::file_system(e.to_string()))
+}
+
 pub fn mkdir(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
     let path = args
         .first()
@@ -105,14 +116,51 @@ pub fn mkdir(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
 
     let recursive = args.get(1).and_then(|v| v.as_bool()).unwrap_or(false);
 
-    if recursive {
-        fs::create_dir_all(path)
-            .map(|_| Value::Boolean(true))
-            .map_err(|e| CorvoError::file_system(e.to_string()))
-    } else {
-        fs::create_dir(path)
-            .map(|_| Value::Boolean(true))
-            .map_err(|e| CorvoError::file_system(e.to_string()))
+    #[cfg(not(unix))]
+    {
+        if args.get(2).is_some() {
+            return Err(CorvoError::runtime(
+                "fs.mkdir mode argument is only supported on Unix",
+            ));
+        }
+        mkdir_without_mode(path, recursive)?;
+        return Ok(Value::Boolean(true));
+    }
+
+    #[cfg(unix)]
+    {
+        let mode_opt = match args.get(2) {
+            Some(Value::Number(n)) => Some(*n),
+            Some(_) => {
+                return Err(CorvoError::invalid_argument(
+                    "fs.mkdir: mode must be a number between 0 and 4095 (0o7777)",
+                ));
+            }
+            None => None,
+        };
+
+        if let Some(mode_f) = mode_opt {
+            if !mode_f.is_finite() || !(0.0..=4095.0).contains(&mode_f) {
+                return Err(CorvoError::invalid_argument(
+                    "fs.mkdir: mode must be a finite integer between 0 and 4095 (0o7777)",
+                ));
+            }
+            if mode_f.fract() != 0.0 {
+                return Err(CorvoError::invalid_argument(
+                    "fs.mkdir: mode must be an integer (no fractional part)",
+                ));
+            }
+            let mode_u32 = (mode_f as u32) & 0o7777;
+            fs::DirBuilder::new()
+                .recursive(recursive)
+                .mode(mode_u32)
+                .create(path)
+                .map(|_| Value::Boolean(true))
+                .map_err(|e| CorvoError::file_system(e.to_string()))
+        } else {
+            mkdir_without_mode(path, recursive)?;
+            Ok(Value::Boolean(true))
+        }
     }
 }
 
@@ -1681,6 +1729,27 @@ macro_rules! fs_selinux_context_set {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
+    struct UnixTestUmaskGuard(libc::mode_t);
+
+    #[cfg(unix)]
+    impl UnixTestUmaskGuard {
+        /// Temporarily set the process umask; previous mask is restored on drop.
+        fn set(mask: libc::mode_t) -> Self {
+            let previous = unsafe { libc::umask(mask) };
+            Self(previous)
+        }
+    }
+
+    #[cfg(unix)]
+    impl Drop for UnixTestUmaskGuard {
+        fn drop(&mut self) {
+            unsafe {
+                libc::umask(self.0);
+            }
+        }
+    }
+
     fn empty_args() -> HashMap<String, Value> {
         HashMap::new()
     }
@@ -1742,6 +1811,152 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(&path);
+    }
+
+    #[test]
+    fn test_mkdir_mode_wrong_type_errors() {
+        let dir = std::env::temp_dir().join("corvo_test_mkdir_mode_wrong_type");
+        let path = dir.to_string_lossy().to_string();
+        let _ = fs::remove_dir_all(&path);
+
+        let args_str_mode = vec![
+            Value::String(path.clone()),
+            Value::Boolean(false),
+            Value::String("700".to_string()),
+        ];
+        let err = mkdir(&args_str_mode, &empty_args()).unwrap_err();
+        let msg = err.to_string();
+        #[cfg(unix)]
+        assert!(
+            msg.contains("mode") && msg.contains("number"),
+            "unexpected mkdir error: {msg}",
+        );
+        #[cfg(not(unix))]
+        assert!(
+            msg.to_lowercase().contains("unix"),
+            "unexpected mkdir error on non-unix: {msg}",
+        );
+
+        let args_bool_mode = vec![
+            Value::String(path.clone()),
+            Value::Boolean(false),
+            Value::Boolean(true),
+        ];
+        let err_b = mkdir(&args_bool_mode, &empty_args()).unwrap_err();
+        let msg_b = err_b.to_string();
+        #[cfg(unix)]
+        assert!(
+            msg_b.contains("mode") && msg_b.contains("number"),
+            "unexpected mkdir error: {msg_b}",
+        );
+        #[cfg(not(unix))]
+        assert!(
+            msg_b.to_lowercase().contains("unix"),
+            "unexpected mkdir error on non-unix: {msg_b}",
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_mkdir_applies_mode_at_creation() {
+        use std::os::unix::fs::MetadataExt;
+
+        let _umask_guard = UnixTestUmaskGuard::set(0);
+
+        let dir = std::env::temp_dir().join("corvo_test_mkdir_mode");
+        let path = dir.to_string_lossy().to_string();
+        let _ = fs::remove_dir_all(&path);
+
+        let mkdir_args = vec![
+            Value::String(path.clone()),
+            Value::Boolean(false),
+            Value::Number(448.0),
+        ];
+        assert_eq!(
+            mkdir(&mkdir_args, &empty_args()).unwrap(),
+            Value::Boolean(true)
+        );
+        let mode = fs::symlink_metadata(&path).unwrap().mode() & 0o7777;
+        assert_eq!(
+            mode, 0o700,
+            "with umask 0, directory mode should match requested mkdir(2) mode exactly"
+        );
+
+        let _ = fs::remove_dir_all(&path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_mkdir_recursive_applies_mode_to_components() {
+        use std::os::unix::fs::MetadataExt;
+
+        let _umask_guard = UnixTestUmaskGuard::set(0);
+
+        let base = std::env::temp_dir().join("corvo_test_mkdir_mode_recursive");
+        let leaf = base.join("nested").join("leaf");
+        let _ = fs::remove_dir_all(&base);
+
+        let mkdir_args = vec![
+            Value::String(leaf.to_string_lossy().to_string()),
+            Value::Boolean(true),
+            Value::Number(f64::from(0o750)),
+        ];
+        assert_eq!(
+            mkdir(&mkdir_args, &empty_args()).unwrap(),
+            Value::Boolean(true)
+        );
+
+        for component in [base.clone(), base.join("nested"), leaf] {
+            let meta = fs::symlink_metadata(&component).unwrap();
+            assert!(meta.is_dir());
+            assert_eq!(meta.mode() & 0o7777, 0o750);
+        }
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_mkdir_mode_out_of_range_errors() {
+        let dir = std::env::temp_dir().join("corvo_test_mkdir_mode_bad");
+        let path = dir.to_string_lossy().to_string();
+        let _ = fs::remove_dir_all(&path);
+
+        let args = vec![
+            Value::String(path.clone()),
+            Value::Boolean(false),
+            Value::Number(4096.0),
+        ];
+        assert!(mkdir(&args, &empty_args()).is_err());
+
+        let args_nan = vec![
+            Value::String(path.clone()),
+            Value::Boolean(false),
+            Value::Number(f64::NAN),
+        ];
+        assert!(mkdir(&args_nan, &empty_args()).is_err());
+
+        let args_fract = vec![
+            Value::String(path.clone()),
+            Value::Boolean(false),
+            Value::Number(448.9),
+        ];
+        assert!(mkdir(&args_fract, &empty_args()).is_err());
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn test_mkdir_mode_rejected_on_non_unix() {
+        let dir = std::env::temp_dir().join("corvo_test_mkdir_mode_os");
+        let path = dir.to_string_lossy().to_string();
+        let _ = fs::remove_dir_all(&path);
+
+        let args = vec![
+            Value::String(path.clone()),
+            Value::Boolean(false),
+            Value::Number(448.0),
+        ];
+        assert!(mkdir(&args, &empty_args()).is_err());
     }
 
     #[test]
