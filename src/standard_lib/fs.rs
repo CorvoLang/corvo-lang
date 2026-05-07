@@ -116,7 +116,15 @@ pub fn mkdir(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
 
     let recursive = args.get(1).and_then(|v| v.as_bool()).unwrap_or(false);
 
-    let mode_opt = args.get(2).and_then(|v| v.as_number());
+    let mode_opt = match args.get(2) {
+        Some(Value::Number(n)) => Some(*n),
+        Some(_) => {
+            return Err(CorvoError::invalid_argument(
+                "fs.mkdir: mode must be a number between 0 and 4095 (0o7777)",
+            ));
+        }
+        None => None,
+    };
 
     #[cfg(unix)]
     {
@@ -1781,6 +1789,32 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(&path);
+    }
+
+    #[test]
+    fn test_mkdir_mode_wrong_type_errors() {
+        let dir = std::env::temp_dir().join("corvo_test_mkdir_mode_wrong_type");
+        let path = dir.to_string_lossy().to_string();
+        let _ = fs::remove_dir_all(&path);
+
+        let args = vec![
+            Value::String(path.clone()),
+            Value::Boolean(false),
+            Value::String("700".to_string()),
+        ];
+        let err = mkdir(&args, &empty_args()).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("mode") && msg.contains("number"),
+            "unexpected mkdir error: {msg}",
+        );
+
+        let args_bool_mode = vec![
+            Value::String(path.clone()),
+            Value::Boolean(false),
+            Value::Boolean(true),
+        ];
+        assert!(mkdir(&args_bool_mode, &empty_args()).is_err());
     }
 
     #[cfg(unix)]
