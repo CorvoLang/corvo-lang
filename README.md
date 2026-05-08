@@ -87,7 +87,24 @@ corvo --compile script.corvo -o myapp
 
 # Transpile to a Rust project
 corvo --transpile script.corvo
+
+# Wipe the persistent compile cache (target dir reused by --compile)
+corvo --clean
 ```
+
+### Compile cache
+
+`corvo --compile` reuses cargo's incremental build cache across invocations,
+so the first compile pays the cost of building the runtime and its
+dependencies once and every subsequent compile only rebuilds the per-script
+`main.rs`. The cache lives at:
+
+* `~/.cache/corvo/build/` on Linux
+* `~/Library/Caches/com.Corvo.corvo/build/` on macOS
+* `%LOCALAPPDATA%\Corvo\corvo\cache\build\` on Windows
+
+Set the `CORVO_CACHE_DIR` environment variable to override the location (for
+example in CI or sandboxed environments), or run `corvo --clean` to wipe it.
 
 ## 🏗️ Architecture & Internals
 
