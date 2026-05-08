@@ -53,6 +53,40 @@ fn cargo_toml_has_bin_target_named(content: &str, name: &str) -> bool {
     false
 }
 
+/// Cargo `[package] name` must satisfy identifier rules (Unicode XID). Tempdirs from
+/// `tempfile` often look like `.tmpXXXXXX`, whose leading `.` breaks `cargo build`.
+fn transpile_package_name_from_build_dir(build_dir: &Path) -> String {
+    let raw = build_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("corvo_project");
+    sanitize_cargo_package_name(raw)
+}
+
+fn sanitize_cargo_package_name(raw: &str) -> String {
+    let mapped: String = raw
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let trimmed = mapped.trim_matches(|c| c == '_' || c == '-');
+    if trimmed.is_empty() {
+        return "corvo_project".to_string();
+    }
+    let mut chars = trimmed.chars();
+    let first = chars.next().unwrap();
+    if first.is_numeric() {
+        format!("pkg_{trimmed}")
+    } else {
+        trimmed.to_string()
+    }
+}
+
 pub struct Compiler {
     source: String,
     /// Source with the prep block stripped out. Used when embedding source into
@@ -199,18 +233,13 @@ impl Compiler {
         let fresh = is_compile_mode || !cargo_toml_path.exists();
 
         let mut content = if fresh {
-            // The cargo package name lives only inside the persistent cache and
-            // is never user-visible, so it does not need to match the build
-            // directory. Using a fixed identifier keeps the value valid even
-            // when the cache path contains characters cargo rejects in package
-            // names (e.g. dots from `mktemp -t` on macOS).
+            // Compile mode uses a fixed package name so cache paths can contain dots or
+            // other characters Cargo rejects. Transpile mode derives a name from the output
+            // directory basename but sanitizes it (e.g. tempfile `.tmpXXXXXX`).
             let package_name = if is_compile_mode {
-                "corvo_compile_workspace"
+                "corvo_compile_workspace".to_string()
             } else {
-                build_dir
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("corvo_project")
+                transpile_package_name_from_build_dir(build_dir)
             };
 
             // The `corvo-lang` requirement is left as a wildcard so the same
@@ -1697,6 +1726,25 @@ mod tests {
             "expected [[bin]] for hello when package name matches script stem; got:\n{cargo_toml}"
         );
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_transpile_package_name_sanitizes_tempfile_style_dir() {
+        let compiler = Compiler::new("sys.echo(\"hi\")".to_string(), PathBuf::from("test.corvo"));
+        let build_dir = std::env::temp_dir().join(".tmp_corvo_pkg_sanitize_test");
+        let _ = std::fs::remove_dir_all(&build_dir);
+        std::fs::create_dir_all(&build_dir).unwrap();
+        compiler.generate_cargo_toml(&build_dir, "hello").unwrap();
+        let cargo_toml = std::fs::read_to_string(build_dir.join("Cargo.toml")).unwrap();
+        assert!(
+            cargo_toml.contains("name = \"tmp_corvo_pkg_sanitize_test\""),
+            "leading-dot tempdirs must map to a valid package name; got:\n{cargo_toml}"
+        );
+        assert!(
+            !cargo_toml.contains("name = \".tmp"),
+            "must not emit a leading-dot package name; got:\n{cargo_toml}"
+        );
+        let _ = std::fs::remove_dir_all(&build_dir);
     }
 
     #[test]
