@@ -21,6 +21,9 @@ jobs:
     name: Compile benchmarks & report
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    permissions:
+      contents: read
+      actions: write
     steps:
       - uses: actions/checkout@v6
 

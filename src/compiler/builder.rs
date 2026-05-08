@@ -5,6 +5,7 @@ use crate::CorvoError;
 use directories::ProjectDirs;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 /// Environment variable that overrides the persistent build cache location.
 /// Useful for CI runners and sandboxed environments where the default user
@@ -17,6 +18,25 @@ const CACHE_DIR_ENV: &str = "CORVO_CACHE_DIR";
 /// local development and benchmarks where the workspace version is not
 /// published.
 const CORVO_LANG_LOCAL_PATH_ENV: &str = "CORVO_LANG_LOCAL_PATH";
+
+/// Binary name for the artifact produced by [`Compiler::compile`] (`cargo` package mode).
+///
+/// This must stay in sync everywhere compile-mode `[[bin]]` entries and `run_cargo_build`
+/// locate the executable.
+pub const COMPILE_MODE_BIN_NAME: &str = "corvo_compiled";
+
+static CORVO_CACHE_ENV_TEST_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+
+/// Acquire a process-wide lock for tests that mutate `CORVO_CACHE_DIR` or related env vars.
+///
+/// Unit tests in this crate and the `benchmark_compile` integration test share the same
+/// process; parallel `set_var` / `remove_var` would race without serialization.
+pub fn corvo_cache_dir_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    CORVO_CACHE_ENV_TEST_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+}
 
 pub struct Compiler {
     source: String,
@@ -105,9 +125,10 @@ impl Compiler {
     pub fn compile(&self, output: &Path) -> Result<PathBuf, CorvoError> {
         let build_dir = create_build_dir()?;
 
-        self.generate_cargo_toml(&build_dir, "corvo_compiled")?;
+        self.generate_cargo_toml(&build_dir, COMPILE_MODE_BIN_NAME)?;
         if let Ok(root) = std::env::var(CORVO_LANG_LOCAL_PATH_ENV) {
-            append_local_corvo_patch(&build_dir, Path::new(&root))?;
+            let canon = resolve_corvo_lang_local_path(&root)?;
+            append_corvo_lang_patch_to_cargo_toml(&build_dir.join("Cargo.toml"), &canon)?;
         }
         self.generate_main_rs(&build_dir)?;
 
@@ -159,7 +180,7 @@ impl Compiler {
         // dependency set consistent with the running CLI version. Transpile
         // mode targets a user-owned project directory and preserves any
         // customisations the user made by reading + appending instead.
-        let is_compile_mode = bin_name == "corvo_compiled";
+        let is_compile_mode = bin_name == COMPILE_MODE_BIN_NAME;
         let fresh = is_compile_mode || !cargo_toml_path.exists();
 
         let mut content = if fresh {
@@ -213,8 +234,7 @@ impl Compiler {
             }
         }
 
-        // Binary path: for "corvo_compiled" (compile mode), we use "src/main.rs"
-        // for everything else (transpile mode), we use "src/{bin_name}.rs"
+        // Binary path: for compile mode we use "src/main.rs"; for transpile, `src/{bin}.rs`.
         let bin_path = if is_compile_mode {
             "src/main.rs".to_string()
         } else {
@@ -356,9 +376,9 @@ impl Compiler {
         }
 
         let binary_name = if cfg!(target_os = "windows") {
-            "corvo_compiled.exe"
+            format!("{}.exe", COMPILE_MODE_BIN_NAME)
         } else {
-            "corvo_compiled"
+            COMPILE_MODE_BIN_NAME.to_string()
         };
 
         let binary = build_dir.join("target").join(profile).join(binary_name);
@@ -408,25 +428,40 @@ pub fn clean_cache() -> Result<bool, CorvoError> {
     Ok(true)
 }
 
-/// Ensure the persistent build directory exists and return its path.
-///
-/// Unlike previous versions of this function, the directory is **never wiped**:
-/// `cargo` relies on its `target/` cache (and the `Cargo.lock` it writes there)
-/// surviving between compilations to avoid recompiling the runtime crate and
-/// its transitive dependencies on every invocation.
-fn create_build_dir() -> Result<PathBuf, CorvoError> {
-    let base = cache_dir();
-    std::fs::create_dir_all(&base)
-        .map_err(|e| CorvoError::io(format!("Failed to create build dir: {}", e)))?;
-    Ok(base)
+/// Resolve and validate [`CORVO_LANG_LOCAL_PATH_ENV`]: must be absolute, exist, and be a directory.
+fn resolve_corvo_lang_local_path(raw: &str) -> Result<PathBuf, CorvoError> {
+    let path = PathBuf::from(raw);
+    if !path.is_absolute() {
+        return Err(CorvoError::io(format!(
+            "Environment variable {CORVO_LANG_LOCAL_PATH_ENV} must be an absolute path, got: {raw}"
+        )));
+    }
+    let canonical = path.canonicalize().map_err(|e| {
+        CorvoError::io(format!(
+            "Failed to canonicalize path from {CORVO_LANG_LOCAL_PATH_ENV}={raw}: {e}"
+        ))
+    })?;
+    if !canonical.is_dir() {
+        return Err(CorvoError::io(format!(
+            "Environment variable {CORVO_LANG_LOCAL_PATH_ENV} must point to an existing directory: {}",
+            canonical.display()
+        )));
+    }
+    Ok(canonical)
 }
 
-fn append_local_corvo_patch(build_dir: &Path, repo_root: &Path) -> Result<(), CorvoError> {
-    let cargo_toml_path = build_dir.join("Cargo.toml");
-    let mut content = std::fs::read_to_string(&cargo_toml_path).map_err(|e| {
+/// Append a `[patch.crates-io]` table so `corvo-lang` resolves to `repo_root` (must exist).
+///
+/// Used by [`Compiler::compile`] when `CORVO_LANG_LOCAL_PATH` is set and by benchmark / test harnesses
+/// patching generated projects. No-op if `[patch.crates-io]` is already present.
+pub fn append_corvo_lang_patch_to_cargo_toml(
+    manifest_path: &Path,
+    repo_root: &Path,
+) -> Result<(), CorvoError> {
+    let mut content = std::fs::read_to_string(manifest_path).map_err(|e| {
         CorvoError::io(format!(
             "Failed to read {} for local patch: {}",
-            cargo_toml_path.display(),
+            manifest_path.display(),
             e
         ))
     })?;
@@ -438,14 +473,27 @@ fn append_local_corvo_patch(build_dir: &Path, repo_root: &Path) -> Result<(), Co
         "\n[patch.crates-io]\ncorvo-lang = {{ path = \"{}\" }}\n",
         root
     ));
-    std::fs::write(&cargo_toml_path, content).map_err(|e| {
+    std::fs::write(manifest_path, content).map_err(|e| {
         CorvoError::io(format!(
             "Failed to write {} after local patch: {}",
-            cargo_toml_path.display(),
+            manifest_path.display(),
             e
         ))
     })?;
     Ok(())
+}
+
+/// Ensure the persistent build directory exists and return its path.
+///
+/// Unlike previous versions of this function, the directory is **never wiped**:
+/// `cargo` relies on its `target/` cache (and the `Cargo.lock` it writes there)
+/// surviving between compilations to avoid recompiling the runtime crate and
+/// its transitive dependencies on every invocation.
+fn create_build_dir() -> Result<PathBuf, CorvoError> {
+    let base = cache_dir();
+    std::fs::create_dir_all(&base)
+        .map_err(|e| CorvoError::io(format!("Failed to create build dir: {}", e)))?;
+    Ok(base)
 }
 
 fn copy_binary(source: &Path, target: &Path) -> Result<PathBuf, CorvoError> {
@@ -1437,7 +1485,7 @@ mod tests {
         std::fs::create_dir_all(&build_dir).unwrap();
 
         compiler
-            .generate_cargo_toml(&build_dir, "corvo_compiled")
+            .generate_cargo_toml(&build_dir, COMPILE_MODE_BIN_NAME)
             .unwrap();
 
         let cargo_toml = std::fs::read_to_string(build_dir.join("Cargo.toml")).unwrap();
@@ -1475,7 +1523,7 @@ mod tests {
         .unwrap();
 
         compiler
-            .generate_cargo_toml(&build_dir, "corvo_compiled")
+            .generate_cargo_toml(&build_dir, COMPILE_MODE_BIN_NAME)
             .unwrap();
 
         let cargo_toml = std::fs::read_to_string(build_dir.join("Cargo.toml")).unwrap();
@@ -1484,28 +1532,21 @@ mod tests {
             "compile mode must rewrite Cargo.toml fresh and drop stale [[bin]] entries"
         );
         assert!(
-            cargo_toml.contains("corvo_compiled"),
-            "compile mode must register the corvo_compiled binary"
+            cargo_toml.contains(COMPILE_MODE_BIN_NAME),
+            "compile mode must register the {} binary",
+            COMPILE_MODE_BIN_NAME
         );
 
         let _ = std::fs::remove_dir_all(&build_dir);
     }
 
-    /// Serialize all tests that mutate the process-global `CORVO_CACHE_DIR`
-    /// environment variable. `cargo test` runs tests in the same process, so
-    /// concurrent `set_var` / `remove_var` calls would race and produce
-    /// nondeterministic failures.
-    fn cache_env_lock() -> std::sync::MutexGuard<'static, ()> {
-        static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
-        LOCK.get_or_init(|| std::sync::Mutex::new(()))
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-    }
-
     /// Run `body` with `CORVO_CACHE_DIR` set to `value`, restoring the previous
     /// value (or unsetting it) afterwards regardless of panics.
+    ///
+    /// Uses [`super::corvo_cache_dir_test_lock`] with integration tests that
+    /// touch the same environment variable.
     fn with_cache_env(value: &Path, body: impl FnOnce()) {
-        let _guard = cache_env_lock();
+        let _guard = corvo_cache_dir_test_lock();
         let prev = std::env::var_os(CACHE_DIR_ENV);
         std::env::set_var(CACHE_DIR_ENV, value);
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(body));
@@ -1589,5 +1630,22 @@ mod tests {
         });
 
         let _ = std::fs::remove_dir_all(&unique);
+    }
+
+    #[test]
+    fn test_corvo_lang_local_path_must_be_absolute_for_compile() {
+        let _lock = corvo_cache_dir_test_lock();
+        let out = std::env::temp_dir().join(format!("corvo_compile_out_{}", std::process::id()));
+        let _ = std::fs::remove_file(&out);
+        let prev = std::env::var_os("CORVO_LANG_LOCAL_PATH");
+        std::env::set_var("CORVO_LANG_LOCAL_PATH", "relative/corvo");
+        let compiler = Compiler::new("sys.echo(\"hi\")".to_string(), PathBuf::from("t.corvo"));
+        let err = compiler.compile(&out).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("absolute path"), "unexpected error: {}", msg);
+        match prev {
+            Some(v) => std::env::set_var("CORVO_LANG_LOCAL_PATH", v),
+            None => std::env::remove_var("CORVO_LANG_LOCAL_PATH"),
+        }
     }
 }

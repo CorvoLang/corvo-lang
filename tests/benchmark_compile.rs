@@ -12,7 +12,9 @@
 //! - `CORVO_BENCHMARK_SKIP_PER_FILE_COLD` — if `1`, skip the per-example cold-cache phase
 //!   (each example uses a fresh `CORVO_CACHE_DIR`; very expensive for large sets).
 
-use corvo_lang::compiler::Compiler;
+use corvo_lang::compiler::{
+    append_corvo_lang_patch_to_cargo_toml, corvo_cache_dir_test_lock, Compiler,
+};
 use std::ffi::OsString;
 use std::fs;
 use std::io::Write;
@@ -106,18 +108,11 @@ fn compile_corvo_to(
 }
 
 fn append_patch_crates_io(project_dir: &Path, crate_root: &Path) -> Result<(), String> {
-    let cargo_toml = project_dir.join("Cargo.toml");
-    let mut s = fs::read_to_string(&cargo_toml).map_err(|e| e.to_string())?;
-    if s.contains("[patch.crates-io]") {
-        return Ok(());
-    }
-    let root = crate_root.to_string_lossy().replace('\\', "/");
-    s.push_str(&format!(
-        "\n[patch.crates-io]\ncorvo-lang = {{ path = \"{}\" }}\n",
-        root
-    ));
-    fs::write(&cargo_toml, s).map_err(|e| e.to_string())?;
-    Ok(())
+    let manifest = project_dir.join("Cargo.toml");
+    let canon = crate_root
+        .canonicalize()
+        .map_err(|e| format!("canonicalize {}: {}", crate_root.display(), e))?;
+    append_corvo_lang_patch_to_cargo_toml(&manifest, &canon).map_err(|e| e.to_string())
 }
 
 fn cargo_build_release(project_dir: &Path) -> Result<Duration, String> {
@@ -147,6 +142,39 @@ fn transpile_example(script: &Path, project_dir: &Path) -> Result<Duration, Stri
     Ok(t0.elapsed())
 }
 
+fn benchmark_hostname() -> String {
+    if let Ok(h) = std::env::var("HOSTNAME") {
+        let t = h.trim();
+        if !t.is_empty() {
+            return t.to_string();
+        }
+    }
+    if let Ok(h) = std::env::var("COMPUTERNAME") {
+        let t = h.trim();
+        if !t.is_empty() {
+            return t.to_string();
+        }
+    }
+    if let Ok(out) = Command::new("hostname").output() {
+        if out.status.success() {
+            if let Ok(s) = String::from_utf8(out.stdout) {
+                let t = s.trim();
+                if !t.is_empty() {
+                    return t.to_string();
+                }
+            }
+        }
+    }
+    #[cfg(unix)]
+    if let Ok(s) = std::fs::read_to_string("/proc/sys/kernel/hostname") {
+        let t = s.trim();
+        if !t.is_empty() {
+            return t.to_string();
+        }
+    }
+    "unknown".to_string()
+}
+
 fn rust_version_line() -> String {
     Command::new("rustc")
         .arg("-V")
@@ -169,6 +197,8 @@ fn benchmark_examples_dir_exists() {
 #[ignore]
 #[test]
 fn generate_benchmark_report() {
+    let _global_cache_lock = corvo_cache_dir_test_lock();
+
     let examples = list_example_files();
     assert!(
         !examples.is_empty(),
@@ -193,9 +223,7 @@ fn generate_benchmark_report() {
         "  cargo test --test benchmark_compile generate_benchmark_report -- --ignored --nocapture\n```\n\n",
     );
 
-    let hostname = std::env::var("HOSTNAME")
-        .or_else(|_| std::env::var("COMPUTERNAME"))
-        .unwrap_or_else(|_| "unknown".to_string());
+    let hostname = benchmark_hostname();
     md.push_str("## Environment\n\n");
     md.push_str(&format!(
         "- **Timestamp** : {:?}\n",
@@ -215,8 +243,6 @@ fn generate_benchmark_report() {
 
     let first = examples.first().unwrap();
     let cold_bin = binary_output_path(&compile_out, first.file_stem().unwrap().to_str().unwrap());
-    let t_cold = compile_corvo_to(first, &cold_bin).expect("cold compile");
-    let cold_bytes = file_len(&cold_bin).unwrap_or(0);
     md.push_str("## `corvo --compile` (`Compiler::compile`, release)\n\n");
     md.push_str("### Cold cache (fresh `CORVO_CACHE_DIR`, first example)\n\n");
     md.push_str("| Metric | Value |\n|--------|-------|\n");
@@ -224,32 +250,49 @@ fn generate_benchmark_report() {
         "| Example | `{}` |\n",
         first.strip_prefix(&root).unwrap_or(first).display()
     ));
-    md.push_str(&format!(
-        "| Wall time (`compile` only; includes `cargo build`) | {:.2} ms |\n",
-        dur_ms(t_cold)
-    ));
-    md.push_str(&format!(
-        "| Output binary size | {} bytes |\n\n",
-        cold_bytes
-    ));
+    match compile_corvo_to(first, &cold_bin) {
+        Ok(t_cold) => {
+            md.push_str(&format!(
+                "| Wall time (`compile` only; includes `cargo build`) | {:.2} ms |\n",
+                dur_ms(t_cold)
+            ));
+            md.push_str(&format!(
+                "| Output binary size | {} bytes |\n\n",
+                file_len(&cold_bin).unwrap_or(0)
+            ));
+        }
+        Err(e) => {
+            md.push_str(&format!(
+                "| Wall time (`compile` only; includes `cargo build`) | ERROR: {} |\n",
+                e
+            ));
+            md.push_str("| Output binary size | — |\n\n");
+        }
+    }
 
     if examples.len() >= 2 {
         let second = &examples[1];
         let warm_bin =
             binary_output_path(&compile_out, second.file_stem().unwrap().to_str().unwrap());
-        let t_warm = compile_corvo_to(second, &warm_bin).expect("warm compile");
-        let warm_bytes = file_len(&warm_bin).unwrap_or(0);
         md.push_str("### Warm cache (same `CORVO_CACHE_DIR`, second example)\n\n");
         md.push_str("| Metric | Value |\n|--------|-------|\n");
         md.push_str(&format!(
             "| Example | `{}` |\n",
             second.strip_prefix(&root).unwrap_or(second).display()
         ));
-        md.push_str(&format!("| Wall time | {:.2} ms |\n", dur_ms(t_warm)));
-        md.push_str(&format!(
-            "| Output binary size | {} bytes |\n\n",
-            warm_bytes
-        ));
+        match compile_corvo_to(second, &warm_bin) {
+            Ok(t_warm) => {
+                md.push_str(&format!("| Wall time | {:.2} ms |\n", dur_ms(t_warm)));
+                md.push_str(&format!(
+                    "| Output binary size | {} bytes |\n\n",
+                    file_len(&warm_bin).unwrap_or(0)
+                ));
+            }
+            Err(e) => {
+                md.push_str(&format!("| Wall time | ERROR: {} |\n", e));
+                md.push_str("| Output binary size | — |\n\n");
+            }
+        }
     }
 
     md.push_str("### Shared cache — all listed examples (sequential)\n\n");
