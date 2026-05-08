@@ -390,7 +390,13 @@ fn lint_file(file: &std::path::Path) {
 }
 
 fn clean_cache() {
-    let path = corvo_lang::compiler::cache_dir();
+    let path = match corvo_lang::compiler::cache_dir() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("error: Invalid compile cache configuration: {}", e);
+            std::process::exit(1);
+        }
+    };
     match corvo_lang::compiler::clean_cache() {
         Ok(true) => eprintln!("Removed compile cache: {}", path.display()),
         Ok(false) => eprintln!("Compile cache is already empty: {}", path.display()),

@@ -38,6 +38,21 @@ pub fn corvo_cache_dir_test_lock() -> std::sync::MutexGuard<'static, ()> {
         .unwrap_or_else(|p| p.into_inner())
 }
 
+/// True if `Cargo.toml` already defines a `[[bin]]` stanza with `name = "{name}"`.
+///
+/// We only scan text inside `[[bin]]` sections so we do not mistake `[package] name = "..."`
+/// for a binary entry when the package name equals the transpile binary stem.
+fn cargo_toml_has_bin_target_named(content: &str, name: &str) -> bool {
+    let needle = format!("name = \"{name}\"");
+    for section in content.split("[[bin]]").skip(1) {
+        let head = section.split("[[").next().unwrap_or(section);
+        if head.contains(&needle) {
+            return true;
+        }
+    }
+    false
+}
+
 pub struct Compiler {
     source: String,
     /// Source with the prep block stripped out. Used when embedding source into
@@ -246,8 +261,9 @@ impl Compiler {
             bin_name, bin_path
         );
 
-        // Check if this binary already exists
-        if !content.contains(&format!("name = \"{}\"", bin_name)) {
+        // Check if this binary target already exists (transpile mode only merges;
+        // do not match `[package] name = "same_as_stem"`.)
+        if !cargo_toml_has_bin_target_named(&content, bin_name) {
             content.push_str(&bin_entry);
         }
 
@@ -394,7 +410,9 @@ impl Compiler {
 /// Return the persistent compile cache directory.
 ///
 /// Resolution order:
-/// 1. `$CORVO_CACHE_DIR` if set — used in CI and sandboxes.
+/// 1. `$CORVO_CACHE_DIR` if set to a **non-empty** value — must be an absolute path
+///    and must not name only a drive/filesystem root (see safety checks in the
+///    implementation). A blank or whitespace-only value is treated as unset.
 /// 2. The user cache directory (e.g. `~/.cache/corvo/build` on Linux,
 ///    `~/Library/Caches/com.Corvo.corvo/build` on macOS) via the
 ///    `directories` crate.
@@ -404,14 +422,54 @@ impl Compiler {
 /// This directory is reused across compilations so that `cargo`'s incremental
 /// build cache survives between `corvo --compile` invocations. Use
 /// [`clean_cache`] (or `corvo --clean`) to wipe it.
-pub fn cache_dir() -> PathBuf {
-    if let Some(custom) = std::env::var_os(CACHE_DIR_ENV) {
-        return PathBuf::from(custom);
+pub fn cache_dir() -> Result<PathBuf, CorvoError> {
+    if let Some(custom) = cache_dir_env_override()? {
+        return Ok(custom);
     }
     if let Some(proj) = ProjectDirs::from("com", "Corvo", "corvo") {
-        return proj.cache_dir().join("build");
+        return Ok(proj.cache_dir().join("build"));
     }
-    std::env::temp_dir().join("corvo_build")
+    Ok(std::env::temp_dir().join("corvo_build"))
+}
+
+fn cache_dir_env_override() -> Result<Option<PathBuf>, CorvoError> {
+    let Some(raw_os) = std::env::var_os(CACHE_DIR_ENV) else {
+        return Ok(None);
+    };
+    let raw = raw_os.to_string_lossy();
+    if raw.trim().is_empty() {
+        return Ok(None);
+    }
+    let path = PathBuf::from(raw.as_ref());
+    if !path.is_absolute() {
+        return Err(CorvoError::io(format!(
+            "Environment variable {CACHE_DIR_ENV} must be an absolute path, got: {raw}",
+        )));
+    }
+    if is_disallowed_cache_deletion_root(&path) {
+        return Err(CorvoError::io(format!(
+            "Environment variable {CACHE_DIR_ENV} must not point at a filesystem root ({})",
+            path.display(),
+        )));
+    }
+    Ok(Some(path))
+}
+
+/// Reject cache roots that would make `corvo --clean` or `remove_dir_all` catastrophic.
+fn is_disallowed_cache_deletion_root(path: &Path) -> bool {
+    use std::path::Component;
+    let mut components = path.components();
+    match components.next() {
+        Some(Component::Prefix(_)) => {
+            matches!(
+                (components.next(), components.next()),
+                (Some(Component::RootDir), None)
+            )
+        }
+        Some(Component::RootDir) => components.next().is_none(),
+        Some(Component::CurDir) | Some(Component::ParentDir) | Some(Component::Normal(_)) => false,
+        None => true,
+    }
 }
 
 /// Remove the persistent compile cache directory (returned by [`cache_dir`]).
@@ -419,7 +477,7 @@ pub fn cache_dir() -> PathBuf {
 /// Returns `Ok(true)` if the directory existed and was removed, `Ok(false)` if
 /// nothing needed to be cleaned, and `Err(_)` if removal failed.
 pub fn clean_cache() -> Result<bool, CorvoError> {
-    let dir = cache_dir();
+    let dir = cache_dir()?;
     if !dir.exists() {
         return Ok(false);
     }
@@ -490,7 +548,7 @@ pub fn append_corvo_lang_patch_to_cargo_toml(
 /// surviving between compilations to avoid recompiling the runtime crate and
 /// its transitive dependencies on every invocation.
 fn create_build_dir() -> Result<PathBuf, CorvoError> {
-    let base = cache_dir();
+    let base = cache_dir()?;
     std::fs::create_dir_all(&base)
         .map_err(|e| CorvoError::io(format!("Failed to create build dir: {}", e)))?;
     Ok(base)
@@ -1565,8 +1623,80 @@ mod tests {
             std::env::temp_dir().join(format!("corvo_test_cache_override_{}", std::process::id()));
 
         with_cache_env(&unique, || {
-            assert_eq!(cache_dir(), unique);
+            assert_eq!(cache_dir().unwrap(), unique);
         });
+    }
+
+    #[test]
+    fn test_cache_dir_rejects_relative_env_override() {
+        let _guard = corvo_cache_dir_test_lock();
+        let prev = std::env::var_os(CACHE_DIR_ENV);
+        std::env::set_var(CACHE_DIR_ENV, "relative/cache/path");
+        let err = cache_dir().unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains(CACHE_DIR_ENV) && msg.contains("absolute"),
+            "unexpected error: {msg}"
+        );
+        match prev {
+            Some(v) => std::env::set_var(CACHE_DIR_ENV, v),
+            None => std::env::remove_var(CACHE_DIR_ENV),
+        }
+    }
+
+    #[test]
+    fn test_cache_dir_whitespace_only_override_is_ignored() {
+        let _guard = corvo_cache_dir_test_lock();
+        let prev = std::env::var_os(CACHE_DIR_ENV);
+        std::env::set_var(CACHE_DIR_ENV, "   ");
+        let with_blank = cache_dir().unwrap();
+        std::env::remove_var(CACHE_DIR_ENV);
+        let unset = cache_dir().unwrap();
+        assert!(
+            with_blank == unset,
+            "whitespace-only {} should behave like unset",
+            CACHE_DIR_ENV
+        );
+        match prev {
+            Some(v) => std::env::set_var(CACHE_DIR_ENV, v),
+            None => std::env::remove_var(CACHE_DIR_ENV),
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_cache_dir_rejects_unix_filesystem_root() {
+        let _guard = corvo_cache_dir_test_lock();
+        let prev = std::env::var_os(CACHE_DIR_ENV);
+        std::env::set_var(CACHE_DIR_ENV, "/");
+        let err = cache_dir().unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("root") || msg.contains("filesystem"),
+            "unexpected error: {msg}"
+        );
+        match prev {
+            Some(v) => std::env::set_var(CACHE_DIR_ENV, v),
+            None => std::env::remove_var(CACHE_DIR_ENV),
+        }
+    }
+
+    #[test]
+    fn test_transpile_cargo_toml_adds_bin_when_package_name_matches_stem() {
+        let tmp =
+            std::env::temp_dir().join(format!("corvo_test_pkg_stem_match_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let script_path = tmp.join("hello.corvo");
+        std::fs::write(&script_path, "sys.echo(\"x\")").unwrap();
+        let compiler = Compiler::new("sys.echo(\"x\")".to_string(), script_path);
+        compiler.generate_cargo_toml(&tmp, "hello").unwrap();
+        let cargo_toml = std::fs::read_to_string(tmp.join("Cargo.toml")).unwrap();
+        assert!(
+            cargo_toml.contains("[[bin]]") && cargo_toml.contains("path = \"src/hello.rs\""),
+            "expected [[bin]] for hello when package name matches script stem; got:\n{cargo_toml}"
+        );
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]

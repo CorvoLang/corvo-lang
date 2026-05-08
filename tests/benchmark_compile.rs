@@ -12,9 +12,8 @@
 //! - `CORVO_BENCHMARK_SKIP_PER_FILE_COLD` — if `1`, skip the per-example cold-cache phase
 //!   (each example uses a fresh `CORVO_CACHE_DIR`; very expensive for large sets).
 
-use corvo_lang::compiler::{
-    append_corvo_lang_patch_to_cargo_toml, corvo_cache_dir_test_lock, Compiler,
-};
+use corvo_lang::compiler::builder::corvo_cache_dir_test_lock;
+use corvo_lang::compiler::{append_corvo_lang_patch_to_cargo_toml, Compiler};
 use std::ffi::OsString;
 use std::fs;
 use std::io::Write;
@@ -101,7 +100,9 @@ fn compile_corvo_to(
 ) -> Result<Duration, Box<dyn std::error::Error + Send + Sync>> {
     let source = fs::read_to_string(script)?;
     let mut compiler = Compiler::new(source, script.to_path_buf());
-    let _ = compiler.pre_execute();
+    compiler
+        .pre_execute()
+        .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
     let t0 = Instant::now();
     let _final = compiler.compile(out_bin)?;
     Ok(t0.elapsed())
@@ -136,7 +137,7 @@ fn cargo_build_release(project_dir: &Path) -> Result<Duration, String> {
 fn transpile_example(script: &Path, project_dir: &Path) -> Result<Duration, String> {
     let source = fs::read_to_string(script).map_err(|e| e.to_string())?;
     let mut compiler = Compiler::new(source, script.to_path_buf());
-    let _ = compiler.pre_execute();
+    compiler.pre_execute().map_err(|e| e.to_string())?;
     let t0 = Instant::now();
     compiler.transpile(project_dir).map_err(|e| e.to_string())?;
     Ok(t0.elapsed())
