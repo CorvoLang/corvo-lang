@@ -1,11 +1,24 @@
 version = 1
 
+# Integration tests use env vars, `expect`, and map/or patterns liberally; mark
+# them as tests so DeepSource applies relaxed defaults.
+test_patterns = ["tests/**"]
+
 [[analyzers]]
 name = "rust"
 enabled = true
 
   [analyzers.meta]
+  msrv = "stable"
+  # Default "high" still flags large matchers and stdlib dispatch; this repo
+  # intentionally keeps complex control flow in the parser/evaluator.
+  cyclomatic_complexity_threshold = "critical"
+
+  # Rules that read as "correctness" but are mostly style / Clippy-adjacent
+  # noise for this codebase (and duplicate local `skipcq` usage in hot paths).
   skip_rules = [
-    "RS-R1000", # Cyclomatic complexity is high (expected in parsers and AST visitors)
-    "RS-W1079"  # Empty call to new() (String::new() and other idiomatic new() calls)
+    "RS-R1000", # Cyclomatic complexity — expected in parsers and AST visitors
+    "RS-W1015", # Literal names in std::env::* — consts where needed; rest is churn
+    "RS-W1072", # .map(..).unwrap_or(_|_else) vs .map_or — stylistic
+    "RS-W1079", # "empty" new() vs Default — idiomatic String::new(), etc.
   ]

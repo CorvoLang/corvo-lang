@@ -10,7 +10,7 @@ use structopt::StructOpt;
         structopt::clap::AppSettings::AllowLeadingHyphen,
         structopt::clap::AppSettings::DisableHelpFlags,
     ],
-    after_help = "Corvo CLI help (no script):\n  corvo -h | corvo --help\n\nExamples:\n  corvo script.corvo              Run a file\n  corvo script.corvo -lh /        Run a script with args (same flag ordering as GNU ls)\n  corvo --repl                    Start interactive REPL\n  corvo --eval 'sys.echo(\"hi\")'  Evaluate an expression\n  corvo --compile script.corvo    Compile to standalone executable\n  corvo --check script.corvo      Check syntax\n  corvo --lint script.corvo       Analyse code for errors and unknown functions"
+    after_help = "Corvo CLI help (no script):\n  corvo -h | corvo --help\n\nExamples:\n  corvo script.corvo              Run a file\n  corvo script.corvo -lh /        Run a script with args (same flag ordering as GNU ls)\n  corvo --repl                    Start interactive REPL\n  corvo --eval 'sys.echo(\"hi\")'  Evaluate an expression\n  corvo --compile script.corvo    Compile to standalone executable\n  corvo --check script.corvo      Check syntax\n  corvo --lint script.corvo       Analyse code for errors and unknown functions\n  corvo --clean                   Remove the persistent compile cache directory"
 )]
 struct Args {
     #[structopt(help = "Corvo file to execute or compile")]
@@ -57,6 +57,12 @@ struct Args {
     )]
     no_debug: bool,
 
+    #[structopt(
+        long,
+        help = "Remove the persistent compile cache directory used by --compile"
+    )]
+    clean: bool,
+
     /// Arguments forwarded to the script (`os.argv()`); may start with `-` (GNU ls-style flags after FILE)
     #[structopt(name = "SCRIPT_ARGS", allow_hyphen_values = true)]
     script_args: Vec<String>,
@@ -84,6 +90,11 @@ fn main() {
 
     if args.version {
         println!("Corvo Language v{}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
+    if args.clean {
+        clean_cache();
         return;
     }
 
@@ -378,6 +389,24 @@ fn lint_file(file: &std::path::Path) {
     }
 }
 
+fn clean_cache() {
+    let path = match corvo_lang::compiler::cache_dir() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("error: Invalid compile cache configuration: {}", e);
+            std::process::exit(1);
+        }
+    };
+    match corvo_lang::compiler::clean_cache() {
+        Ok(true) => eprintln!("Removed compile cache: {}", path.display()),
+        Ok(false) => eprintln!("Compile cache is already empty: {}", path.display()),
+        Err(e) => {
+            eprintln!("error: Failed to clean compile cache: {}", e);
+            std::process::exit(1);
+        }
+    }
+}
+
 fn print_usage() {
     eprintln!("Usage: corvo [OPTIONS] [FILE] [SCRIPT_ARGS]...");
     eprintln!();
@@ -392,6 +421,7 @@ fn print_usage() {
     eprintln!("      --lint           Analyse code for errors (like cargo clippy)");
     eprintln!("      --debug          Use debug build mode (faster compile)");
     eprintln!("      --no-debug       Generate a binary that aborts under debuggers/tracers");
+    eprintln!("      --clean          Remove the persistent compile cache directory");
     eprintln!();
     eprintln!("Examples:");
     eprintln!("  corvo script.corvo               Run a file");
@@ -403,6 +433,7 @@ fn print_usage() {
     eprintln!("  corvo --compile script.corvo     Compile to executable");
     eprintln!("  corvo --compile script.corvo -o myapp");
     eprintln!("  corvo --compile --no-debug script.corvo  Compile with anti-debug protection");
+    eprintln!("  corvo --clean                    Wipe the persistent compile cache");
     eprintln!("  corvo --eval 'sys.echo(\"hi\")'   Evaluate an expression");
     eprintln!("  corvo --lint script.corvo        Analyse code for issues");
 }

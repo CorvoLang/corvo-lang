@@ -1,0 +1,67 @@
+name: Benchmark (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_per_file_cold:
+        description: Skip the “fresh cache per example” phase (saves a lot of time; still benchmarks shared-cache compile paths)
+        type: boolean
+        default: true
+      benchmark_limit:
+        description: Max number of example files (after ordering); leave empty for all examples
+        type: string
+        default: ""
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  benchmark:
+    name: Compile benchmarks & report
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install dependencies (Linux)
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+
+      - name: Run benchmark integration test
+        env:
+          CORVO_LANG_LOCAL_PATH: ${{ github.workspace }}
+          CORVO_BENCHMARK_SKIP_PER_FILE_COLD: ${{ inputs.skip_per_file_cold && '1' || '0' }}
+          CORVO_BENCHMARK_LIMIT: ${{ inputs.benchmark_limit }}
+        run: |
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE}"
+
+          # Smoke test (fast)
+          cargo test --test benchmark_compile benchmark_examples_dir_exists
+
+          # Stripping empty optional limit avoids passing a bogus env var
+          if [ -z "${CORVO_BENCHMARK_LIMIT}" ]; then
+            unset CORVO_BENCHMARK_LIMIT
+          fi
+
+          # Ignored test: regenerates BENCHMARK.md from examples/*.corvo
+          cargo test --test benchmark_compile generate_benchmark_report \
+            -- --ignored --nocapture \
+            2>&1 | tee benchmark_run.log
+
+      - name: Upload benchmark artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results-${{ github.run_id }}
+          path: |
+            BENCHMARK.md
+            benchmark_run.log
+          if-no-files-found: warn
