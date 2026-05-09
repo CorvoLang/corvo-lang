@@ -54,8 +54,8 @@ try {
     sys.echo("Protocol    : PostgreSQL")
 } fallback {
     try {
-        assert_eq(string.starts_with(@db_url, "mysql://"), true)
-        sys.echo("Protocol    : MySQL")
+        assert_eq(string.starts_with(@db_url, "sqlite://"), true)
+        sys.echo("Protocol    : SQLite")
     } fallback {
         sys.echo("Protocol    : unknown")
     }

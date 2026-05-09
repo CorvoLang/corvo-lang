@@ -61,9 +61,25 @@ impl<'de> Deserialize<'de> for SharedValue {
     }
 }
 
-/// A wrapper for an active database pool and its associated Tokio runtime.
+/// Supported SQL drivers compiled into Corvo (`db.connect`).
 #[derive(Debug, Clone)]
-pub struct DatabasePoolValue(pub Arc<tokio::runtime::Runtime>, pub Arc<sqlx::AnyPool>);
+pub enum SupportedSqlPool {
+    Sqlite(sqlx::Pool<sqlx::Sqlite>),
+    Postgres(sqlx::Pool<sqlx::Postgres>),
+}
+
+/// A wrapper for an active database pool and its associated Tokio runtime.
+#[derive(Clone)]
+pub struct DatabasePoolValue(pub Arc<tokio::runtime::Runtime>, pub Arc<SupportedSqlPool>);
+
+impl fmt::Debug for DatabasePoolValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("DatabasePoolValue")
+            .field(&self.0)
+            .field(&"<pool>")
+            .finish()
+    }
+}
 
 impl PartialEq for DatabasePoolValue {
     fn eq(&self, other: &Self) -> bool {

@@ -3,4 +3,6 @@ pub mod types;
 pub mod value;
 
 pub use types::Type;
-pub use value::{AmqpConnectionValue, DatabasePoolValue, NativeCallback, ProcedureValue, Value};
+pub use value::{
+    AmqpConnectionValue, DatabasePoolValue, NativeCallback, ProcedureValue, SupportedSqlPool, Value,
+};

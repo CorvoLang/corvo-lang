@@ -113,7 +113,7 @@
 | `hcl.parse` | `str` | `Value` | Parses HCL string | `examples/hcl_example.corvo` |
 | `hcl.stringify` | `val` | `String` | Serializes to HCL | `examples/hcl_example.corvo` |
 | `csv.parse` | `str` | `List` | Parses CSV string | `examples/csv_example.corvo` |
-| `db.connect` | `url, [max_conn]` | `DatabasePool` | Connects to a SQL database | `examples/db_example.corvo` |
+| `db.connect` | `url, [max_conn]` | `DatabasePool` | Connects to SQLite (`sqlite:`) or Postgres (`postgres://`/`postgresql:`) | `examples/db_example.corvo` |
 | `db.query` | `pool, sql, args...`| `List` | Executes a SQL query returning rows | `examples/db_example.corvo` |
 | `db.execute` | `pool, sql, args...`| `Number` | Executes a SQL statement | `examples/db_example.corvo` |
 | `db.close` | `pool` | `Null` | Closes the database pool | `examples/db_example.corvo` |

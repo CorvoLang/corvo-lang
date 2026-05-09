@@ -1,70 +1,72 @@
 use std::path::PathBuf;
-use structopt::StructOpt;
 
-#[derive(StructOpt, Debug)]
-#[structopt(
+use clap::{CommandFactory, Parser};
+
+#[derive(Parser, Debug)]
+#[command(
     name = "corvo",
     about = "Corvo Programming Language",
-    settings = &[
-        structopt::clap::AppSettings::TrailingVarArg,
-        structopt::clap::AppSettings::AllowLeadingHyphen,
-        structopt::clap::AppSettings::DisableHelpFlags,
-    ],
+    disable_help_flag = true,
+    disable_version_flag = true,
     after_help = "Corvo CLI help (no script):\n  corvo -h | corvo --help\n\nExamples:\n  corvo script.corvo              Run a file\n  corvo script.corvo -lh /        Run a script with args (same flag ordering as GNU ls)\n  corvo --repl                    Start interactive REPL\n  corvo --eval 'sys.echo(\"hi\")'  Evaluate an expression\n  corvo --compile script.corvo    Compile to standalone executable\n  corvo --check script.corvo      Check syntax\n  corvo --lint script.corvo       Analyse code for errors and unknown functions\n  corvo --clean                   Remove the persistent compile cache directory"
 )]
 struct Args {
-    #[structopt(help = "Corvo file to execute or compile")]
+    /// Corvo file to execute or compile
+    #[arg(value_name = "FILE")]
     file: Option<PathBuf>,
 
-    #[structopt(short, long, help = "Start the REPL")]
+    /// Start the REPL
+    #[arg(short = 'r', long)]
     repl: bool,
 
-    #[structopt(short, long, help = "Print version")]
+    /// Print version
+    #[arg(short = 'v', long)]
     version: bool,
 
-    #[structopt(short, long, help = "Evaluate a string")]
+    /// Evaluate a string
+    #[arg(short = 'e', long)]
     eval: Option<String>,
 
-    #[structopt(long, help = "Check syntax without executing")]
+    /// Check syntax without executing
+    #[arg(long)]
     check: bool,
 
-    #[structopt(
+    #[arg(
         long,
         help = "Analyse code for errors and unknown functions (like cargo clippy)"
     )]
     lint: bool,
 
-    #[structopt(long, help = "Compile to standalone executable")]
+    /// Compile to standalone executable
+    #[arg(long)]
     compile: bool,
 
-    #[structopt(long, help = "Transpile to a Rust project directory")]
+    /// Transpile to a Rust project directory
+    #[arg(long)]
     transpile: bool,
 
-    #[structopt(
-        short,
-        long,
-        help = "Output path for compiled executable",
-        parse(from_os_str)
-    )]
+    /// Output path for compiled executable
+    #[arg(short = 'o', long, value_name = "PATH")]
     output: Option<PathBuf>,
 
-    #[structopt(long, help = "Use debug build mode (faster compile)")]
+    /// Use debug build mode (faster compile)
+    #[arg(long)]
     debug: bool,
 
-    #[structopt(
-        long,
-        help = "Generate a binary that aborts when run under a debugger, tracer, or dynamic analysis tool (gdb, LLDB, strace, rr, WinDbg, Valgrind)"
-    )]
+    /// Generate a binary that aborts when run under a debugger, tracer, or dynamic analysis tool (gdb, LLDB, strace, rr, WinDbg, Valgrind)
+    #[arg(long)]
     no_debug: bool,
 
-    #[structopt(
-        long,
-        help = "Remove the persistent compile cache directory used by --compile"
-    )]
+    /// Remove the persistent compile cache directory used by --compile
+    #[arg(long)]
     clean: bool,
 
     /// Arguments forwarded to the script (`os.argv()`); may start with `-` (GNU ls-style flags after FILE)
-    #[structopt(name = "SCRIPT_ARGS", allow_hyphen_values = true)]
+    #[arg(
+        value_name = "SCRIPT_ARGS",
+        trailing_var_arg = true,
+        allow_hyphen_values = true
+    )]
     script_args: Vec<String>,
 }
 
@@ -74,7 +76,7 @@ struct Args {
 fn maybe_print_corvo_help_only() -> bool {
     let argv: Vec<String> = std::env::args().collect();
     if argv.len() == 2 && (argv[1] == "-h" || argv[1] == "--help") {
-        Args::clap().print_help().unwrap();
+        Args::command().print_help().unwrap();
         println!();
         return true;
     }
@@ -86,7 +88,7 @@ fn main() {
         return;
     }
 
-    let args = Args::from_args();
+    let args = Args::parse();
 
     if args.version {
         println!("Corvo Language v{}", env!("CARGO_PKG_VERSION"));
@@ -413,7 +415,7 @@ fn print_usage() {
     eprintln!("Options:");
     eprintln!("  -r, --repl           Start the REPL");
     eprintln!("  -e, --eval <EXPR>    Evaluate an expression");
-    eprintln!("  -c, --compile        Compile to standalone executable");
+    eprintln!("      --compile        Compile to standalone executable");
     eprintln!("      --transpile      Transpile to a Rust project directory");
     eprintln!("  -o, --output <PATH>  Output path (for --compile or --transpile)");
     eprintln!("  -v, --version        Print version");
