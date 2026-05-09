@@ -25,22 +25,152 @@ enum DbScheme {
     Postgres,
 }
 
-/// PostgreSQL dialect uses numbered placeholders (`$1`, `$2`). Corvo uses `?`
-/// placeholders (matching SQLite style). Rewrite positional `?` in order before
-/// calling `sqlx` on PostgreSQL pools.
+/// PostgreSQL uses numbered placeholders (`$1`, `$2`). Corvo passes SQLite-style `?`
+/// bind markers. Rewrite only `?` that appear in SQL code (not inside string literals,
+/// quoted identifiers, comments, dollar-quoted bodies, or `$n` parameter tokens).
 fn postgres_rewrite_placeholders(sql: &str) -> String {
+    let bytes = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len());
+    let mut i = 0usize;
     let mut n = 0usize;
-    let mut out = String::with_capacity(sql.len() + sql.matches('?').count() + 8);
-    for ch in sql.chars() {
-        if ch == '?' {
+
+    while i < bytes.len() {
+        // `--` line comment
+        if i + 1 < bytes.len() && bytes[i] == b'-' && bytes[i + 1] == b'-' {
+            out.push_str("--");
+            i += 2;
+            while i < bytes.len() && bytes[i] != b'\n' {
+                out.push(char::from(bytes[i]));
+                i += 1;
+            }
+            continue;
+        }
+        // `/* */` block comment (first `*/` closes)
+        if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'*' {
+            out.push_str("/*");
+            i += 2;
+            let mut closed = false;
+            while i + 1 < bytes.len() {
+                if bytes[i] == b'*' && bytes[i + 1] == b'/' {
+                    out.push_str("*/");
+                    i += 2;
+                    closed = true;
+                    break;
+                }
+                out.push(char::from(bytes[i]));
+                i += 1;
+            }
+            if !closed {
+                while i < bytes.len() {
+                    out.push(char::from(bytes[i]));
+                    i += 1;
+                }
+            }
+            continue;
+        }
+        // Single-quoted string literal (`''` escape)
+        if bytes[i] == b'\'' {
+            out.push('\'');
+            i += 1;
+            while i < bytes.len() {
+                if bytes[i] == b'\'' {
+                    if i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
+                        out.push_str("''");
+                        i += 2;
+                        continue;
+                    }
+                    out.push('\'');
+                    i += 1;
+                    break;
+                }
+                // UTF-8 safe copy
+                let ch = sql[i..].chars().next().unwrap();
+                out.push(ch);
+                i += ch.len_utf8();
+            }
+            continue;
+        }
+        // Double-quoted identifier (`""` escape)
+        if bytes[i] == b'"' {
+            out.push('"');
+            i += 1;
+            while i < bytes.len() {
+                if bytes[i] == b'"' {
+                    if i + 1 < bytes.len() && bytes[i + 1] == b'"' {
+                        out.push_str("\"\"");
+                        i += 2;
+                        continue;
+                    }
+                    out.push('"');
+                    i += 1;
+                    break;
+                }
+                let ch = sql[i..].chars().next().unwrap();
+                out.push(ch);
+                i += ch.len_utf8();
+            }
+            continue;
+        }
+        // Dollar-quoted string (`$$...$$`, `$tag$...$tag$`). Not `$1` parameters.
+        if bytes[i] == b'$' {
+            if let Some(end) = skip_dollar_quoted(bytes, i) {
+                out.push_str(&sql[i..end]);
+                i = end;
+                continue;
+            }
+            // Copy `$123` parameter references or stray `$`
+            out.push('$');
+            i += 1;
+            while i < bytes.len() && bytes[i].is_ascii_digit() {
+                out.push(char::from(bytes[i]));
+                i += 1;
+            }
+            continue;
+        }
+        if bytes[i] == b'?' {
             n += 1;
             out.push('$');
             out.push_str(&n.to_string());
-        } else {
-            out.push(ch);
+            i += 1;
+            continue;
         }
+        let ch = sql[i..].chars().next().unwrap();
+        out.push(ch);
+        i += ch.len_utf8();
     }
     out
+}
+
+/// If `bytes[start]` begins a valid PostgreSQL dollar-quoted literal, returns the
+/// exclusive end index; otherwise `None` (caller should treat `$` as ordinary).
+fn skip_dollar_quoted(bytes: &[u8], start: usize) -> Option<usize> {
+    if bytes.get(start) != Some(&b'$') {
+        return None;
+    }
+    // `$n` references are parameters, not dollar quotes
+    if bytes.get(start + 1).is_some_and(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let mut j = start + 1;
+    while j < bytes.len() && bytes[j] != b'$' {
+        let c = bytes[j];
+        if !(c.is_ascii_alphanumeric() || c == b'_') {
+            return None;
+        }
+        j += 1;
+    }
+    if j >= bytes.len() {
+        return None;
+    }
+    let delim_len = j - start + 1;
+    let mut k = j + 1;
+    while k + delim_len <= bytes.len() {
+        if bytes[k..k + delim_len] == bytes[start..start + delim_len] {
+            return Some(k + delim_len);
+        }
+        k += 1;
+    }
+    None
 }
 
 pub fn connect(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
@@ -396,6 +526,40 @@ mod tests {
     use super::*;
     use crate::type_system::Value;
     use std::collections::HashMap;
+
+    #[test]
+    fn test_postgres_rewrite_skips_literal_and_comment() {
+        let s = "SELECT 'a?b' FROM t WHERE x = ? -- ? \nAND y = ?";
+        assert_eq!(
+            postgres_rewrite_placeholders(s),
+            "SELECT 'a?b' FROM t WHERE x = $1 -- ? \nAND y = $2"
+        );
+    }
+
+    #[test]
+    fn test_postgres_rewrite_block_comment_and_dollar() {
+        let s = "/* ? */ SELECT $$?$$, ?";
+        assert_eq!(postgres_rewrite_placeholders(s), "/* ? */ SELECT $$?$$, $1");
+    }
+
+    #[test]
+    fn test_postgres_rewrite_double_quoted() {
+        let s = r#"SELECT "col?" FROM t WHERE z = ?"#;
+        assert_eq!(
+            postgres_rewrite_placeholders(s),
+            r#"SELECT "col?" FROM t WHERE z = $1"#
+        );
+    }
+
+    #[test]
+    fn test_postgres_rewrite_dollar_param_and_bind() {
+        // Postgres `$n` placeholders are copied as-is; `?` is renumbered independently.
+        let s = r#"SELECT * FROM t WHERE id = ? AND lbl = '$1'"#;
+        assert_eq!(
+            postgres_rewrite_placeholders(s),
+            r#"SELECT * FROM t WHERE id = $1 AND lbl = '$1'"#
+        );
+    }
 
     #[test]
     fn test_db_lifecycle() {

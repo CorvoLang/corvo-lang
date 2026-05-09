@@ -11,8 +11,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 jobs:
   build-binaries:
@@ -21,7 +20,6 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
-      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -229,7 +227,6 @@ jobs:
     needs: [build-binaries]
     permissions:
       contents: write
-      packages: write
     steps:
       - uses: actions/checkout@v6
 
@@ -266,7 +263,6 @@ jobs:
     environment: prod
     permissions:
       contents: write
-      packages: write
     steps:
       - uses: actions/checkout@v4
 
