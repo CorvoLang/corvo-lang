@@ -12,6 +12,8 @@ env:
 
 jobs:
   fmt:
+    permissions:
+      contents: read
     name: Format
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -23,6 +25,8 @@ jobs:
       - run: cargo fmt --check
 
   clippy:
+    permissions:
+      contents: read
     name: Clippy
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -35,6 +39,8 @@ jobs:
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   test:
+    permissions:
+      contents: read
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: [fmt, clippy]

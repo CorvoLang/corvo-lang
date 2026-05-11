@@ -11,14 +11,15 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 jobs:
   build-binaries:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -98,6 +99,9 @@ jobs:
     name: Docker (${{ matrix.platform }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: write
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -171,6 +175,9 @@ jobs:
     name: Docker Manifest
     runs-on: ubuntu-latest
     needs: [docker]
+    permissions:
+      contents: write
+      packages: write
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
@@ -218,6 +225,8 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     needs: [build-binaries]
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v6
 
@@ -252,6 +261,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-binaries]
     environment: prod
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
