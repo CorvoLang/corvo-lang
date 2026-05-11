@@ -25,9 +25,30 @@ enum DbScheme {
     Postgres,
 }
 
+/// Byte before `i` that is not ASCII whitespace, if any.
+fn last_non_ws_byte_before(bytes: &[u8], i: usize) -> Option<u8> {
+    if i == 0 {
+        return None;
+    }
+    let mut p = i - 1;
+    loop {
+        if !bytes[p].is_ascii_whitespace() {
+            return Some(bytes[p]);
+        }
+        if p == 0 {
+            return None;
+        }
+        p -= 1;
+    }
+}
+
 /// PostgreSQL uses numbered placeholders (`$1`, `$2`). Corvo passes SQLite-style `?`
 /// bind markers. Rewrite only `?` that appear in SQL code (not inside string literals,
 /// quoted identifiers, comments, dollar-quoted bodies, or `$n` parameter tokens).
+///
+/// Preserves JSONB operators `?|`, `?&`, and `??`, and treats `expr ? '...'` as the
+/// key-exists operator when the previous non-whitespace byte is not `=` (bind markers
+/// typically follow `=`).
 fn postgres_rewrite_placeholders(sql: &str) -> String {
     let bytes = sql.as_bytes();
     let mut out = String::with_capacity(sql.len());
@@ -35,36 +56,36 @@ fn postgres_rewrite_placeholders(sql: &str) -> String {
     let mut n = 0usize;
 
     while i < bytes.len() {
-        // `--` line comment
+        // `--` line comment (copy substring to preserve UTF-8)
         if i + 1 < bytes.len() && bytes[i] == b'-' && bytes[i + 1] == b'-' {
             out.push_str("--");
             i += 2;
+            let body_start = i;
             while i < bytes.len() && bytes[i] != b'\n' {
-                out.push(char::from(bytes[i]));
                 i += 1;
             }
+            out.push_str(&sql[body_start..i]);
             continue;
         }
         // `/* */` block comment (first `*/` closes)
         if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'*' {
             out.push_str("/*");
             i += 2;
+            let body_start = i;
             let mut closed = false;
             while i + 1 < bytes.len() {
                 if bytes[i] == b'*' && bytes[i + 1] == b'/' {
+                    out.push_str(&sql[body_start..i]);
                     out.push_str("*/");
                     i += 2;
                     closed = true;
                     break;
                 }
-                out.push(char::from(bytes[i]));
                 i += 1;
             }
             if !closed {
-                while i < bytes.len() {
-                    out.push(char::from(bytes[i]));
-                    i += 1;
-                }
+                out.push_str(&sql[body_start..]);
+                i = bytes.len();
             }
             continue;
         }
@@ -128,6 +149,31 @@ fn postgres_rewrite_placeholders(sql: &str) -> String {
             continue;
         }
         if bytes[i] == b'?' {
+            // PostgreSQL JSON/JSONB/key operators (not bind placeholders)
+            if bytes.get(i + 1) == Some(&b'|') || bytes.get(i + 1) == Some(&b'&') {
+                out.push('?');
+                out.push(char::from(bytes[i + 1]));
+                i += 2;
+                continue;
+            }
+            if bytes.get(i + 1) == Some(&b'?') {
+                out.push_str("??");
+                i += 2;
+                continue;
+            }
+            // `expr ? 'key'` JSONB key-exists: `?` is an operator, not `?` bind syntax
+            let mut j = i + 1;
+            while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                j += 1;
+            }
+            if j < bytes.len()
+                && bytes[j] == b'\''
+                && last_non_ws_byte_before(bytes, i) != Some(b'=')
+            {
+                out.push('?');
+                i += 1;
+                continue;
+            }
             n += 1;
             out.push('$');
             out.push_str(&n.to_string());
@@ -526,6 +572,69 @@ mod tests {
     use super::*;
     use crate::type_system::Value;
     use std::collections::HashMap;
+
+    #[test]
+    fn test_classify_db_url_errors() {
+        assert!(classify_db_url("").is_err());
+        assert!(classify_db_url("   ").is_err());
+        assert!(classify_db_url("mysql://localhost/x").is_err());
+        assert!(classify_db_url("jdbc:postgres://x").is_err());
+    }
+
+    #[test]
+    fn test_classify_db_url_ok() {
+        assert!(matches!(
+            classify_db_url("sqlite::memory:").unwrap(),
+            DbScheme::Sqlite
+        ));
+        assert!(matches!(
+            classify_db_url(" postgres://x").unwrap(),
+            DbScheme::Postgres
+        ));
+        assert!(matches!(
+            classify_db_url("postgresql://x").unwrap(),
+            DbScheme::Postgres
+        ));
+    }
+
+    #[test]
+    fn test_postgres_rewrite_utf8_in_comments() {
+        let s = "SELECT ? -- éclair ?\nWHERE x = ?";
+        assert_eq!(
+            postgres_rewrite_placeholders(s),
+            "SELECT $1 -- éclair ?\nWHERE x = $2"
+        );
+    }
+
+    #[test]
+    fn test_postgres_rewrite_jsonb_contains_vs_bind() {
+        assert_eq!(
+            postgres_rewrite_placeholders("SELECT * FROM t WHERE meta ? 'k' AND id = ?"),
+            "SELECT * FROM t WHERE meta ? 'k' AND id = $1"
+        );
+    }
+
+    #[test]
+    fn test_postgres_rewrite_jsonb_key_ops() {
+        let s = "SELECT * FROM t WHERE j ?| '{a,b}' AND z = ?";
+        assert_eq!(
+            postgres_rewrite_placeholders(s),
+            "SELECT * FROM t WHERE j ?| '{a,b}' AND z = $1"
+        );
+        let s2 = "SELECT * FROM t WHERE j ?& '{a,b}' AND z = ?";
+        assert_eq!(
+            postgres_rewrite_placeholders(s2),
+            "SELECT * FROM t WHERE j ?& '{a,b}' AND z = $1"
+        );
+    }
+
+    #[test]
+    fn test_postgres_rewrite_double_question_jsonpath() {
+        assert_eq!(
+            postgres_rewrite_placeholders("SELECT jsonb_path_exists(j, '??') AND v = ?"),
+            "SELECT jsonb_path_exists(j, '??') AND v = $1"
+        );
+    }
 
     #[test]
     fn test_postgres_rewrite_skips_literal_and_comment() {

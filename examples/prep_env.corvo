@@ -47,17 +47,22 @@ sys.echo("Debug mode  : ${static.get("DEBUG")}")
 @section.call("=== Database ===")
 sys.echo("DATABASE_URL: ${static.get("DATABASE_URL")}")
 
-# Use the connection string — parse the protocol as a sanity check
+# Use the connection string — parse the protocol as a sanity check (matches db.connect)
 @db_url = static.get("DATABASE_URL")
 try {
     assert_eq(string.starts_with(@db_url, "postgres://"), true)
     sys.echo("Protocol    : PostgreSQL")
 } fallback {
     try {
-        assert_eq(string.starts_with(@db_url, "sqlite://"), true)
-        sys.echo("Protocol    : SQLite")
+        assert_eq(string.starts_with(@db_url, "postgresql://"), true)
+        sys.echo("Protocol    : PostgreSQL")
     } fallback {
-        sys.echo("Protocol    : unknown")
+        try {
+            assert_eq(string.starts_with(@db_url, "sqlite:"), true)
+            sys.echo("Protocol    : SQLite")
+        } fallback {
+            sys.echo("Protocol    : unknown")
+        }
     }
 }
 
