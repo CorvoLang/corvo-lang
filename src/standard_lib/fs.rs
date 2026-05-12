@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 
 #[cfg(unix)]
 use std::os::unix::fs::{
-    chown as unix_chown, lchown, DirBuilderExt, FileTypeExt, MetadataExt, PermissionsExt,
+    chown as unix_chown, lchown, DirBuilderExt, FileTypeExt, MetadataExt, OpenOptionsExt,
+    PermissionsExt,
 };
 
 #[cfg(target_os = "linux")]
@@ -47,6 +48,32 @@ pub fn write(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
         .get(1)
         .and_then(|v| v.as_string())
         .ok_or_else(|| CorvoError::invalid_argument("fs.write requires content"))?;
+    let follow_symlinks = args.get(2).and_then(|v| v.as_bool()).unwrap_or(true);
+
+    #[cfg(not(unix))]
+    {
+        if !follow_symlinks {
+            return Err(CorvoError::invalid_argument(
+                "fs.write: follow_symlinks=false is only supported on Unix",
+            ));
+        }
+    }
+
+    #[cfg(unix)]
+    {
+        if !follow_symlinks {
+            let mut f = fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .custom_flags(libc::O_NOFOLLOW)
+                .open(path)
+                .map_err(|e| CorvoError::file_system(e.to_string()))?;
+            std::io::Write::write_all(&mut f, content.as_bytes())
+                .map_err(|e| CorvoError::file_system(e.to_string()))?;
+            return Ok(Value::Boolean(true));
+        }
+    }
 
     fs::write(path, content)
         .map(|_| Value::Boolean(true))
@@ -189,6 +216,66 @@ pub fn copy(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult
         .get(1)
         .and_then(|v| v.as_string())
         .ok_or_else(|| CorvoError::invalid_argument("fs.copy requires a destination path"))?;
+    let follow_symlinks = args.get(2).and_then(|v| v.as_bool()).unwrap_or(true);
+
+    #[cfg(not(unix))]
+    {
+        if !follow_symlinks {
+            return Err(CorvoError::invalid_argument(
+                "fs.copy: follow_symlinks=false is only supported on Unix",
+            ));
+        }
+    }
+
+    #[cfg(unix)]
+    {
+        if !follow_symlinks {
+            let src_meta = fs::symlink_metadata(src.as_str())
+                .map_err(|e| CorvoError::file_system(e.to_string()))?;
+            if src_meta.file_type().is_symlink() {
+                let target = fs::read_link(src.as_str())
+                    .map_err(|e| CorvoError::file_system(e.to_string()))?;
+                if let Ok(dest_meta) = fs::symlink_metadata(dest.as_str()) {
+                    if dest_meta.is_dir() {
+                        return Err(CorvoError::runtime(format!(
+                            "fs.copy: destination '{}' is a directory; cannot replace with symlink",
+                            dest
+                        )));
+                    }
+                    fs::remove_file(dest.as_str())
+                        .map_err(|e| CorvoError::file_system(e.to_string()))?;
+                }
+                std::os::unix::fs::symlink(&target, dest.as_str())
+                    .map_err(|e| CorvoError::file_system(e.to_string()))?;
+                return Ok(Value::Boolean(true));
+            }
+        }
+
+        let meta = if follow_symlinks {
+            fs::metadata(src.as_str()).map_err(|e| CorvoError::file_system(e.to_string()))?
+        } else {
+            fs::symlink_metadata(src.as_str())
+                .map_err(|e| CorvoError::file_system(e.to_string()))?
+        };
+        let ft = meta.file_type();
+        if ft.is_char_device() || ft.is_block_device() || ft.is_fifo() || ft.is_socket() {
+            return Err(CorvoError::runtime(format!(
+                "fs.copy cannot copy special file '{}': preserving special node types is not supported",
+                src
+            )));
+        }
+
+        if !follow_symlinks {
+            if let Ok(dm) = fs::symlink_metadata(dest.as_str()) {
+                if dm.file_type().is_symlink() {
+                    return Err(CorvoError::runtime(format!(
+                        "fs.copy: destination '{}' is a symlink; refusing to follow destination with follow_symlinks=false",
+                        dest
+                    )));
+                }
+            }
+        }
+    }
 
     fs::copy(src, dest)
         .map(|_| Value::Boolean(true))
@@ -282,6 +369,79 @@ pub fn truncate(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoRe
     f.set_len(size)
         .map(|_| Value::Boolean(true))
         .map_err(|e| CorvoError::file_system(e.to_string()))
+}
+
+pub fn touch(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
+    let path = args
+        .first()
+        .and_then(|v| v.as_string())
+        .ok_or_else(|| CorvoError::invalid_argument("fs.touch requires a path"))?;
+    let follow_symlinks = args.get(1).and_then(|v| v.as_bool()).unwrap_or(true);
+
+    #[cfg(not(unix))]
+    {
+        if !follow_symlinks {
+            return Err(CorvoError::invalid_argument(
+                "fs.touch: follow_symlinks=false is only supported on Unix",
+            ));
+        }
+        return fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(false)
+            .open(path.as_str())
+            .map(|_| Value::Boolean(true))
+            .map_err(|e| CorvoError::file_system(e.to_string()));
+    }
+
+    #[cfg(unix)]
+    {
+        use std::io::ErrorKind;
+        use std::os::unix::io::AsRawFd;
+
+        // Prefer read-only open for existing files so `touch` still works on e.g. read-only
+        // regular files (0444) where POSIX allows timestamp updates for the owner.
+        // Create only on `NotFound`, with a separate `create_new` path that can use O_NOFOLLOW.
+        let f = {
+            let mut open_existing = fs::OpenOptions::new();
+            open_existing.read(true);
+            if !follow_symlinks {
+                open_existing.custom_flags(libc::O_NOFOLLOW);
+            }
+            match open_existing.open(path.as_str()) {
+                Ok(f) => f,
+                Err(e) if e.kind() == ErrorKind::NotFound => {
+                    let mut create_new = fs::OpenOptions::new();
+                    create_new.create_new(true).write(true);
+                    if !follow_symlinks {
+                        create_new.custom_flags(libc::O_NOFOLLOW);
+                    }
+                    create_new
+                        .open(path.as_str())
+                        .map_err(|e| CorvoError::file_system(e.to_string()))?
+                }
+                Err(e) => return Err(CorvoError::file_system(e.to_string())),
+            }
+        };
+        // Update both atime and mtime to "now" via futimens(2), mirroring POSIX `touch`.
+        let times = [
+            libc::timespec {
+                tv_sec: 0,
+                tv_nsec: libc::UTIME_NOW,
+            },
+            libc::timespec {
+                tv_sec: 0,
+                tv_nsec: libc::UTIME_NOW,
+            },
+        ];
+        let rc = unsafe { libc::futimens(f.as_raw_fd(), times.as_ptr()) };
+        if rc != 0 {
+            return Err(CorvoError::file_system(
+                std::io::Error::last_os_error().to_string(),
+            ));
+        }
+        Ok(Value::Boolean(true))
+    }
 }
 
 pub fn stat(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
@@ -588,7 +748,21 @@ pub fn mktemp(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResu
     if is_dir {
         fs::create_dir_all(&final_path).map_err(|e| CorvoError::file_system(e.to_string()))?;
     } else {
-        fs::File::create(&final_path).map_err(|e| CorvoError::file_system(e.to_string()))?;
+        #[cfg(unix)]
+        {
+            // Security hardening: mktemp files must be owner-only (0600),
+            // independent from the process umask.
+            fs::OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .mode(0o600)
+                .open(&final_path)
+                .map_err(|e| CorvoError::file_system(e.to_string()))?;
+        }
+        #[cfg(not(unix))]
+        {
+            fs::File::create(&final_path).map_err(|e| CorvoError::file_system(e.to_string()))?;
+        }
     }
 
     Ok(Value::String(path_s))
@@ -1209,7 +1383,14 @@ fn chmod_visit(path: &Path, spec_or_mode: &ChmodArg<'_>) -> CorvoResult<()> {
         let rd = fs::read_dir(path).map_err(|e| CorvoError::file_system(e.to_string()))?;
         for ent in rd {
             let ent = ent.map_err(|e| CorvoError::file_system(e.to_string()))?;
-            chmod_visit(&ent.path(), spec_or_mode)?;
+            let ent_path = ent.path();
+            let meta = fs::symlink_metadata(&ent_path)
+                .map_err(|e| CorvoError::file_system(e.to_string()))?;
+            // GNU-compatible recursive chmod: do not follow symlinks discovered while walking.
+            if meta.file_type().is_symlink() {
+                continue;
+            }
+            chmod_visit(&ent_path, spec_or_mode)?;
         }
     }
     Ok(())
@@ -1576,6 +1757,16 @@ macro_rules! fs_truncate {
 }
 
 #[macro_export]
+macro_rules! fs_touch {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.touch", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("fs.touch", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
 macro_rules! fs_stat {
     ($state:expr $(, $arg:expr)* $(,)?) => {
         $crate::standard_lib::call("fs.stat", &[$($arg),*], &std::collections::HashMap::new(), $state)
@@ -1779,6 +1970,513 @@ mod tests {
         let _ = fs::remove_file(&path);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn test_touch_default_follows_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let base = std::env::temp_dir().join(format!(
+            "corvo_test_touch_follow_symlink_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+        let victim = base.join("victim.txt");
+        let link = base.join("touch_link.txt");
+
+        fs::write(&victim, b"x").unwrap();
+        symlink(&victim, &link).unwrap();
+
+        let before = fs::metadata(&victim).unwrap().modified().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let args = vec![Value::String(link.to_string_lossy().to_string())];
+        assert_eq!(touch(&args, &empty_args()).unwrap(), Value::Boolean(true));
+        let after = fs::metadata(&victim).unwrap().modified().unwrap();
+        assert!(
+            after > before,
+            "touch must strictly bump the followed target's mtime (before={before:?}, after={after:?})"
+        );
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_touch_no_follow_rejects_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let base = std::env::temp_dir().join(format!(
+            "corvo_test_touch_nofollow_symlink_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+        let victim = base.join("victim.txt");
+        let link = base.join("touch_link.txt");
+
+        fs::write(&victim, b"x").unwrap();
+        symlink(&victim, &link).unwrap();
+
+        let before = fs::metadata(&victim).unwrap().modified().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let args = vec![
+            Value::String(link.to_string_lossy().to_string()),
+            Value::Boolean(false),
+        ];
+        let err = touch(&args, &empty_args()).unwrap_err();
+        let msg = err.to_string().to_lowercase();
+        assert!(
+            msg.contains("symlink") || msg.contains("loop") || msg.contains("too many levels"),
+            "unexpected touch no-follow error: {msg}"
+        );
+        let after = fs::metadata(&victim).unwrap().modified().unwrap();
+        assert_eq!(
+            after, before,
+            "touch with no-follow must not update symlink target timestamp"
+        );
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_touch_regular_file_and_create() {
+        let base =
+            std::env::temp_dir().join(format!("corvo_test_touch_regular_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+        let existing = base.join("existing.txt");
+        let missing = base.join("missing.txt");
+        fs::write(&existing, b"x").unwrap();
+        let _ = fs::remove_file(&missing);
+
+        let args_existing = vec![Value::String(existing.to_string_lossy().to_string())];
+        assert_eq!(
+            touch(&args_existing, &empty_args()).unwrap(),
+            Value::Boolean(true)
+        );
+
+        let args_missing = vec![Value::String(missing.to_string_lossy().to_string())];
+        assert_eq!(
+            touch(&args_missing, &empty_args()).unwrap(),
+            Value::Boolean(true)
+        );
+        assert!(missing.exists(), "touch must create missing file");
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// Regression for issue #22: `fs.touch` with `follow_symlinks=false` must still be able to
+    /// create a brand-new regular file at a path that has no existing entry. The previous failure
+    /// mode would be silently rejecting the create when `O_NOFOLLOW` was misapplied.
+    #[cfg(unix)]
+    #[test]
+    fn test_touch_no_follow_creates_new_regular_file() {
+        let base = std::env::temp_dir().join(format!(
+            "corvo_test_touch_nofollow_new_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+        let new_path = base.join("brand_new.txt");
+        assert!(!new_path.exists(), "sanity: file must not exist yet");
+
+        let args = vec![
+            Value::String(new_path.to_string_lossy().to_string()),
+            Value::Boolean(false),
+        ];
+        assert_eq!(touch(&args, &empty_args()).unwrap(), Value::Boolean(true));
+        assert!(
+            new_path.exists(),
+            "touch no_follow must create a regular file when nothing exists at path"
+        );
+        let meta = fs::symlink_metadata(&new_path).unwrap();
+        assert!(
+            meta.file_type().is_file(),
+            "newly created path must be a regular file, not a symlink"
+        );
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// Regression for issue #22: touching an existing regular file must bump its mtime.
+    /// The default-follow test exercises this through a symlink, this one verifies a direct
+    /// regular-file invocation so a future refactor can't accidentally turn `touch` into a no-op.
+    #[cfg(unix)]
+    #[test]
+    fn test_touch_existing_regular_file_updates_mtime() {
+        let base = std::env::temp_dir().join(format!(
+            "corvo_test_touch_existing_mtime_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+        let path = base.join("file.txt");
+        fs::write(&path, b"x").unwrap();
+        let before = fs::metadata(&path).unwrap().modified().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+
+        let args = vec![Value::String(path.to_string_lossy().to_string())];
+        assert_eq!(touch(&args, &empty_args()).unwrap(), Value::Boolean(true));
+        let after = fs::metadata(&path).unwrap().modified().unwrap();
+        assert!(
+            after > before,
+            "touch on an existing regular file must update mtime (before={:?}, after={:?})",
+            before,
+            after,
+        );
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// PR #24 review: `fs.touch` should open existing files read-only before `futimens` so
+    /// mode 0444 files still get timestamps updated when the owner has read access.
+    #[cfg(unix)]
+    #[test]
+    fn test_touch_succeeds_on_read_only_file_readable_by_owner() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let base =
+            std::env::temp_dir().join(format!("corvo_test_touch_readonly_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+        let path = base.join("ro.txt");
+        fs::write(&path, b"x").unwrap();
+
+        let mut perms = fs::metadata(&path).unwrap().permissions();
+        perms.set_mode(0o444);
+        fs::set_permissions(&path, perms).unwrap();
+
+        let before = fs::metadata(&path).unwrap().modified().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+
+        let args = vec![Value::String(path.to_string_lossy().to_string())];
+        assert_eq!(touch(&args, &empty_args()).unwrap(), Value::Boolean(true));
+        let after = fs::metadata(&path).unwrap().modified().unwrap();
+        assert!(
+            after > before,
+            "touch must bump mtime on read-only mode file when owner can open O_RDONLY (before={before:?}, after={after:?})"
+        );
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_mktemp_file_mode_is_0600_even_with_relaxed_umask() {
+        use std::os::unix::fs::MetadataExt;
+
+        let _umask_guard = UnixTestUmaskGuard::set(0);
+        let base =
+            std::env::temp_dir().join(format!("corvo_test_mktemp_mode_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+
+        let template = base.join("tmp.XXXXXX").to_string_lossy().to_string();
+        let args = vec![
+            Value::String(template),
+            Value::Boolean(false), // file
+            Value::String(base.to_string_lossy().to_string()),
+            Value::String("".to_string()),
+        ];
+        let out = mktemp(&args, &empty_args()).unwrap();
+        let path = out.as_string().unwrap();
+        let mode = fs::symlink_metadata(path).unwrap().mode() & 0o777;
+        assert_eq!(mode, 0o600, "mktemp files must be created with 0600");
+
+        let _ = fs::remove_file(path);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_write_default_follows_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let base = std::env::temp_dir().join(format!(
+            "corvo_test_write_follow_symlink_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+
+        let victim = base.join("victim.txt");
+        let link = base.join("dest_link.txt");
+        fs::write(&victim, b"IMPORTANT").unwrap();
+        symlink(&victim, &link).unwrap();
+
+        let args = vec![
+            Value::String(link.to_string_lossy().to_string()),
+            Value::String("updated".to_string()),
+        ];
+        assert_eq!(write(&args, &empty_args()).unwrap(), Value::Boolean(true));
+        assert_eq!(fs::read_to_string(&victim).unwrap(), "updated");
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_write_no_follow_rejects_symlink_dest() {
+        use std::os::unix::fs::symlink;
+
+        let base = std::env::temp_dir().join(format!(
+            "corvo_test_write_nofollow_symlink_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+
+        let victim = base.join("victim.txt");
+        let link = base.join("dest_link.txt");
+        fs::write(&victim, b"IMPORTANT").unwrap();
+        symlink(&victim, &link).unwrap();
+
+        let args = vec![
+            Value::String(link.to_string_lossy().to_string()),
+            Value::String("pwned".to_string()),
+            Value::Boolean(false),
+        ];
+        let err = write(&args, &empty_args()).unwrap_err();
+        let msg = err.to_string().to_lowercase();
+        assert!(
+            msg.contains("too many levels") || msg.contains("symlink") || msg.contains("loop"),
+            "unexpected no-follow write error: {msg}"
+        );
+        assert_eq!(
+            fs::read_to_string(&victim).unwrap(),
+            "IMPORTANT",
+            "no-follow write must not overwrite symlink target"
+        );
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_write_no_follow_regular_file_still_works() {
+        let path = std::env::temp_dir().join(format!(
+            "corvo_test_write_nofollow_regular_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&path);
+        fs::write(&path, b"old").unwrap();
+
+        let args = vec![
+            Value::String(path.to_string_lossy().to_string()),
+            Value::String("new".to_string()),
+            Value::Boolean(false),
+        ];
+        assert_eq!(write(&args, &empty_args()).unwrap(), Value::Boolean(true));
+        assert_eq!(fs::read_to_string(&path).unwrap(), "new");
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_copy_special_file_errors_instead_of_creating_regular_file() {
+        let dest_path = std::env::temp_dir()
+            .join(format!("corvo_test_copy_special_{}", std::process::id()))
+            .to_string_lossy()
+            .to_string();
+        let _ = fs::remove_file(&dest_path);
+
+        let args = vec![
+            Value::String("/dev/null".to_string()),
+            Value::String(dest_path.clone()),
+        ];
+        let err = copy(&args, &empty_args()).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("cannot copy special file"),
+            "unexpected error when copying special file: {msg}"
+        );
+        assert!(
+            !Path::new(dest_path.as_str()).exists(),
+            "destination should not be created for special-file copy"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_copy_symlink_default_dereferences() {
+        use std::os::unix::fs::symlink;
+
+        let base = std::env::temp_dir().join(format!(
+            "corvo_test_copy_symlink_follow_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+
+        let target = base.join("target.txt");
+        let link = base.join("link.txt");
+        let dest = base.join("dest.txt");
+
+        fs::write(&target, b"sensitive").unwrap();
+        symlink(&target, &link).unwrap();
+
+        let args = vec![
+            Value::String(link.to_string_lossy().to_string()),
+            Value::String(dest.to_string_lossy().to_string()),
+        ];
+        assert_eq!(copy(&args, &empty_args()).unwrap(), Value::Boolean(true));
+
+        let meta = fs::symlink_metadata(&dest).unwrap();
+        assert!(
+            meta.file_type().is_file(),
+            "default fs.copy should dereference source symlink"
+        );
+        assert_eq!(fs::read_to_string(&dest).unwrap(), "sensitive");
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// Regression for issue #17: `fs.copy` with `follow_symlinks=false` must still behave
+    /// like a normal copy when the source is a plain regular file (no symlink involved).
+    #[cfg(unix)]
+    #[test]
+    fn test_copy_no_follow_with_regular_file_copies_content() {
+        let base = std::env::temp_dir().join(format!(
+            "corvo_test_copy_nofollow_regular_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+
+        let src = base.join("src.txt");
+        let dest = base.join("dest.txt");
+        fs::write(&src, b"payload").unwrap();
+
+        let args = vec![
+            Value::String(src.to_string_lossy().to_string()),
+            Value::String(dest.to_string_lossy().to_string()),
+            Value::Boolean(false),
+        ];
+        assert_eq!(copy(&args, &empty_args()).unwrap(), Value::Boolean(true));
+
+        let dest_meta = fs::symlink_metadata(&dest).unwrap();
+        assert!(
+            dest_meta.file_type().is_file(),
+            "destination of a non-symlink no-follow copy must be a regular file"
+        );
+        assert_eq!(fs::read_to_string(&dest).unwrap(), "payload");
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_copy_symlink_no_dereference_preserves_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let base = std::env::temp_dir().join(format!(
+            "corvo_test_copy_symlink_nofollow_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+
+        let target = base.join("target.txt");
+        let link = base.join("link.txt");
+        let dest = base.join("dest.txt");
+
+        fs::write(&target, b"sensitive").unwrap();
+        symlink(&target, &link).unwrap();
+
+        let args = vec![
+            Value::String(link.to_string_lossy().to_string()),
+            Value::String(dest.to_string_lossy().to_string()),
+            Value::Boolean(false),
+        ];
+        assert_eq!(copy(&args, &empty_args()).unwrap(), Value::Boolean(true));
+
+        let dest_meta = fs::symlink_metadata(&dest).unwrap();
+        assert!(
+            dest_meta.file_type().is_symlink(),
+            "fs.copy with follow_symlinks=false should preserve symlink"
+        );
+        assert_eq!(fs::read_link(&dest).unwrap(), target);
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// Copilot PR #24: with `follow_symlinks=false`, copying a symlink should replace an existing
+    /// regular-file destination (GNU `cp -P` / overwrite semantics).
+    #[cfg(unix)]
+    #[test]
+    fn test_copy_symlink_no_follow_replaces_existing_dest_file() {
+        use std::os::unix::fs::symlink;
+
+        let base = std::env::temp_dir().join(format!(
+            "corvo_test_copy_symlink_replace_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+
+        let target = base.join("target.txt");
+        let link = base.join("link.txt");
+        let dest = base.join("dest.txt");
+
+        fs::write(&target, b"sensitive").unwrap();
+        symlink(&target, &link).unwrap();
+        fs::write(&dest, b"old_content").unwrap();
+
+        let args = vec![
+            Value::String(link.to_string_lossy().to_string()),
+            Value::String(dest.to_string_lossy().to_string()),
+            Value::Boolean(false),
+        ];
+        assert_eq!(copy(&args, &empty_args()).unwrap(), Value::Boolean(true));
+
+        let dest_meta = fs::symlink_metadata(&dest).unwrap();
+        assert!(dest_meta.file_type().is_symlink());
+        assert_eq!(fs::read_link(&dest).unwrap(), target);
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// Copilot / CodeRabbit: `follow_symlinks=false` must not follow a symlink at the destination.
+    #[cfg(unix)]
+    #[test]
+    fn test_copy_no_follow_errors_when_dest_is_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let base = std::env::temp_dir().join(format!(
+            "corvo_test_copy_nofollow_dest_symlink_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+
+        let src = base.join("src.txt");
+        let victim = base.join("victim.txt");
+        let dest_link = base.join("dest_link.txt");
+        fs::write(&src, b"from_src").unwrap();
+        fs::write(&victim, b"VICTIM").unwrap();
+        symlink(&victim, &dest_link).unwrap();
+
+        let args = vec![
+            Value::String(src.to_string_lossy().to_string()),
+            Value::String(dest_link.to_string_lossy().to_string()),
+            Value::Boolean(false),
+        ];
+        let err = copy(&args, &empty_args()).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("destination") && msg.contains("symlink"),
+            "unexpected error: {msg}"
+        );
+        assert_eq!(
+            fs::read_to_string(&victim).unwrap(),
+            "VICTIM",
+            "must not overwrite symlink target"
+        );
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
     #[test]
     fn test_read_not_found() {
         let args = vec![Value::String("/nonexistent/path/file.txt".to_string())];
@@ -1959,6 +2657,60 @@ mod tests {
         assert!(mkdir(&args, &empty_args()).is_err());
     }
 
+    /// PR #24 / Sourcery: `follow_symlinks=false` must not be silently ignored on non-Unix.
+    #[cfg(not(unix))]
+    #[test]
+    fn test_touch_follow_symlinks_false_errors_on_non_unix() {
+        let err = touch(
+            &[
+                Value::String("nul:dummy".to_string()),
+                Value::Boolean(false),
+            ],
+            &empty_args(),
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("only supported on Unix"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn test_write_follow_symlinks_false_errors_on_non_unix() {
+        let err = write(
+            &[
+                Value::String("nul:dummy".to_string()),
+                Value::String("x".to_string()),
+                Value::Boolean(false),
+            ],
+            &empty_args(),
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("only supported on Unix"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn test_copy_follow_symlinks_false_errors_on_non_unix() {
+        let err = copy(
+            &[
+                Value::String("nul:dummy_a".to_string()),
+                Value::String("nul:dummy_b".to_string()),
+                Value::Boolean(false),
+            ],
+            &empty_args(),
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("only supported on Unix"),
+            "unexpected error: {err}"
+        );
+    }
+
     #[test]
     fn test_write_no_args() {
         assert!(write(&[], &empty_args()).is_err());
@@ -2034,5 +2786,102 @@ mod tests {
         assert_eq!(mode2, 0o700);
 
         let _ = fs::remove_file(&path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_chmod_recursive_does_not_follow_symlinked_file() {
+        use std::os::unix::fs::{symlink, MetadataExt};
+
+        let base =
+            std::env::temp_dir().join(format!("corvo_test_chmod_symlink_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let target_dir = base.join("target");
+        let subdir = target_dir.join("subdir");
+        let outside = base.join("outside.txt");
+        let link = subdir.join("link_to_outside");
+        let inside = subdir.join("inside.txt");
+
+        fs::create_dir_all(&subdir).unwrap();
+        fs::write(&outside, b"outside").unwrap();
+        fs::write(&inside, b"inside").unwrap();
+
+        // outside starts as 600 and must remain unchanged by recursive chmod on target tree.
+        let mut outside_perms = fs::symlink_metadata(&outside).unwrap().permissions();
+        outside_perms.set_mode(0o600);
+        fs::set_permissions(&outside, outside_perms).unwrap();
+
+        symlink(&outside, &link).unwrap();
+
+        let chmod_args = vec![
+            Value::String(target_dir.to_string_lossy().to_string()),
+            Value::Number(0o755 as f64),
+            Value::Boolean(true),
+        ];
+        assert_eq!(
+            chmod(&chmod_args, &empty_args()).unwrap(),
+            Value::Boolean(true)
+        );
+
+        let outside_mode = fs::symlink_metadata(&outside).unwrap().mode() & 0o7777;
+        let inside_mode = fs::symlink_metadata(&inside).unwrap().mode() & 0o7777;
+        assert_eq!(
+            outside_mode, 0o600,
+            "recursive chmod must not follow symlink targets"
+        );
+        assert_eq!(
+            inside_mode, 0o755,
+            "regular file inside tree should still be updated"
+        );
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// Regression for issue #15: a symlink to a *directory* discovered during `chmod -R`
+    /// must be skipped just like a symlink to a file. Otherwise an attacker could redirect
+    /// a recursive chmod into an arbitrary tree by planting a directory symlink.
+    #[cfg(unix)]
+    #[test]
+    fn test_chmod_recursive_does_not_follow_symlinked_directory() {
+        use std::os::unix::fs::{symlink, MetadataExt};
+
+        let base = std::env::temp_dir().join(format!(
+            "corvo_test_chmod_symlinked_dir_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        let target_dir = base.join("target");
+        let outside_dir = base.join("outside_dir");
+        let outside_file = outside_dir.join("victim.txt");
+        let link_dir = target_dir.join("link_to_outside_dir");
+
+        fs::create_dir_all(&target_dir).unwrap();
+        fs::create_dir_all(&outside_dir).unwrap();
+        fs::write(&outside_file, b"victim").unwrap();
+
+        // Lock down the victim file inside the *separate* tree so we can detect any traversal.
+        let mut outside_perms = fs::symlink_metadata(&outside_file).unwrap().permissions();
+        outside_perms.set_mode(0o600);
+        fs::set_permissions(&outside_file, outside_perms).unwrap();
+
+        symlink(&outside_dir, &link_dir).unwrap();
+
+        let chmod_args = vec![
+            Value::String(target_dir.to_string_lossy().to_string()),
+            Value::Number(0o755 as f64),
+            Value::Boolean(true),
+        ];
+        assert_eq!(
+            chmod(&chmod_args, &empty_args()).unwrap(),
+            Value::Boolean(true)
+        );
+
+        let victim_mode = fs::symlink_metadata(&outside_file).unwrap().mode() & 0o7777;
+        assert_eq!(
+            victim_mode, 0o600,
+            "recursive chmod must not traverse into a directory reached via a symlink"
+        );
+
+        let _ = fs::remove_dir_all(&base);
     }
 }

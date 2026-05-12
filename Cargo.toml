@@ -9,6 +9,12 @@ repository = "https://github.com/anomalyco/corvo-lang"
 keywords = ["language", "scripting", "compiler", "interpreter"]
 categories = ["command-line-utilities", "development-tools"]
 
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+
 [lib]
 name = "corvo_lang"
 path = "src/lib.rs"

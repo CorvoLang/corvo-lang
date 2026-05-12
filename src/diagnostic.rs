@@ -466,6 +466,7 @@ pub const KNOWN_FUNCTIONS: &[&str] = &[
     "fs.symlink",
     "fs.realpath",
     "fs.truncate",
+    "fs.touch",
     "fs.stat",
     "fs.read_link",
     "fs.read_dir_meta",
@@ -569,6 +570,8 @@ pub const KNOWN_FUNCTIONS: &[&str] = &[
     "re.replace_all",
     "re.split",
     "re.new",
+    "re.posix_class_chars",
+    "re.posix_class_translate",
     // string methods
     "string.concat",
     "string.replace",

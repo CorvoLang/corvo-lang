@@ -106,6 +106,7 @@ pub fn call(
         "fs.move" => fs::move_file(args, named_args),
         "fs.realpath" => fs::realpath(args, named_args),
         "fs.truncate" => fs::truncate(args, named_args),
+        "fs.touch" => fs::touch(args, named_args),
         "fs.read_lines" => fs::read_lines(args, named_args),
         "fs.stat" => fs::stat(args, named_args),
         "fs.read_link" => fs::read_link(args, named_args),
