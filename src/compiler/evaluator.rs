@@ -967,21 +967,60 @@ impl Evaluator {
         Ok(())
     }
 
+    /// Maximum HTTP request body size accepted when reading `Content-Length` (DoS mitigation).
+    const MAX_HTTP_BODY_BYTES: usize = 10 * 1024 * 1024;
+
+    /// Byte offset immediately after the header block (`\r\n\r\n` or `\n\n`), or `request.len()` if not found.
+    #[cfg(test)]
+    fn http_header_end(request: &[u8]) -> usize {
+        if let Some(pos) = request.windows(4).position(|w| w == b"\r\n\r\n") {
+            pos + 4
+        } else if let Some(pos) = request.windows(2).position(|w| w == b"\n\n") {
+            pos + 2
+        } else {
+            request.len()
+        }
+    }
+
+    fn extract_http_content_length(header_text: &str) -> usize {
+        header_text
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                if name.trim().eq_ignore_ascii_case("content-length") {
+                    value.trim().parse::<usize>().ok()
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(0)
+    }
+
     fn parse_http_request(
         stream: &mut std::net::TcpStream,
     ) -> CorvoResult<std::collections::HashMap<String, Value>> {
-        use std::io::Read;
         stream
             .set_read_timeout(Some(std::time::Duration::from_secs(30)))
             .map_err(|e| CorvoError::runtime(format!("Failed to set read timeout: {}", e)))?;
 
+        let peer_ip = stream
+            .peer_addr()
+            .map(|a| a.ip().to_string())
+            .unwrap_or_default();
+
+        Self::parse_http_request_from_reader(stream, &peer_ip)
+    }
+
+    fn parse_http_request_from_reader<R: std::io::Read>(
+        reader: &mut R,
+        peer_ip: &str,
+    ) -> CorvoResult<std::collections::HashMap<String, Value>> {
         let mut request_raw = Vec::new();
         let mut buffer = [0; 1024];
         let mut header_end = 0;
 
         loop {
-            let bytes_read = stream
-                .read(&mut buffer)
+            let bytes_read = std::io::Read::read(reader, &mut buffer)
                 .map_err(|e| CorvoError::runtime(format!("Failed to read request: {}", e)))?;
             if bytes_read == 0 {
                 break;
@@ -1002,20 +1041,43 @@ impl Evaluator {
             }
         }
 
-        let header_str = String::from_utf8_lossy(&request_raw[..header_end]).to_string();
+        let header_cow = String::from_utf8_lossy(&request_raw[..header_end]);
+        let content_length = Self::extract_http_content_length(header_cow.as_ref());
+
+        if content_length > Self::MAX_HTTP_BODY_BYTES {
+            return Err(CorvoError::runtime(format!(
+                "Request body too large (max {} bytes)",
+                Self::MAX_HTTP_BODY_BYTES
+            )));
+        }
+
+        let mut body_bytes = request_raw[header_end..].to_vec();
+        if body_bytes.len() < content_length {
+            let mut body_buffer = vec![0; content_length - body_bytes.len()];
+            std::io::Read::read_exact(reader, &mut body_buffer)
+                .map_err(|e| CorvoError::runtime(format!("Failed to read body: {}", e)))?;
+            body_bytes.extend_from_slice(&body_buffer);
+        }
+
+        let mut full_request = Vec::with_capacity(header_end + body_bytes.len());
+        full_request.extend_from_slice(&request_raw[..header_end]);
+        full_request.extend_from_slice(&body_bytes);
+
+        Self::parse_http_raw(&full_request, header_end, peer_ip, header_cow.as_ref())
+    }
+
+    fn parse_http_raw(
+        request_raw: &[u8],
+        header_end: usize,
+        peer_ip: &str,
+        header_text: &str,
+    ) -> CorvoResult<std::collections::HashMap<String, Value>> {
+        let content_length = Self::extract_http_content_length(header_text);
         let mut req_map = std::collections::HashMap::new();
 
-        req_map.insert(
-            "ip".to_string(),
-            Value::String(
-                stream
-                    .peer_addr()
-                    .map(|a| a.ip().to_string())
-                    .unwrap_or_default(),
-            ),
-        );
+        req_map.insert("ip".to_string(), Value::String(peer_ip.to_string()));
 
-        let mut header_lines = header_str.lines();
+        let mut header_lines = header_text.lines();
         if let Some(first_line) = header_lines.next() {
             let req_parts: Vec<&str> = first_line.split_whitespace().collect();
             if req_parts.len() >= 2 {
@@ -1023,19 +1085,15 @@ impl Evaluator {
                     "method".to_string(),
                     Value::String(req_parts[0].to_uppercase()),
                 );
-                let mut path_and_query = req_parts[1].splitn(2, '?');
-                let path = path_and_query.next().unwrap_or("/");
+                let (path, query_str) = req_parts[1].split_once('?').unwrap_or((req_parts[1], ""));
                 req_map.insert("path".to_string(), Value::String(path.to_string()));
 
-                let query_str = path_and_query.next().unwrap_or("");
                 let mut query_map = std::collections::HashMap::new();
                 for pair in query_str.split('&') {
                     if pair.is_empty() {
                         continue;
                     }
-                    let mut kv = pair.splitn(2, '=');
-                    let k = kv.next().unwrap_or("");
-                    let v = kv.next().unwrap_or("");
+                    let (k, v) = pair.split_once('=').unwrap_or((pair, ""));
                     query_map.insert(k.to_string(), Value::String(v.to_string()));
                 }
                 req_map.insert("query".to_string(), Value::Map(query_map));
@@ -1057,29 +1115,19 @@ impl Evaluator {
         }
 
         let mut headers_map = std::collections::HashMap::new();
-        let mut content_length = 0;
 
         for line in header_lines {
-            let mut kv = line.splitn(2, ':');
-            let k = kv.next().unwrap_or("").trim().to_lowercase();
-            let v = kv.next().unwrap_or("").trim().to_string();
+            let (k_raw, v_raw) = line.split_once(':').unwrap_or((line, ""));
+            let k = k_raw.trim().to_lowercase();
+            let v = v_raw.trim().to_string();
             if !k.is_empty() {
-                if k == "content-length" {
-                    content_length = v.parse::<usize>().unwrap_or(0);
-                }
                 headers_map.insert(k, Value::String(v));
             }
         }
         req_map.insert("headers".to_string(), Value::Map(headers_map));
 
         let mut body_bytes = request_raw[header_end..].to_vec();
-        if body_bytes.len() < content_length {
-            let mut body_buffer = vec![0; content_length - body_bytes.len()];
-            stream
-                .read_exact(&mut body_buffer)
-                .map_err(|e| CorvoError::runtime(format!("Failed to read body: {}", e)))?;
-            body_bytes.extend_from_slice(&body_buffer);
-        } else if body_bytes.len() > content_length {
+        if body_bytes.len() > content_length {
             body_bytes.truncate(content_length);
         }
 
@@ -1169,10 +1217,8 @@ impl Evaluator {
                 if !has_content_len {
                     response_str.push_str(&format!("Content-Length: {}\r\n", body_str.len()));
                 }
-                response_str.push_str(&format!("\r\n{}!", body_str));
-
-                // wait, the format in string is exclamation point? No, just the body.
-                // Let's fix the above line: response_str.push_str(&format!("\r\n{}!", body_str)); -> response_str.push_str(&format!("\r\n{}", body_str));
+                response_str.push_str(&format!("\r\n{}", body_str));
+                let _ = stream.write_all(response_str.as_bytes());
             } else {
                 let _ = stream
                     .write_all(b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n");
@@ -2186,3 +2232,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "http_security_tests.rs"]
+mod http_security_tests;
