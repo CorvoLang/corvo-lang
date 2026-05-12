@@ -1002,18 +1002,54 @@ impl Evaluator {
             }
         }
 
+        let peer_ip = stream
+            .peer_addr()
+            .map(|a| a.ip().to_string())
+            .unwrap_or_default();
+
+        // Determine content-length to read exact body
+        let header_str = String::from_utf8_lossy(&request_raw[..header_end]).to_string();
+        let content_length = header_str
+            .lines()
+            .filter_map(|line| {
+                let mut kv = line.splitn(2, ':');
+                let k = kv.next()?.trim().to_lowercase();
+                let v = kv.next()?.trim().to_string();
+                if k == "content-length" {
+                    v.parse::<usize>().ok()
+                } else {
+                    None
+                }
+            })
+            .next()
+            .unwrap_or(0);
+
+        let mut body_bytes = request_raw[header_end..].to_vec();
+        if body_bytes.len() < content_length {
+            let mut body_buffer = vec![0; content_length - body_bytes.len()];
+            stream
+                .read_exact(&mut body_buffer)
+                .map_err(|e| CorvoError::runtime(format!("Failed to read body: {}", e)))?;
+            body_bytes.extend_from_slice(&body_buffer);
+        }
+
+        let mut full_request = Vec::with_capacity(header_end + body_bytes.len());
+        full_request.extend_from_slice(&request_raw[..header_end]);
+        full_request.extend_from_slice(&body_bytes);
+
+        Self::parse_http_raw(&full_request, header_end, content_length, &peer_ip)
+    }
+
+    fn parse_http_raw(
+        request_raw: &[u8],
+        header_end: usize,
+        content_length: usize,
+        peer_ip: &str,
+    ) -> CorvoResult<std::collections::HashMap<String, Value>> {
         let header_str = String::from_utf8_lossy(&request_raw[..header_end]).to_string();
         let mut req_map = std::collections::HashMap::new();
 
-        req_map.insert(
-            "ip".to_string(),
-            Value::String(
-                stream
-                    .peer_addr()
-                    .map(|a| a.ip().to_string())
-                    .unwrap_or_default(),
-            ),
-        );
+        req_map.insert("ip".to_string(), Value::String(peer_ip.to_string()));
 
         let mut header_lines = header_str.lines();
         if let Some(first_line) = header_lines.next() {
@@ -1057,29 +1093,19 @@ impl Evaluator {
         }
 
         let mut headers_map = std::collections::HashMap::new();
-        let mut content_length = 0;
 
         for line in header_lines {
             let mut kv = line.splitn(2, ':');
             let k = kv.next().unwrap_or("").trim().to_lowercase();
             let v = kv.next().unwrap_or("").trim().to_string();
             if !k.is_empty() {
-                if k == "content-length" {
-                    content_length = v.parse::<usize>().unwrap_or(0);
-                }
                 headers_map.insert(k, Value::String(v));
             }
         }
         req_map.insert("headers".to_string(), Value::Map(headers_map));
 
         let mut body_bytes = request_raw[header_end..].to_vec();
-        if body_bytes.len() < content_length {
-            let mut body_buffer = vec![0; content_length - body_bytes.len()];
-            stream
-                .read_exact(&mut body_buffer)
-                .map_err(|e| CorvoError::runtime(format!("Failed to read body: {}", e)))?;
-            body_bytes.extend_from_slice(&body_buffer);
-        } else if body_bytes.len() > content_length {
+        if body_bytes.len() > content_length {
             body_bytes.truncate(content_length);
         }
 
@@ -1169,10 +1195,8 @@ impl Evaluator {
                 if !has_content_len {
                     response_str.push_str(&format!("Content-Length: {}\r\n", body_str.len()));
                 }
-                response_str.push_str(&format!("\r\n{}!", body_str));
-
-                // wait, the format in string is exclamation point? No, just the body.
-                // Let's fix the above line: response_str.push_str(&format!("\r\n{}!", body_str)); -> response_str.push_str(&format!("\r\n{}", body_str));
+                response_str.push_str(&format!("\r\n{}", body_str));
+                let _ = stream.write_all(response_str.as_bytes());
             } else {
                 let _ = stream
                     .write_all(b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n");
@@ -2186,3 +2210,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "http_security_tests.rs"]
+mod http_security_tests;
