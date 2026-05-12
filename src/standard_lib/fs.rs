@@ -235,6 +235,16 @@ pub fn copy(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult
             if src_meta.file_type().is_symlink() {
                 let target = fs::read_link(src.as_str())
                     .map_err(|e| CorvoError::file_system(e.to_string()))?;
+                if let Ok(dest_meta) = fs::symlink_metadata(dest.as_str()) {
+                    if dest_meta.is_dir() {
+                        return Err(CorvoError::runtime(format!(
+                            "fs.copy: destination '{}' is a directory; cannot replace with symlink",
+                            dest
+                        )));
+                    }
+                    fs::remove_file(dest.as_str())
+                        .map_err(|e| CorvoError::file_system(e.to_string()))?;
+                }
                 std::os::unix::fs::symlink(&target, dest.as_str())
                     .map_err(|e| CorvoError::file_system(e.to_string()))?;
                 return Ok(Value::Boolean(true));
@@ -253,6 +263,17 @@ pub fn copy(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult
                 "fs.copy cannot copy special file '{}': preserving special node types is not supported",
                 src
             )));
+        }
+
+        if !follow_symlinks {
+            if let Ok(dm) = fs::symlink_metadata(dest.as_str()) {
+                if dm.file_type().is_symlink() {
+                    return Err(CorvoError::runtime(format!(
+                        "fs.copy: destination '{}' is a symlink; refusing to follow destination with follow_symlinks=false",
+                        dest
+                    )));
+                }
+            }
         }
     }
 
@@ -2376,6 +2397,82 @@ mod tests {
             "fs.copy with follow_symlinks=false should preserve symlink"
         );
         assert_eq!(fs::read_link(&dest).unwrap(), target);
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// Copilot PR #24: with `follow_symlinks=false`, copying a symlink should replace an existing
+    /// regular-file destination (GNU `cp -P` / overwrite semantics).
+    #[cfg(unix)]
+    #[test]
+    fn test_copy_symlink_no_follow_replaces_existing_dest_file() {
+        use std::os::unix::fs::symlink;
+
+        let base = std::env::temp_dir().join(format!(
+            "corvo_test_copy_symlink_replace_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+
+        let target = base.join("target.txt");
+        let link = base.join("link.txt");
+        let dest = base.join("dest.txt");
+
+        fs::write(&target, b"sensitive").unwrap();
+        symlink(&target, &link).unwrap();
+        fs::write(&dest, b"old_content").unwrap();
+
+        let args = vec![
+            Value::String(link.to_string_lossy().to_string()),
+            Value::String(dest.to_string_lossy().to_string()),
+            Value::Boolean(false),
+        ];
+        assert_eq!(copy(&args, &empty_args()).unwrap(), Value::Boolean(true));
+
+        let dest_meta = fs::symlink_metadata(&dest).unwrap();
+        assert!(dest_meta.file_type().is_symlink());
+        assert_eq!(fs::read_link(&dest).unwrap(), target);
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// Copilot / CodeRabbit: `follow_symlinks=false` must not follow a symlink at the destination.
+    #[cfg(unix)]
+    #[test]
+    fn test_copy_no_follow_errors_when_dest_is_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let base = std::env::temp_dir().join(format!(
+            "corvo_test_copy_nofollow_dest_symlink_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+
+        let src = base.join("src.txt");
+        let victim = base.join("victim.txt");
+        let dest_link = base.join("dest_link.txt");
+        fs::write(&src, b"from_src").unwrap();
+        fs::write(&victim, b"VICTIM").unwrap();
+        symlink(&victim, &dest_link).unwrap();
+
+        let args = vec![
+            Value::String(src.to_string_lossy().to_string()),
+            Value::String(dest_link.to_string_lossy().to_string()),
+            Value::Boolean(false),
+        ];
+        let err = copy(&args, &empty_args()).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("destination") && msg.contains("symlink"),
+            "unexpected error: {msg}"
+        );
+        assert_eq!(
+            fs::read_to_string(&victim).unwrap(),
+            "VICTIM",
+            "must not overwrite symlink target"
+        );
 
         let _ = fs::remove_dir_all(&base);
     }

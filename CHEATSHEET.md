@@ -63,7 +63,7 @@
 | `fs.mkfifo` | `path` | `Boolean` | Creates FIFO special file | `examples/fs_example.corvo` |
 | `fs.mknod` | `path, type` | `Boolean` | Creates block/char device | `examples/fs_example.corvo` |
 | `fs.list_dir` | `path` | `List` | Lists directory contents | `examples/fs_example.corvo` |
-| `fs.copy` | `src, dst, [follow_symlinks]` | `Boolean` | Copies file; optional `follow_symlinks` defaults to `true`; on Unix, `false` preserves source symlink instead of dereferencing; special files (char/block/FIFO/socket) are rejected with error; on non-Unix, `false` is rejected | `examples/fs_example.corvo` |
+| `fs.copy` | `src, dst, [follow_symlinks]` | `Boolean` | Copies file; optional `follow_symlinks` defaults to `true`; on Unix, `false` preserves a symlink **source** (creating a new symlink at dest, replacing an existing dest file if needed), rejects a symlink **destination** and special source nodes (char/block/FIFO/socket); on non-Unix, `false` is rejected | `examples/fs_example.corvo` |
 | `fs.move` | `src, dst` | `Boolean` | Moves file | `examples/fs_example.corvo` |
 | `fs.link` | `src, dst` | `Boolean` | Creates hard link | `examples/fs_example.corvo` |
 | `fs.symlink` | `src, dst` | `Boolean` | Creates symlink | `examples/fs_example.corvo` |

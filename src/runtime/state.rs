@@ -250,6 +250,13 @@ macro_rules! corvo_browse {
                     );
                     $state.var_set($value.to_string(), item.clone());
                     $body
+                    if $state
+                        .var_get("_terminate_requested")
+                        .unwrap_or_else(|_| $crate::type_system::Value::Boolean(false))
+                        .is_truthy()
+                    {
+                        break;
+                    }
                 }
             }
             $crate::type_system::Value::Map(map) => {
@@ -259,6 +266,13 @@ macro_rules! corvo_browse {
                     $state.var_set($key.to_string(), $crate::type_system::Value::String(k));
                     $state.var_set($value.to_string(), v);
                     $body
+                    if $state
+                        .var_get("_terminate_requested")
+                        .unwrap_or_else(|_| $crate::type_system::Value::Boolean(false))
+                        .is_truthy()
+                    {
+                        break;
+                    }
                 }
             }
             _ => {
@@ -267,6 +281,7 @@ macro_rules! corvo_browse {
                 ))
             }
         }
+        $state.var_set("_terminate_requested".to_string(), $crate::type_system::Value::Boolean(false));
     };
 }
 
