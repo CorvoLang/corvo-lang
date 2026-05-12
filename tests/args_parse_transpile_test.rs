@@ -63,9 +63,9 @@ sys.echo(
     let line_space = String::from_utf8_lossy(&out_space.stdout)
         .trim()
         .to_string();
-    assert!(
-        line_space == "0:80",
-        "expected `0:80` (no stray positionals, width 80) for `-w 80`, got: {line_space:?}"
+    assert_eq!(
+        line_space, "0:80",
+        "expected `0:80` (no stray positionals, width 80) for `-w 80`"
     );
 
     let out_glued = Command::new("cargo")
@@ -81,8 +81,5 @@ sys.echo(
     let line_glued: String = String::from_utf8_lossy(&out_glued.stdout)
         .trim()
         .to_string();
-    assert!(
-        line_glued == "0:80",
-        "expected `0:80` for `-w80`, got: {line_glued:?}"
-    );
+    assert_eq!(line_glued, "0:80", "expected `0:80` for `-w80`");
 }

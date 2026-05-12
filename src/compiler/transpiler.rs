@@ -747,16 +747,20 @@ impl Transpiler {
                     // (see `parse_map_literal`); `named_args` is always empty. Building
                     // from `named_map_code` alone yielded empty maps and broke transpiled
                     // `args.parse` (and any script that assigned a non-empty map literal).
+                    //
+                    // Keep key handling aligned with evaluator semantics (`Value::to_string()`).
+                    if !args_list.len().is_multiple_of(2) {
+                        return "{ return Err(CorvoError::runtime(\"Invalid map literal: expected key/value pairs\")); }"
+                            .to_string();
+                    }
                     let mut map_build = String::new();
-                    let mut i = 0;
-                    while i + 1 < args.len() {
-                        let k = self.transpile_expr(&args[i], state_var);
-                        let v = self.transpile_expr(&args[i + 1], state_var);
+                    for pair in args_list.chunks_exact(2) {
+                        let k = &pair[0];
+                        let v = &pair[1];
                         map_build.push_str(&format!(
                             "        __corvo_map.insert(({}).to_string(), {});\n",
                             k, v
                         ));
-                        i += 2;
                     }
                     if map_build.is_empty() {
                         "Value::Map(HashMap::new())".to_string()
@@ -995,8 +999,12 @@ mod tests {
             "expected short_values in output:\n{rust}"
         );
         assert!(
-            !rust.contains("let val = Value::Map(HashMap::new());"),
-            "top-level spec map must not be empty:\n{rust}"
+            rust.matches("__corvo_map.insert").count() >= 2,
+            "expected multiple key/value inserts for non-empty map:\n{rust}"
+        );
+        assert!(
+            rust.contains("aliases"),
+            "expected aliases key in transpiled map literal:\n{rust}"
         );
     }
 
