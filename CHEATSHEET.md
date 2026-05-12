@@ -55,7 +55,7 @@
 | `math.range` | `start, end` | `List` | Generates range list | `examples/math_example.corvo` |
 | `fs.read` | `path` | `String` | Reads file contents | `examples/fs_example.corvo` |
 | `fs.read_lines` | `path` | `List` | Reads file lines | `examples/fs_example.corvo` |
-| `fs.write` | `path, content, [follow_symlinks]` | `Boolean` | Writes to file; optional `follow_symlinks` defaults to `true`; on Unix, `false` opens destination with `O_NOFOLLOW` (errors on symlink) | `examples/fs_example.corvo` |
+| `fs.write` | `path, content, [follow_symlinks]` | `Boolean` | Writes to file; optional `follow_symlinks` defaults to `true`; on Unix, `false` opens destination with `O_NOFOLLOW` (errors on symlink); on non-Unix, `false` is rejected | `examples/fs_example.corvo` |
 | `fs.append` | `path, content` | `Boolean` | Appends to file | `examples/fs_example.corvo` |
 | `fs.delete` | `path` | `Boolean` | Deletes file or directory | `examples/fs_example.corvo` |
 | `fs.exists` | `path` | `Boolean` | Checks if path exists | `examples/fs_example.corvo` |
@@ -63,13 +63,13 @@
 | `fs.mkfifo` | `path` | `Boolean` | Creates FIFO special file | `examples/fs_example.corvo` |
 | `fs.mknod` | `path, type` | `Boolean` | Creates block/char device | `examples/fs_example.corvo` |
 | `fs.list_dir` | `path` | `List` | Lists directory contents | `examples/fs_example.corvo` |
-| `fs.copy` | `src, dst, [follow_symlinks]` | `Boolean` | Copies file; optional `follow_symlinks` defaults to `true`; on Unix, `false` preserves source symlink instead of dereferencing; special files (char/block/FIFO/socket) are rejected with error | `examples/fs_example.corvo` |
+| `fs.copy` | `src, dst, [follow_symlinks]` | `Boolean` | Copies file; optional `follow_symlinks` defaults to `true`; on Unix, `false` preserves source symlink instead of dereferencing; special files (char/block/FIFO/socket) are rejected with error; on non-Unix, `false` is rejected | `examples/fs_example.corvo` |
 | `fs.move` | `src, dst` | `Boolean` | Moves file | `examples/fs_example.corvo` |
 | `fs.link` | `src, dst` | `Boolean` | Creates hard link | `examples/fs_example.corvo` |
 | `fs.symlink` | `src, dst` | `Boolean` | Creates symlink | `examples/fs_example.corvo` |
 | `fs.realpath` | `path` | `String` | Resolves absolute path | `examples/fs_example.corvo` |
 | `fs.truncate` | `path, size` | `Boolean` | Truncates file | `examples/fs_example.corvo` |
-| `fs.touch` | `path, [follow_symlinks]` | `Boolean` | Creates file if missing and bumps atime/mtime to now via `futimens(2)` on Unix; optional `follow_symlinks` defaults to `true`; on Unix, `false` uses `O_NOFOLLOW` and rejects symlink destinations | `examples/fs_example.corvo` |
+| `fs.touch` | `path, [follow_symlinks]` | `Boolean` | Creates file if missing and bumps atime/mtime to now via `futimens(2)` on Unix (read-only open for existing files, then times); optional `follow_symlinks` defaults to `true`; on Unix, `false` uses `O_NOFOLLOW` and rejects symlink destinations; on non-Unix, `false` is rejected | `examples/fs_example.corvo` |
 | `fs.stat` | `path` | `Map` | Gets file metadata | `examples/fs_example.corvo` |
 | `fs.read_link` | `path` | `String` | Reads symlink target | `examples/fs_example.corvo` |
 | `fs.read_dir_meta` | `path` | `List` | Lists dir with metadata | `examples/fs_example.corvo` |

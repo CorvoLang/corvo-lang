@@ -1107,6 +1107,26 @@ macro_rules! re_new {
 }
 
 #[macro_export]
+macro_rules! re_posix_class_chars {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.posix_class_chars", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.posix_class_chars", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
+macro_rules! re_posix_class_translate {
+    ($state:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.posix_class_translate", &[$($arg),*], &std::collections::HashMap::new(), $state)
+    };
+    ($state:expr; kwargs: $kwargs:expr $(, $arg:expr)* $(,)?) => {
+        $crate::standard_lib::call("re.posix_class_translate", &[$($arg),*], &$kwargs, $state)
+    };
+}
+
+#[macro_export]
 macro_rules! string_concat {
     ($state:expr $(, $arg:expr)* $(,)?) => {
         $crate::standard_lib::call("string.concat", &[$($arg),*], &std::collections::HashMap::new(), $state)

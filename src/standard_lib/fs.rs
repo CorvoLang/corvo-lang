@@ -50,6 +50,15 @@ pub fn write(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
         .ok_or_else(|| CorvoError::invalid_argument("fs.write requires content"))?;
     let follow_symlinks = args.get(2).and_then(|v| v.as_bool()).unwrap_or(true);
 
+    #[cfg(not(unix))]
+    {
+        if !follow_symlinks {
+            return Err(CorvoError::invalid_argument(
+                "fs.write: follow_symlinks=false is only supported on Unix",
+            ));
+        }
+    }
+
     #[cfg(unix)]
     {
         if !follow_symlinks {
@@ -209,6 +218,15 @@ pub fn copy(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult
         .ok_or_else(|| CorvoError::invalid_argument("fs.copy requires a destination path"))?;
     let follow_symlinks = args.get(2).and_then(|v| v.as_bool()).unwrap_or(true);
 
+    #[cfg(not(unix))]
+    {
+        if !follow_symlinks {
+            return Err(CorvoError::invalid_argument(
+                "fs.copy: follow_symlinks=false is only supported on Unix",
+            ));
+        }
+    }
+
     #[cfg(unix)]
     {
         if !follow_symlinks {
@@ -339,23 +357,52 @@ pub fn touch(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
         .ok_or_else(|| CorvoError::invalid_argument("fs.touch requires a path"))?;
     let follow_symlinks = args.get(1).and_then(|v| v.as_bool()).unwrap_or(true);
 
+    #[cfg(not(unix))]
+    {
+        if !follow_symlinks {
+            return Err(CorvoError::invalid_argument(
+                "fs.touch: follow_symlinks=false is only supported on Unix",
+            ));
+        }
+        return fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(false)
+            .open(path.as_str())
+            .map(|_| Value::Boolean(true))
+            .map_err(|e| CorvoError::file_system(e.to_string()));
+    }
+
     #[cfg(unix)]
     {
+        use std::io::ErrorKind;
         use std::os::unix::io::AsRawFd;
 
-        let mut opts = fs::OpenOptions::new();
-        opts.create(true).write(true).truncate(false);
-        if !follow_symlinks {
-            // Open with O_NOFOLLOW so a symlink at the path is rejected atomically.
-            // This mitigates symlink TOCTOU on privileged writes/timestamp updates.
-            opts.custom_flags(libc::O_NOFOLLOW);
-        }
-        let f = opts
-            .open(path.as_str())
-            .map_err(|e| CorvoError::file_system(e.to_string()))?;
+        // Prefer read-only open for existing files so `touch` still works on e.g. read-only
+        // regular files (0444) where POSIX allows timestamp updates for the owner.
+        // Create only on `NotFound`, with a separate `create_new` path that can use O_NOFOLLOW.
+        let f = {
+            let mut open_existing = fs::OpenOptions::new();
+            open_existing.read(true);
+            if !follow_symlinks {
+                open_existing.custom_flags(libc::O_NOFOLLOW);
+            }
+            match open_existing.open(path.as_str()) {
+                Ok(f) => f,
+                Err(e) if e.kind() == ErrorKind::NotFound => {
+                    let mut create_new = fs::OpenOptions::new();
+                    create_new.create_new(true).write(true);
+                    if !follow_symlinks {
+                        create_new.custom_flags(libc::O_NOFOLLOW);
+                    }
+                    create_new
+                        .open(path.as_str())
+                        .map_err(|e| CorvoError::file_system(e.to_string()))?
+                }
+                Err(e) => return Err(CorvoError::file_system(e.to_string())),
+            }
+        };
         // Update both atime and mtime to "now" via futimens(2), mirroring POSIX `touch`.
-        // Just opening the file does not bump mtime on most filesystems, so we do it
-        // explicitly so callers can rely on `fs.touch` for cache/build-system semantics.
         let times = [
             libc::timespec {
                 tv_sec: 0,
@@ -373,18 +420,6 @@ pub fn touch(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
             ));
         }
         Ok(Value::Boolean(true))
-    }
-
-    #[cfg(not(unix))]
-    {
-        let _ = follow_symlinks; // no-follow is a Unix-only guarantee
-        fs::OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(false)
-            .open(path.as_str())
-            .map(|_| Value::Boolean(true))
-            .map_err(|e| CorvoError::file_system(e.to_string()))
     }
 }
 
@@ -2072,6 +2107,38 @@ mod tests {
         let _ = fs::remove_dir_all(&base);
     }
 
+    /// PR #24 review: `fs.touch` should open existing files read-only before `futimens` so
+    /// mode 0444 files still get timestamps updated when the owner has read access.
+    #[cfg(unix)]
+    #[test]
+    fn test_touch_succeeds_on_read_only_file_readable_by_owner() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let base =
+            std::env::temp_dir().join(format!("corvo_test_touch_readonly_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+        let path = base.join("ro.txt");
+        fs::write(&path, b"x").unwrap();
+
+        let mut perms = fs::metadata(&path).unwrap().permissions();
+        perms.set_mode(0o444);
+        fs::set_permissions(&path, perms).unwrap();
+
+        let before = fs::metadata(&path).unwrap().modified().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+
+        let args = vec![Value::String(path.to_string_lossy().to_string())];
+        assert_eq!(touch(&args, &empty_args()).unwrap(), Value::Boolean(true));
+        let after = fs::metadata(&path).unwrap().modified().unwrap();
+        assert!(
+            after > before,
+            "touch must bump mtime on read-only mode file when owner can open O_RDONLY (before={before:?}, after={after:?})"
+        );
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
     #[cfg(unix)]
     #[test]
     fn test_mktemp_file_mode_is_0600_even_with_relaxed_umask() {
@@ -2491,6 +2558,60 @@ mod tests {
             Value::Number(448.0),
         ];
         assert!(mkdir(&args, &empty_args()).is_err());
+    }
+
+    /// PR #24 / Sourcery: `follow_symlinks=false` must not be silently ignored on non-Unix.
+    #[cfg(not(unix))]
+    #[test]
+    fn test_touch_follow_symlinks_false_errors_on_non_unix() {
+        let err = touch(
+            &[
+                Value::String("nul:dummy".to_string()),
+                Value::Boolean(false),
+            ],
+            &empty_args(),
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("only supported on Unix"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn test_write_follow_symlinks_false_errors_on_non_unix() {
+        let err = write(
+            &[
+                Value::String("nul:dummy".to_string()),
+                Value::String("x".to_string()),
+                Value::Boolean(false),
+            ],
+            &empty_args(),
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("only supported on Unix"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn test_copy_follow_symlinks_false_errors_on_non_unix() {
+        let err = copy(
+            &[
+                Value::String("nul:dummy_a".to_string()),
+                Value::String("nul:dummy_b".to_string()),
+                Value::Boolean(false),
+            ],
+            &empty_args(),
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("only supported on Unix"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]

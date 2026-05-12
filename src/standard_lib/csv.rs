@@ -12,7 +12,7 @@ pub fn parse_value(args: &[Value], _named_args: &HashMap<String, Value>) -> Corv
         Some(s) => {
             if s.len() != 1 {
                 return Err(CorvoError::invalid_argument(
-                    "csv.parse: delimiter must be a single character",
+                    "csv.parse: delimiter must be a single byte (ASCII)",
                 ));
             }
             s.as_bytes()[0]
@@ -69,7 +69,7 @@ mod tests {
         .unwrap_err();
         assert!(
             err.to_string()
-                .contains("delimiter must be a single character"),
+                .contains("delimiter must be a single byte (ASCII)"),
             "unexpected error: {err}"
         );
     }
@@ -86,7 +86,7 @@ mod tests {
         .unwrap_err();
         assert!(
             err.to_string()
-                .contains("delimiter must be a single character"),
+                .contains("delimiter must be a single byte (ASCII)"),
             "unexpected error: {err}"
         );
     }
