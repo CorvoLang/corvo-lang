@@ -743,7 +743,29 @@ impl Transpiler {
                 if name == "__list__" {
                     format!("Value::List(vec![{}])", args_list.join(", "))
                 } else if name == "__map__" {
-                    format!("Value::Map({})", named_map_code)
+                    // Map literals parse as __map__ with alternating key/value in `args`
+                    // (see `parse_map_literal`); `named_args` is always empty. Building
+                    // from `named_map_code` alone yielded empty maps and broke transpiled
+                    // `args.parse` (and any script that assigned a non-empty map literal).
+                    let mut map_build = String::new();
+                    let mut i = 0;
+                    while i + 1 < args.len() {
+                        let k = self.transpile_expr(&args[i], state_var);
+                        let v = self.transpile_expr(&args[i + 1], state_var);
+                        map_build.push_str(&format!(
+                            "        __corvo_map.insert(({}).to_string(), {});\n",
+                            k, v
+                        ));
+                        i += 2;
+                    }
+                    if map_build.is_empty() {
+                        "Value::Map(HashMap::new())".to_string()
+                    } else {
+                        format!(
+                            "{{\n        let mut __corvo_map = HashMap::new();\n{}        Value::Map(__corvo_map)\n    }}",
+                            map_build
+                        )
+                    }
                 } else {
                     let macro_name = name.replace('.', "_");
                     let args_str = if args_list.is_empty() {
@@ -936,5 +958,54 @@ impl Transpiler {
             }
             _ => "Value::Null".to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Transpiler;
+    use crate::lexer::token::TokenType;
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+
+    fn transpile_source(source: &str) -> String {
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize().expect("lex");
+        let mut parser = Parser::new(
+            tokens
+                .into_iter()
+                .filter(|t| !matches!(t.token_type, TokenType::Comment(_)))
+                .collect(),
+        );
+        let program = parser.parse().expect("parse");
+        Transpiler::new().transpile(&program)
+    }
+
+    #[test]
+    fn map_literal_transpiles_key_value_inserts() {
+        let rust = transpile_source(
+            "@spec = { \"aliases\": { \"w\": \"width\" }, \"short_values\": [\"w\"] }\n",
+        );
+        assert!(
+            rust.contains("__corvo_map.insert"),
+            "expected map literal inserts, got:\n{rust}"
+        );
+        assert!(
+            rust.contains("short_values"),
+            "expected short_values in output:\n{rust}"
+        );
+        assert!(
+            !rust.contains("let val = Value::Map(HashMap::new());"),
+            "top-level spec map must not be empty:\n{rust}"
+        );
+    }
+
+    #[test]
+    fn empty_map_literal_transpiles_empty_hash_map() {
+        let rust = transpile_source("@m = {}\n");
+        assert!(
+            rust.contains("let val = Value::Map(HashMap::new());"),
+            "expected empty map:\n{rust}"
+        );
     }
 }
