@@ -214,3 +214,7 @@ pub fn call(
         _ => Err(CorvoError::unknown_function(name)),
     }
 }
+
+#[cfg(test)]
+#[path = "cve_security_tests.rs"]
+mod cve_security_tests;
