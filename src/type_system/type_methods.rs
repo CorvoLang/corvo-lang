@@ -1030,6 +1030,8 @@ pub fn call_re_method(name: &str, args: &[Value]) -> CorvoResult<Value> {
         "replace_all" => crate::standard_lib::re::replace_all(args, &named),
         "split" => crate::standard_lib::re::split(args, &named),
         "new" => crate::standard_lib::re::new_regex(args, &named),
+        "posix_class_chars" => crate::standard_lib::re::posix_class_chars(args, &named),
+        "posix_class_translate" => crate::standard_lib::re::posix_class_translate(args, &named),
         _ => Err(CorvoError::unknown_function(format!("re.{}", method))),
     }
 }

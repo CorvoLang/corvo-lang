@@ -297,6 +297,18 @@ impl Transpiler {
                 self.indent_level += 1;
                 for s in body {
                     code.push_str(&self.transpile_stmt(s, state_var));
+                    code.push_str(&format!(
+                        "{}if {}.var_get(\"_terminate_requested\").unwrap_or_else(|_| Value::Boolean(false)).is_truthy() {{\n",
+                        self.indent(),
+                        state_var
+                    ));
+                    code.push_str(&format!(
+                        "{}    {}.var_set(\"_terminate_requested\".to_string(), Value::Boolean(false));\n",
+                        self.indent(),
+                        state_var
+                    ));
+                    code.push_str(&format!("{}    break;\n", self.indent()));
+                    code.push_str(&format!("{}}}\n", self.indent()));
                 }
                 self.indent_level -= 1;
                 code.push_str(&format!("{}}}\n", self.indent()));
@@ -324,19 +336,11 @@ impl Transpiler {
                 code.push_str(&format!("{}}});\n", self.indent()));
             }
             Stmt::Terminate => {
-                if self.closure_depth > 0 {
-                    code.push_str(&format!(
-                        "{}        {}.var_set(\"_terminate_requested\".to_string(), Value::Boolean(true));\n",
-                        self.indent(),
-                        state_var
-                    ));
-                    code.push_str(&format!(
-                        "{}        return Err(CorvoError::runtime(\"terminate\"));\n",
-                        self.indent()
-                    ));
-                } else {
-                    code.push_str(&format!("{}return Ok(());\n", self.indent()));
-                }
+                code.push_str(&format!(
+                    "{}{}.var_set(\"_terminate_requested\".to_string(), Value::Boolean(true));\n",
+                    self.indent(),
+                    state_var
+                ));
             }
             Stmt::If {
                 condition,
@@ -1014,6 +1018,26 @@ mod tests {
         assert!(
             rust.contains("let val = Value::Map(HashMap::new());"),
             "expected empty map:\n{rust}"
+        );
+    }
+
+    /// Issue #20: `terminate` inside a `loop` must transpile to a flag-setting + checked-break
+    /// sequence so a `terminate` from inside a procedure body cleanly exits the surrounding
+    /// loop (matching the interpreter), rather than returning an error from the closure.
+    #[test]
+    fn terminate_inside_loop_transpiles_to_flag_and_checked_break() {
+        let rust = transpile_source("loop {\n  terminate\n}\n");
+        assert!(
+            rust.contains("_terminate_requested"),
+            "expected terminate flag plumbing in transpiled loop:\n{rust}"
+        );
+        assert!(
+            rust.contains("Value::Boolean(true)"),
+            "expected flag to be set to true on terminate:\n{rust}"
+        );
+        assert!(
+            rust.contains("break;"),
+            "loop must contain a conditional break that observes the flag:\n{rust}"
         );
     }
 }

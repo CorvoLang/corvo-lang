@@ -55,7 +55,7 @@
 | `math.range` | `start, end` | `List` | Generates range list | `examples/math_example.corvo` |
 | `fs.read` | `path` | `String` | Reads file contents | `examples/fs_example.corvo` |
 | `fs.read_lines` | `path` | `List` | Reads file lines | `examples/fs_example.corvo` |
-| `fs.write` | `path, content` | `Boolean` | Writes to file | `examples/fs_example.corvo` |
+| `fs.write` | `path, content, [follow_symlinks]` | `Boolean` | Writes to file; optional `follow_symlinks` defaults to `true`; on Unix, `false` opens destination with `O_NOFOLLOW` (errors on symlink) | `examples/fs_example.corvo` |
 | `fs.append` | `path, content` | `Boolean` | Appends to file | `examples/fs_example.corvo` |
 | `fs.delete` | `path` | `Boolean` | Deletes file or directory | `examples/fs_example.corvo` |
 | `fs.exists` | `path` | `Boolean` | Checks if path exists | `examples/fs_example.corvo` |
@@ -63,16 +63,17 @@
 | `fs.mkfifo` | `path` | `Boolean` | Creates FIFO special file | `examples/fs_example.corvo` |
 | `fs.mknod` | `path, type` | `Boolean` | Creates block/char device | `examples/fs_example.corvo` |
 | `fs.list_dir` | `path` | `List` | Lists directory contents | `examples/fs_example.corvo` |
-| `fs.copy` | `src, dst` | `Boolean` | Copies file | `examples/fs_example.corvo` |
+| `fs.copy` | `src, dst, [follow_symlinks]` | `Boolean` | Copies file; optional `follow_symlinks` defaults to `true`; on Unix, `false` preserves source symlink instead of dereferencing; special files (char/block/FIFO/socket) are rejected with error | `examples/fs_example.corvo` |
 | `fs.move` | `src, dst` | `Boolean` | Moves file | `examples/fs_example.corvo` |
 | `fs.link` | `src, dst` | `Boolean` | Creates hard link | `examples/fs_example.corvo` |
 | `fs.symlink` | `src, dst` | `Boolean` | Creates symlink | `examples/fs_example.corvo` |
 | `fs.realpath` | `path` | `String` | Resolves absolute path | `examples/fs_example.corvo` |
 | `fs.truncate` | `path, size` | `Boolean` | Truncates file | `examples/fs_example.corvo` |
+| `fs.touch` | `path, [follow_symlinks]` | `Boolean` | Creates file if missing and bumps atime/mtime to now via `futimens(2)` on Unix; optional `follow_symlinks` defaults to `true`; on Unix, `false` uses `O_NOFOLLOW` and rejects symlink destinations | `examples/fs_example.corvo` |
 | `fs.stat` | `path` | `Map` | Gets file metadata | `examples/fs_example.corvo` |
 | `fs.read_link` | `path` | `String` | Reads symlink target | `examples/fs_example.corvo` |
 | `fs.read_dir_meta` | `path` | `List` | Lists dir with metadata | `examples/fs_example.corvo` |
-| `fs.mktemp` | `[prefix]` | `String` | Creates temporary file | `examples/fs_example.corvo` |
+| `fs.mktemp` | `[template], [is_dir], [tmp_dir], [suffix]` | `String` | Creates temporary file/dir; on Unix, file mode is forced to `0600` (`create_new`) | `examples/fs_example.corvo` |
 | `fs.read_hex` | `path` | `String` | Reads file as hex | `examples/fs_example.corvo` |
 | `fs.write_hex` | `path, hex` | `Boolean` | Writes hex to file | `examples/fs_example.corvo` |
 | `fs.read_meta` | `path` | `Map` | Gets detailed file metadata | `examples/fs_example.corvo` |
@@ -154,6 +155,8 @@
 | `re.replace_all` | `pattern, str, repl` | `String` | Replaces all matches | `examples/regex.corvo` |
 | `re.split` | `pattern, str` | `List` | Splits string by regex | `examples/regex.corvo` |
 | `re.new` | `pattern` | `Regex` | Compiles regex object | `examples/regex.corvo` |
+| `re.posix_class_chars` | `class` | `String` | Expands POSIX class to ASCII set (`graph`,`print`,`space`,`upper`,`lower`) with POSIX-consistent definitions | `examples/regex.corvo` |
+| `re.posix_class_translate` | `text, from_class, to_class` | `String` | Translates chars by POSIX classes (e.g. `upper -> lower`), reusing last destination char when destination set is shorter | `examples/regex.corvo` |
 | `string.concat` | `args...` | `String` | Concatenates strings | `examples/string_methods.corvo` |
 | `string.replace` | `s, old, new` | `String` | Replaces substring | `examples/string_methods.corvo` |
 | `string.split` | `s, delim` | `List` | Splits string | `examples/string_methods.corvo` |
