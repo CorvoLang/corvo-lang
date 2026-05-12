@@ -1,64 +1,21 @@
 use super::*;
 use crate::type_system::Value;
+use std::io::{self, Read};
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 fn parse_raw(request: &[u8]) -> std::collections::HashMap<String, Value> {
-    let header_end = if let Some(pos) = request.windows(4).position(|w| w == b"\r\n\r\n") {
-        pos + 4
-    } else if let Some(pos) = request.windows(2).position(|w| w == b"\n\n") {
-        pos + 2
-    } else {
-        request.len()
-    };
-
-    let header_str = String::from_utf8_lossy(&request[..header_end]);
-    let content_length = header_str
-        .lines()
-        .filter_map(|line| {
-            let mut kv = line.splitn(2, ':');
-            let k = kv.next()?.trim().to_lowercase();
-            let v = kv.next()?.trim().to_string();
-            if k == "content-length" {
-                v.parse::<usize>().ok()
-            } else {
-                None
-            }
-        })
-        .next()
-        .unwrap_or(0);
-
-    Evaluator::parse_http_raw(request, header_end, content_length, "127.0.0.1").unwrap()
+    let header_end = Evaluator::http_header_end(request);
+    let header_text = String::from_utf8_lossy(&request[..header_end]);
+    Evaluator::parse_http_raw(request, header_end, "127.0.0.1", header_text.as_ref()).unwrap()
 }
 
 fn parse_raw_with_ip(request: &[u8], ip: &str) -> std::collections::HashMap<String, Value> {
-    let header_end = if let Some(pos) = request.windows(4).position(|w| w == b"\r\n\r\n") {
-        pos + 4
-    } else if let Some(pos) = request.windows(2).position(|w| w == b"\n\n") {
-        pos + 2
-    } else {
-        request.len()
-    };
-
-    let header_str = String::from_utf8_lossy(&request[..header_end]);
-    let content_length = header_str
-        .lines()
-        .filter_map(|line| {
-            let mut kv = line.splitn(2, ':');
-            let k = kv.next()?.trim().to_lowercase();
-            let v = kv.next()?.trim().to_string();
-            if k == "content-length" {
-                v.parse::<usize>().ok()
-            } else {
-                None
-            }
-        })
-        .next()
-        .unwrap_or(0);
-
-    Evaluator::parse_http_raw(request, header_end, content_length, ip).unwrap()
+    let header_end = Evaluator::http_header_end(request);
+    let header_text = String::from_utf8_lossy(&request[..header_end]);
+    Evaluator::parse_http_raw(request, header_end, ip, header_text.as_ref()).unwrap()
 }
 
 fn method(result: &std::collections::HashMap<String, Value>) -> String {
@@ -222,6 +179,82 @@ fn test_cve_2022_22720_large_body_smuggling() {
     // Body must be truncated to Content-Length (5 bytes)
     assert_eq!(body(&result).len(), 5);
     assert_eq!(body(&result), "This ");
+}
+
+/// Test-only stream returning fixed chunks per `read` call (exercises `read_exact` body path).
+struct ChunkedFakeStream {
+    chunks: Vec<&'static [u8]>,
+    index: usize,
+}
+
+impl ChunkedFakeStream {
+    fn new(chunks: Vec<&'static [u8]>) -> Self {
+        Self { chunks, index: 0 }
+    }
+}
+
+impl Read for ChunkedFakeStream {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.index >= self.chunks.len() {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "no more data in ChunkedFakeStream",
+            ));
+        }
+        let chunk = self.chunks[self.index];
+        let n = chunk.len().min(buf.len());
+        buf[..n].copy_from_slice(&chunk[..n]);
+        self.index += 1;
+        Ok(n)
+    }
+}
+
+#[test]
+fn test_stream_short_body_read_exact_success() {
+    const INITIAL: &[u8] =
+        b"POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 11\r\n\r\nHello ";
+    const REMAINING: &[u8] = b"world";
+    let mut stream = ChunkedFakeStream::new(vec![INITIAL, REMAINING]);
+    let result = Evaluator::parse_http_request_from_reader(&mut stream, "127.0.0.1").unwrap();
+    assert_eq!(body(&result), "Hello world");
+}
+
+#[test]
+fn test_stream_short_body_read_exact_eof_error() {
+    const TRUNCATED: &[u8] =
+        b"POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 20\r\n\r\nshort";
+    let mut stream = ChunkedFakeStream::new(vec![TRUNCATED]);
+    let err = Evaluator::parse_http_request_from_reader(&mut stream, "127.0.0.1").unwrap_err();
+    match err {
+        crate::CorvoError::Runtime { message, .. } => {
+            assert!(
+                message.contains("Failed to read body"),
+                "expected body read failure, got: {}",
+                message
+            );
+        }
+        other => panic!(
+            "expected runtime error for truncated body, got: {:?}",
+            other
+        ),
+    }
+}
+
+#[test]
+fn test_stream_content_length_over_limit_rejected() {
+    let raw = b"POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 10485761\r\n\r\n";
+    let mut stream = ChunkedFakeStream::new(vec![raw]);
+    let err = Evaluator::parse_http_request_from_reader(&mut stream, "127.0.0.1").unwrap_err();
+    match err {
+        crate::CorvoError::Runtime { message, .. } => {
+            assert!(
+                message.contains("too large"),
+                "expected oversize body rejection, got: {}",
+                message
+            );
+        }
+        other => panic!("expected runtime error for oversized CL, got: {:?}", other),
+    }
 }
 
 // ===========================================================================
@@ -880,7 +913,7 @@ fn test_encoding_null_in_header_name_lossy() {
     let headers = result.get("headers").unwrap().as_map().unwrap();
     let found = headers
         .iter()
-        .any(|(k, v)| k.contains('\x00') && v.as_string().map_or(false, |s| s == "value"));
+        .any(|(k, v)| k.contains('\x00') && v.as_string().is_some_and(|s| s == "value"));
     assert!(found, "Null byte in header name should be preserved");
 
     // Also check by exact lossy conversion
