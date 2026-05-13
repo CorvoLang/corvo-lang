@@ -324,7 +324,17 @@ impl Evaluator {
                 if self.pre_exec_mode {
                     return Ok(());
                 }
-                self.exec_amqp_consume(connection, queue, msg_ident, shared_vars, body, state)
+                #[cfg(feature = "stdlib-amqp")]
+                {
+                    self.exec_amqp_consume(connection, queue, msg_ident, shared_vars, body, state)
+                }
+                #[cfg(not(feature = "stdlib-amqp"))]
+                {
+                    let _ = (connection, queue, msg_ident, shared_vars, body);
+                    Err(CorvoError::runtime(
+                        "amqp_consume requires the 'stdlib-amqp' feature",
+                    ))
+                }
             }
         }
     }
@@ -519,7 +529,7 @@ impl Evaluator {
 
                     let mut guard = arc.lock().unwrap();
                     let current = guard.clone();
-                    *guard = merge_shared_writeback(&snapshots[i], &thread_final, &current);
+                    *guard = Value::merge_shared_writeback(&snapshots[i], &thread_final, &current);
                 }
 
                 result
@@ -556,6 +566,7 @@ impl Evaluator {
         }
     }
 
+    #[cfg(feature = "stdlib-amqp")]
     fn run_amqp_consumer_loop(
         conn_val: Value,
         queue: String,
@@ -649,7 +660,7 @@ impl Evaluator {
                             .unwrap_or(Value::Null);
                         let mut guard = arc.lock().unwrap();
                         let current = guard.clone();
-                        *guard = merge_shared_writeback(&snapshots[i], &final_val, &current);
+                        *guard = Value::merge_shared_writeback(&snapshots[i], &final_val, &current);
                     }
 
                     use lapin::options::{BasicAckOptions, BasicNackOptions};
@@ -697,6 +708,7 @@ impl Evaluator {
         result
     }
 
+    #[cfg(feature = "stdlib-amqp")]
     #[allow(clippy::type_complexity)]
     pub fn exec_amqp_consume_native(
         &mut self,
@@ -760,7 +772,7 @@ impl Evaluator {
                     let thread_final = thread_state.var_get(param_name).unwrap_or(Value::Null);
                     let mut guard = arc.lock().unwrap();
                     let current = guard.clone();
-                    *guard = merge_shared_writeback(&snapshots[i], &thread_final, &current);
+                    *guard = Value::merge_shared_writeback(&snapshots[i], &thread_final, &current);
                 }
 
                 thread_result.map(|_| ())
@@ -807,72 +819,39 @@ impl Evaluator {
         state: &mut RuntimeState,
     ) -> CorvoResult<()> {
         let port_val = self.eval_expr(port_expr, state)?;
-        let port = match port_val {
-            Value::Number(n) if (0.0..=65535.0).contains(&n) && n.fract() == 0.0 => n as u16,
-            _ => {
-                return Err(CorvoError::r#type(
-                    "http_listen port must be an integer between 0 and 65535",
-                ))
-            }
-        };
+        let body_clone = body.to_vec();
 
-        let listener = std::net::TcpListener::bind(format!("0.0.0.0:{}", port))
-            .map_err(|e| CorvoError::runtime(format!("Failed to bind to port {}: {}", port, e)))?;
+        #[cfg(feature = "stdlib-http")]
+        return crate::standard_lib::http_server::HttpServer::exec_http_listen_native(
+            port_val,
+            req_ident,
+            resp_ident,
+            shared_vars,
+            std::sync::Arc::new(move |_args, eval_state| {
+                let mut evaluator = Evaluator::default();
+                evaluator.execute_block(&body_clone, eval_state)?;
+                Ok(Value::Null)
+            }),
+            state,
+        );
 
-        let shared_arcs: Vec<Arc<Mutex<Value>>> = shared_vars
-            .iter()
-            .map(|name| {
-                let val = state.var_get(name).unwrap_or(Value::Null);
-                Arc::new(Mutex::new(val))
-            })
-            .collect::<Vec<_>>();
-
-        for stream in listener.incoming() {
-            let mut stream = stream
-                .map_err(|e| CorvoError::runtime(format!("Failed to accept connection: {}", e)))?;
-
-            let req_map = match Self::parse_http_request(&mut stream) {
-                Ok(m) => m,
-                Err(_) => continue,
-            };
-
-            let arcs: Vec<Arc<Mutex<Value>>> = shared_arcs.iter().map(Arc::clone).collect();
-            let thread_state = state.clone();
-            let req_ident_clone = req_ident.to_string();
-            let resp_ident_clone = resp_ident.to_string();
-            let shared_vars_clone = shared_vars.to_vec();
-            let body_clone = body.to_vec();
-
-            std::thread::spawn(move || {
-                let mut scope_state = crate::runtime::RuntimeState::new();
-                let snapshots = Self::init_http_scope(
-                    &req_ident_clone,
-                    &resp_ident_clone,
-                    &shared_vars_clone,
-                    &arcs,
-                    &thread_state,
-                    req_map,
-                    &mut scope_state,
-                );
-
-                let mut evaluator = Evaluator::new();
-                let result = evaluator.execute_block(&body_clone, &mut scope_state);
-                let success = result.is_ok();
-
-                let _ = Self::write_http_response(
-                    &mut stream,
-                    &scope_state,
-                    &resp_ident_clone,
-                    &shared_vars_clone,
-                    &arcs,
-                    &snapshots,
-                    success,
-                );
-            });
+        #[cfg(not(feature = "stdlib-http"))]
+        {
+            let _ = (
+                port_val,
+                req_ident,
+                resp_ident,
+                shared_vars,
+                body_clone,
+                state,
+            );
+            Err(CorvoError::runtime(
+                "http_listen requires 'stdlib-http' feature",
+            ))
         }
-        Ok(())
     }
 
+    #[cfg(feature = "stdlib-amqp")]
     fn exec_amqp_consume(
         &mut self,
         conn_expr: &Expr,
@@ -897,343 +876,6 @@ impl Evaluator {
             let mut evaluator = Evaluator::default();
             evaluator.execute_block(&body_clone, eval_state)
         })
-    }
-
-    pub fn exec_http_listen_native(
-        &mut self,
-        port_val: Value,
-        req_ident: &str,
-        resp_ident: &str,
-        shared_vars: &[String],
-        proc: NativeCallback,
-        state: &mut RuntimeState,
-    ) -> CorvoResult<()> {
-        let port = match port_val {
-            Value::Number(n) if (0.0..=65535.0).contains(&n) && n.fract() == 0.0 => n as u16,
-            _ => {
-                return Err(CorvoError::r#type(
-                    "http_listen port must be an integer between 0 and 65535",
-                ))
-            }
-        };
-
-        let listener = std::net::TcpListener::bind(format!("0.0.0.0:{}", port))
-            .map_err(|e| CorvoError::runtime(format!("Failed to bind to port {}: {}", port, e)))?;
-
-        let shared_arcs: Vec<Arc<Mutex<Value>>> = shared_vars
-            .iter()
-            .map(|name| {
-                let val = state.var_get(name).unwrap_or(Value::Null);
-                Arc::new(Mutex::new(val))
-            })
-            .collect::<Vec<_>>();
-
-        for stream in listener.incoming() {
-            let mut stream = stream
-                .map_err(|e| CorvoError::runtime(format!("Failed to accept connection: {}", e)))?;
-
-            let req_map = match Self::parse_http_request(&mut stream) {
-                Ok(m) => m,
-                Err(_) => continue,
-            };
-
-            let arcs: Vec<Arc<Mutex<Value>>> = shared_arcs.iter().map(Arc::clone).collect();
-            let thread_state = state.clone();
-            let req_ident_clone = req_ident.to_string();
-            let resp_ident_clone = resp_ident.to_string();
-            let shared_vars_clone = shared_vars.to_vec();
-            let proc_clone = Arc::clone(&proc);
-
-            std::thread::spawn(move || {
-                let mut scope_state = crate::runtime::RuntimeState::new();
-                let snapshots = Self::init_http_scope(
-                    &req_ident_clone,
-                    &resp_ident_clone,
-                    &shared_vars_clone,
-                    &arcs,
-                    &thread_state,
-                    req_map,
-                    &mut scope_state,
-                );
-
-                let result = (proc_clone)(&[], &mut scope_state);
-                let success = result.is_ok();
-
-                let _ = Self::write_http_response(
-                    &mut stream,
-                    &scope_state,
-                    &resp_ident_clone,
-                    &shared_vars_clone,
-                    &arcs,
-                    &snapshots,
-                    success,
-                );
-            });
-        }
-        Ok(())
-    }
-
-    /// Maximum HTTP request body size accepted when reading `Content-Length` (DoS mitigation).
-    const MAX_HTTP_BODY_BYTES: usize = 10 * 1024 * 1024;
-
-    /// Byte offset immediately after the header block (`\r\n\r\n` or `\n\n`), or `request.len()` if not found.
-    #[cfg(test)]
-    fn http_header_end(request: &[u8]) -> usize {
-        if let Some(pos) = request.windows(4).position(|w| w == b"\r\n\r\n") {
-            pos + 4
-        } else if let Some(pos) = request.windows(2).position(|w| w == b"\n\n") {
-            pos + 2
-        } else {
-            request.len()
-        }
-    }
-
-    fn extract_http_content_length(header_text: &str) -> usize {
-        header_text
-            .lines()
-            .find_map(|line| {
-                let (name, value) = line.split_once(':')?;
-                if name.trim().eq_ignore_ascii_case("content-length") {
-                    value.trim().parse::<usize>().ok()
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0)
-    }
-
-    fn parse_http_request(
-        stream: &mut std::net::TcpStream,
-    ) -> CorvoResult<std::collections::HashMap<String, Value>> {
-        stream
-            .set_read_timeout(Some(std::time::Duration::from_secs(30)))
-            .map_err(|e| CorvoError::runtime(format!("Failed to set read timeout: {}", e)))?;
-
-        let peer_ip = stream
-            .peer_addr()
-            .map(|a| a.ip().to_string())
-            .unwrap_or_default();
-
-        Self::parse_http_request_from_reader(stream, &peer_ip)
-    }
-
-    fn parse_http_request_from_reader<R: std::io::Read>(
-        reader: &mut R,
-        peer_ip: &str,
-    ) -> CorvoResult<std::collections::HashMap<String, Value>> {
-        let mut request_raw = Vec::new();
-        let mut buffer = [0; 1024];
-        let mut header_end = 0;
-
-        loop {
-            let bytes_read = std::io::Read::read(reader, &mut buffer)
-                .map_err(|e| CorvoError::runtime(format!("Failed to read request: {}", e)))?;
-            if bytes_read == 0 {
-                break;
-            }
-            request_raw.extend_from_slice(&buffer[..bytes_read]);
-
-            if let Some(pos) = request_raw.windows(4).position(|w| w == b"\r\n\r\n") {
-                header_end = pos + 4;
-                break;
-            }
-            if let Some(pos) = request_raw.windows(2).position(|w| w == b"\n\n") {
-                header_end = pos + 2;
-                break;
-            }
-
-            if request_raw.len() > 1024 * 1024 {
-                return Err(CorvoError::runtime("Headers too large"));
-            }
-        }
-
-        let header_cow = String::from_utf8_lossy(&request_raw[..header_end]);
-        let content_length = Self::extract_http_content_length(header_cow.as_ref());
-
-        if content_length > Self::MAX_HTTP_BODY_BYTES {
-            return Err(CorvoError::runtime(format!(
-                "Request body too large (max {} bytes)",
-                Self::MAX_HTTP_BODY_BYTES
-            )));
-        }
-
-        let mut body_bytes = request_raw[header_end..].to_vec();
-        if body_bytes.len() < content_length {
-            let mut body_buffer = vec![0; content_length - body_bytes.len()];
-            std::io::Read::read_exact(reader, &mut body_buffer)
-                .map_err(|e| CorvoError::runtime(format!("Failed to read body: {}", e)))?;
-            body_bytes.extend_from_slice(&body_buffer);
-        }
-
-        let mut full_request = Vec::with_capacity(header_end + body_bytes.len());
-        full_request.extend_from_slice(&request_raw[..header_end]);
-        full_request.extend_from_slice(&body_bytes);
-
-        Self::parse_http_raw(&full_request, header_end, peer_ip, header_cow.as_ref())
-    }
-
-    fn parse_http_raw(
-        request_raw: &[u8],
-        header_end: usize,
-        peer_ip: &str,
-        header_text: &str,
-    ) -> CorvoResult<std::collections::HashMap<String, Value>> {
-        let content_length = Self::extract_http_content_length(header_text);
-        let mut req_map = std::collections::HashMap::new();
-
-        req_map.insert("ip".to_string(), Value::String(peer_ip.to_string()));
-
-        let mut header_lines = header_text.lines();
-        if let Some(first_line) = header_lines.next() {
-            let req_parts: Vec<&str> = first_line.split_whitespace().collect();
-            if req_parts.len() >= 2 {
-                req_map.insert(
-                    "method".to_string(),
-                    Value::String(req_parts[0].to_uppercase()),
-                );
-                let (path, query_str) = req_parts[1].split_once('?').unwrap_or((req_parts[1], ""));
-                req_map.insert("path".to_string(), Value::String(path.to_string()));
-
-                let mut query_map = std::collections::HashMap::new();
-                for pair in query_str.split('&') {
-                    if pair.is_empty() {
-                        continue;
-                    }
-                    let (k, v) = pair.split_once('=').unwrap_or((pair, ""));
-                    query_map.insert(k.to_string(), Value::String(v.to_string()));
-                }
-                req_map.insert("query".to_string(), Value::Map(query_map));
-            } else {
-                req_map.insert("method".to_string(), Value::String("".to_string()));
-                req_map.insert("path".to_string(), Value::String("".to_string()));
-                req_map.insert(
-                    "query".to_string(),
-                    Value::Map(std::collections::HashMap::new()),
-                );
-            }
-        } else {
-            req_map.insert("method".to_string(), Value::String("".to_string()));
-            req_map.insert("path".to_string(), Value::String("".to_string()));
-            req_map.insert(
-                "query".to_string(),
-                Value::Map(std::collections::HashMap::new()),
-            );
-        }
-
-        let mut headers_map = std::collections::HashMap::new();
-
-        for line in header_lines {
-            let (k_raw, v_raw) = line.split_once(':').unwrap_or((line, ""));
-            let k = k_raw.trim().to_lowercase();
-            let v = v_raw.trim().to_string();
-            if !k.is_empty() {
-                headers_map.insert(k, Value::String(v));
-            }
-        }
-        req_map.insert("headers".to_string(), Value::Map(headers_map));
-
-        let mut body_bytes = request_raw[header_end..].to_vec();
-        if body_bytes.len() > content_length {
-            body_bytes.truncate(content_length);
-        }
-
-        let body_str = String::from_utf8_lossy(&body_bytes).to_string();
-        req_map.insert("body".to_string(), Value::String(body_str));
-
-        Ok(req_map)
-    }
-
-    fn init_http_scope(
-        req_ident: &str,
-        resp_ident: &str,
-        shared_vars: &[String],
-        shared_arcs: &[Arc<Mutex<Value>>],
-        thread_state: &RuntimeState,
-        req_map: std::collections::HashMap<String, Value>,
-        scope_state: &mut RuntimeState,
-    ) -> Vec<Value> {
-        scope_state.var_set(req_ident.to_string(), Value::Map(req_map));
-
-        let mut resp_map = std::collections::HashMap::new();
-        resp_map.insert("status".to_string(), Value::Number(200.0));
-        let mut resp_headers = std::collections::HashMap::new();
-        resp_headers.insert(
-            "content-type".to_string(),
-            Value::String("text/plain".to_string()),
-        );
-        resp_map.insert("headers".to_string(), Value::Map(resp_headers));
-        resp_map.insert("body".to_string(), Value::String(String::new()));
-        scope_state.var_set(resp_ident.to_string(), Value::Map(resp_map));
-
-        let mut snapshots: Vec<Value> = Vec::with_capacity(shared_arcs.len());
-        for (i, arc) in shared_arcs.iter().enumerate() {
-            let snapshot = arc.lock().unwrap().clone();
-            snapshots.push(snapshot.clone());
-            scope_state.var_set(shared_vars[i].clone(), snapshot);
-        }
-
-        for k in thread_state.static_keys() {
-            if let Ok(v) = thread_state.static_get(&k) {
-                scope_state.static_set(k, v);
-            }
-        }
-
-        snapshots
-    }
-
-    fn write_http_response(
-        stream: &mut std::net::TcpStream,
-        scope_state: &RuntimeState,
-        resp_ident: &str,
-        shared_vars: &[String],
-        shared_arcs: &[Arc<Mutex<Value>>],
-        snapshots: &[Value],
-        success: bool,
-    ) -> CorvoResult<()> {
-        use std::io::Write;
-        if success {
-            for (i, arc) in shared_arcs.iter().enumerate() {
-                let thread_final = scope_state.var_get(&shared_vars[i]).unwrap_or(Value::Null);
-                let mut guard = arc.lock().unwrap();
-                let current = guard.clone();
-                *guard = merge_shared_writeback(&snapshots[i], &thread_final, &current);
-            }
-
-            let final_resp = scope_state.var_get(resp_ident).unwrap_or(Value::Null);
-            if let Value::Map(resp) = final_resp {
-                let status = match resp.get("status") {
-                    Some(Value::Number(n)) => *n as u16,
-                    _ => 200,
-                };
-                let body_str = match resp.get("body") {
-                    Some(Value::String(s)) => s.clone(),
-                    _ => String::new(),
-                };
-
-                let mut response_str = format!("HTTP/1.1 {} OK\r\n", status);
-                let mut has_content_len = false;
-                if let Some(Value::Map(h)) = resp.get("headers") {
-                    for (k, v) in h {
-                        if k.to_lowercase() == "content-length" {
-                            has_content_len = true;
-                        }
-                        response_str.push_str(&format!("{}: {}\r\n", k, v));
-                    }
-                }
-                if !has_content_len {
-                    response_str.push_str(&format!("Content-Length: {}\r\n", body_str.len()));
-                }
-                response_str.push_str(&format!("\r\n{}", body_str));
-                let _ = stream.write_all(response_str.as_bytes());
-            } else {
-                let _ = stream
-                    .write_all(b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n");
-            }
-        } else {
-            let _ = stream
-                .write_all(b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n");
-        }
-        Ok(())
     }
 
     // skipcq: RS-R1000
@@ -1681,29 +1323,6 @@ impl Default for Evaluator {
 ///
 /// For all other value types the thread's final value replaces the current
 /// mutex value (last-writer-wins semantics).
-pub fn merge_shared_writeback(snapshot: &Value, thread_final: &Value, current: &Value) -> Value {
-    match (snapshot, thread_final, current) {
-        (Value::List(snap), Value::List(fin), Value::List(cur)) if fin.len() >= snap.len() => {
-            // Append only the items the thread added beyond its snapshot.
-            let new_items = &fin[snap.len()..];
-            let mut result = cur.clone();
-            result.extend_from_slice(new_items);
-            Value::List(result)
-        }
-        (Value::Number(snap), Value::Number(fin), Value::Number(cur)) => {
-            // Add the delta that the thread contributed.
-            Value::Number(cur + (fin - snap))
-        }
-        (Value::String(snap), Value::String(fin), Value::String(cur)) if fin.starts_with(snap) => {
-            // Append only the suffix the thread added.
-            let suffix = &fin[snap.len()..];
-            let mut result = cur.clone();
-            result.push_str(suffix);
-            Value::String(result)
-        }
-        _ => thread_final.clone(),
-    }
-}
 
 #[cfg(test)]
 mod tests {

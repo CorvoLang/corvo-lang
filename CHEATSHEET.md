@@ -248,6 +248,21 @@
 | `var.set` | `name, value` | `Value` | Sets dynamic variable | `examples/variables.corvo` |
 | `static.get` | `name` | `Value` | Gets static variable | `examples/variables.corvo` |
 | `static.set` | `name, value` | `Value` | Sets static variable | `examples/variables.corvo` |
+| `http_listen` | `addr, @req, @resp` | `Null` | Starts HTTP server | `examples/http_listen.corvo` |
+
+## Oxide Deployment (Lean Binaries)
+
+Corvo supports a specialized transpilation mode called **Oxide** for creating ultra-lean binaries.
+
+| Command | Description |
+| --- | --- |
+| `corvo --oxide <file.corvo>` | Transpiles to a lean Rust project with static dispatch |
+| `corvo --oxide <file> -o <dir>` | Specifies the output directory for the oxide project |
+
+**Optimization Tips:**
+- Oxide automatically excludes unused standard library modules.
+- Binaries are built with `opt-level = "z"`, `LTO`, and `strip` by default.
+- Hello World binaries in Oxide mode are typically **< 400KB**.
 
 ## Shorthands
 

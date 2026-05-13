@@ -1,0 +1,4 @@
+@resp = http.get("https://google.com")
+sys.echo("Status: " + @resp["status_code"].to_string())
+@body = @resp["response_body"]
+sys.echo("Body length: " + @body.len().to_string())

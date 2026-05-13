@@ -1,24 +1,40 @@
+#[cfg(feature = "stdlib-amqp")]
 pub mod amqp;
 pub mod args;
+#[cfg(feature = "stdlib-crypto")]
 pub mod crypto;
+#[cfg(feature = "stdlib-csv")]
 pub mod csv;
+#[cfg(feature = "stdlib-db")]
 pub mod db;
+#[cfg(feature = "stdlib-dns")]
 pub mod dns;
+#[cfg(feature = "stdlib-env")]
 pub mod env;
 pub mod fs;
+#[cfg(feature = "stdlib-hcl")]
 pub mod hcl;
+#[cfg(feature = "stdlib-http")]
 pub mod http;
+#[cfg(feature = "stdlib-http")]
+pub mod http_server;
 pub mod json;
+#[cfg(feature = "stdlib-llm")]
 pub mod llm;
 pub mod math;
+#[cfg(feature = "stdlib-net")]
 pub mod net;
+#[cfg(feature = "stdlib-notifications")]
 pub mod notifications;
 pub mod os;
 pub mod re;
 pub mod sys;
+#[cfg(feature = "stdlib-template")]
 pub mod template;
 pub mod time;
+#[cfg(feature = "stdlib-xml")]
 pub mod xml;
+#[cfg(feature = "stdlib-yaml")]
 pub mod yaml;
 
 use crate::runtime::RuntimeState;
@@ -130,75 +146,130 @@ pub fn call(
         "time.parse_date" => time::parse_date(args, named_args),
         "time.boot_time" => time::boot_time(args, named_args),
 
-        "http.get" => http::get(args, named_args),
-        "http.post" => http::post(args, named_args),
-        "http.put" => http::put(args, named_args),
-        "http.delete" => http::delete(args, named_args),
-
-        "net.tcp_listen" => net::tcp_listen(args, named_args, state),
-        "net.tcp_accept" => net::tcp_accept(args, named_args, state),
-        "net.tcp_close_listener" => net::tcp_close_listener(args, named_args, state),
-        "net.tcp_connect" => net::tcp_connect(args, named_args, state),
-        "net.tcp_read" => net::tcp_read(args, named_args, state),
-        "net.tcp_write" => net::tcp_write(args, named_args, state),
-        "net.tcp_close" => net::tcp_close(args, named_args, state),
-
-        "dns.resolve" => dns::resolve(args, named_args),
-        "dns.lookup" => dns::lookup(args, named_args),
-
-        "crypto.hash" => crypto::hash(args, named_args),
-        "crypto.hash_file" => crypto::hash_file(args, named_args),
-        "crypto.hash_stdin" => crypto::hash_stdin(args, named_args),
-        "crypto.checksum" => crypto::checksum(args, named_args),
-        "crypto.crc32_file" => crypto::crc32_file(args, named_args),
-        "crypto.crc32_stdin" => crypto::crc32_stdin(args, named_args),
-        "crypto.encrypt" => crypto::encrypt(args, named_args),
-        "crypto.decrypt" => crypto::decrypt(args, named_args),
-        "crypto.uuid" => crypto::uuid(args, named_args),
-
         "json.parse" => json::parse_value(args, named_args),
         "json.stringify" => json::stringify(args, named_args),
 
+        // Feature-gated modules
+        #[cfg(feature = "stdlib-http")]
+        "http.get" => http::get(args, named_args),
+        #[cfg(feature = "stdlib-http")]
+        "http.post" => http::post(args, named_args),
+        #[cfg(feature = "stdlib-http")]
+        "http.put" => http::put(args, named_args),
+        #[cfg(feature = "stdlib-http")]
+        "http.delete" => http::delete(args, named_args),
+
+        #[cfg(feature = "stdlib-net")]
+        "net.tcp_listen" => net::tcp_listen(args, named_args, state),
+        #[cfg(feature = "stdlib-net")]
+        "net.tcp_accept" => net::tcp_accept(args, named_args, state),
+        #[cfg(feature = "stdlib-net")]
+        "net.tcp_close_listener" => net::tcp_close_listener(args, named_args, state),
+        #[cfg(feature = "stdlib-net")]
+        "net.tcp_connect" => net::tcp_connect(args, named_args, state),
+        #[cfg(feature = "stdlib-net")]
+        "net.tcp_read" => net::tcp_read(args, named_args, state),
+        #[cfg(feature = "stdlib-net")]
+        "net.tcp_write" => net::tcp_write(args, named_args, state),
+        #[cfg(feature = "stdlib-net")]
+        "net.tcp_close" => net::tcp_close(args, named_args, state),
+
+        #[cfg(feature = "stdlib-dns")]
+        "dns.resolve" => dns::resolve(args, named_args),
+        #[cfg(feature = "stdlib-dns")]
+        "dns.lookup" => dns::lookup(args, named_args),
+
+        #[cfg(feature = "stdlib-crypto")]
+        "crypto.hash" => crypto::hash(args, named_args),
+        #[cfg(feature = "stdlib-crypto")]
+        "crypto.hash_file" => crypto::hash_file(args, named_args),
+        #[cfg(feature = "stdlib-crypto")]
+        "crypto.hash_stdin" => crypto::hash_stdin(args, named_args),
+        #[cfg(feature = "stdlib-crypto")]
+        "crypto.checksum" => crypto::checksum(args, named_args),
+        #[cfg(feature = "stdlib-crypto")]
+        "crypto.crc32_file" => crypto::crc32_file(args, named_args),
+        #[cfg(feature = "stdlib-crypto")]
+        "crypto.crc32_stdin" => crypto::crc32_stdin(args, named_args),
+        #[cfg(feature = "stdlib-crypto")]
+        "crypto.encrypt" => crypto::encrypt(args, named_args),
+        #[cfg(feature = "stdlib-crypto")]
+        "crypto.decrypt" => crypto::decrypt(args, named_args),
+        #[cfg(feature = "stdlib-crypto")]
+        "crypto.uuid" => crypto::uuid(args, named_args),
+
+        #[cfg(feature = "stdlib-yaml")]
         "yaml.parse" => yaml::parse_value(args, named_args),
+        #[cfg(feature = "stdlib-yaml")]
         "yaml.stringify" => yaml::stringify(args, named_args),
 
+        #[cfg(feature = "stdlib-hcl")]
         "hcl.parse" => hcl::parse_value(args, named_args),
+        #[cfg(feature = "stdlib-hcl")]
         "hcl.stringify" => hcl::stringify(args, named_args),
 
+        #[cfg(feature = "stdlib-csv")]
         "csv.parse" => csv::parse_value(args, named_args),
 
+        #[cfg(feature = "stdlib-db")]
         "db.connect" => db::connect(args, named_args),
+        #[cfg(feature = "stdlib-db")]
         "db.query" => db::query(args, named_args),
+        #[cfg(feature = "stdlib-db")]
         "db.execute" => db::execute(args, named_args),
+        #[cfg(feature = "stdlib-db")]
         "db.close" => db::close(args, named_args),
 
+        #[cfg(feature = "stdlib-amqp")]
         "amqp.connect" => amqp::connect(args, named_args),
+        #[cfg(feature = "stdlib-amqp")]
         "amqp.publish" => amqp::publish(args, named_args),
+        #[cfg(feature = "stdlib-amqp")]
         "amqp.queue_delete" => amqp::queue_delete(args, named_args),
+        #[cfg(feature = "stdlib-amqp")]
         "amqp.queue_purge" => amqp::queue_purge(args, named_args),
 
+        #[cfg(feature = "stdlib-xml")]
         "xml.parse" => xml::parse_value(args, named_args),
 
+        #[cfg(feature = "stdlib-env")]
         "env.parse" => env::parse_value(args, named_args),
 
+        #[cfg(feature = "stdlib-template")]
         "template.render" => template::render(args, named_args),
+        #[cfg(feature = "stdlib-template")]
         "template.render_file" => template::render_file(args, named_args),
 
+        #[cfg(feature = "stdlib-llm")]
         "llm.model" => llm::model(args, named_args),
+        #[cfg(feature = "stdlib-llm")]
         "llm.prompt" => llm::prompt(args, named_args),
+        #[cfg(feature = "stdlib-llm")]
         "llm.embed" => llm::embed(args, named_args),
+        #[cfg(feature = "stdlib-llm")]
         "llm.chat" => llm::chat(args, named_args),
 
+        #[cfg(feature = "stdlib-notifications")]
         "notifications.smtp" => notifications::smtp(args, named_args),
+        #[cfg(feature = "stdlib-notifications")]
         "notifications.slack" => notifications::slack(args, named_args),
+        #[cfg(feature = "stdlib-notifications")]
         "notifications.telegram" => notifications::telegram(args, named_args),
+        #[cfg(feature = "stdlib-notifications")]
         "notifications.mattermost" => notifications::mattermost(args, named_args),
+        #[cfg(feature = "stdlib-notifications")]
         "notifications.gitter" => notifications::gitter(args, named_args),
+        #[cfg(feature = "stdlib-notifications")]
         "notifications.messenger" => notifications::messenger(args, named_args),
+        #[cfg(feature = "stdlib-notifications")]
         "notifications.discord" => notifications::discord(args, named_args),
+        #[cfg(feature = "stdlib-notifications")]
         "notifications.teams" => notifications::teams(args, named_args),
+        #[cfg(feature = "stdlib-notifications")]
         "notifications.x" => notifications::x(args, named_args),
+        #[cfg(feature = "stdlib-notifications")]
         "notifications.os" => notifications::os_notify(args, named_args),
+        #[cfg(feature = "stdlib-notifications")]
         "notifications.irc" => notifications::irc(args, named_args),
 
         // Type methods
@@ -217,5 +288,6 @@ pub fn call(
 }
 
 #[cfg(test)]
+#[cfg(feature = "full-stdlib")]
 #[path = "cve_security_tests.rs"]
 mod cve_security_tests;

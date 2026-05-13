@@ -203,3 +203,19 @@ fn test_transpile_and_run_fizzbuzz() {
     assert!(stdout
         .contains("1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz\n"));
 }
+
+#[test]
+fn test_transpile_exit_mismatch_repro() {
+    let source = r#"
+        prep {}
+        @p = procedure() {
+          try {
+            sys.exit(0)
+          } fallback {
+            # This should be skipped on exit request
+          }
+        }
+        @p.call()
+    "#;
+    assert_transpile_exit("repro_exit_mismatch", source, 0);
+}

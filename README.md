@@ -85,8 +85,12 @@ corvo --lint script.corvo
 # Compile to a native standalone executable
 corvo --compile script.corvo -o myapp
 
-# Transpile to a Rust project
+# Transpile to a Rust project (full runtime)
 corvo --transpile script.corvo
+
+# Transpile to a lean, optimized Rust project (Oxide mode)
+# Achieves < 5MB binaries for most scripts.
+corvo --oxide script.corvo
 
 # Wipe the persistent compile cache (target dir reused by --compile)
 corvo --clean

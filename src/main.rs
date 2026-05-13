@@ -45,6 +45,10 @@ struct Args {
     #[arg(long)]
     transpile: bool,
 
+    /// Oxide-transpile to a lean Rust project (smaller binaries)
+    #[arg(long)]
+    oxide: bool,
+
     /// Output path for compiled executable
     #[arg(short = 'o', long, value_name = "PATH")]
     output: Option<PathBuf>,
@@ -127,6 +131,8 @@ fn main() {
             compile_file(&file, args.output.as_deref(), args.debug, args.no_debug);
         } else if args.transpile {
             transpile_file(&file, args.output.as_deref());
+        } else if args.oxide {
+            oxide_file(&file, args.output.as_deref());
         } else if args.lint {
             lint_file(&file);
         } else if args.check {
@@ -273,6 +279,57 @@ fn transpile_file(file: &std::path::Path, output: Option<&std::path::Path>) {
         }
         Err(e) => {
             eprintln!("error: Transpilation failed: {}", e);
+            std::process::exit(1);
+        }
+    }
+}
+
+fn oxide_file(file: &std::path::Path, output: Option<&std::path::Path>) {
+    let source = match std::fs::read_to_string(file) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("error: Cannot read '{}': {}", file.display(), e);
+            std::process::exit(1);
+        }
+    };
+
+    let output_dir = match output {
+        Some(p) => p.to_path_buf(),
+        None => {
+            let stem = file.file_stem().unwrap_or_default().to_string_lossy();
+            PathBuf::from(stem.to_string())
+        }
+    };
+
+    let mut compiler = corvo_lang::compiler::Compiler::new(source, file.to_path_buf());
+
+    eprintln!(
+        "Pre-executing {} to capture static values...",
+        file.display()
+    );
+    match compiler.pre_execute() {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("warning: Pre-execution error: {}", e);
+        }
+    }
+
+    eprintln!(
+        "Oxide-transpiling {} to lean Rust project in {}...",
+        file.display(),
+        output_dir.display()
+    );
+
+    match compiler.oxide(&output_dir) {
+        Ok(_) => {
+            eprintln!("Oxide transpiled successfully to {}", output_dir.display());
+            eprintln!(
+                "To build: cd {} && cargo build --release",
+                output_dir.display()
+            );
+        }
+        Err(e) => {
+            eprintln!("error: Oxide transpilation failed: {}", e);
             std::process::exit(1);
         }
     }

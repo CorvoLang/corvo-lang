@@ -8,6 +8,11 @@ pub struct Transpiler {
     pub closure_depth: usize,
     /// Monotonic id for generated `'corvo_loop_N` labels (nested `loop` needs unique labels).
     loop_label_counter: u32,
+    /// When true, generate direct `corvo_lang::standard_lib::ns::func(...)` calls
+    /// instead of `corvo_lang::macro_name!(...)` macro invocations.
+    pub oxide_mode: bool,
+    /// Stack of closure types: true = Procedure (returns Result<Value>), false = TryBlock (returns Result<()>)
+    pub closure_stack: Vec<bool>,
 }
 
 impl Transpiler {
@@ -23,6 +28,8 @@ impl Default for Transpiler {
             captured_statics: HashMap::new(),
             closure_depth: 0,
             loop_label_counter: 0,
+            oxide_mode: false,
+            closure_stack: Vec::new(),
         }
     }
 }
@@ -31,6 +38,62 @@ impl Transpiler {
     pub fn with_statics(mut self, statics: HashMap<String, Value>) -> Self {
         self.captured_statics = statics;
         self
+    }
+
+    /// Enable Oxide mode: direct stdlib calls instead of macro dispatch.
+    pub fn with_oxide_mode(mut self) -> Self {
+        self.oxide_mode = true;
+        self
+    }
+
+    /// Transpile the program body only (no import header). Used by OxideTranspiler
+    /// which provides its own selective imports.
+    pub fn transpile_oxide_body(mut self, program: &Program) -> String {
+        self.loop_label_counter = 0;
+        let mut rust_code = String::new();
+
+        rust_code.push_str("fn main() {\n");
+        rust_code.push_str("    match run() {\n");
+        rust_code.push_str("        Ok(_) => {},\n");
+        rust_code.push_str("        Err(e) => {\n");
+        rust_code.push_str("            eprintln!(\"{}\", e);\n");
+        rust_code.push_str("            std::process::exit(e.exit_code());\n");
+        rust_code.push_str("        }\n");
+        rust_code.push_str("    }\n");
+        rust_code.push_str("}\n\n");
+
+        rust_code.push_str("fn run() -> Result<(), CorvoError> {\n");
+        rust_code.push_str("    let mut state = RuntimeState::new();\n");
+        rust_code.push_str("    state.set_script_argv(std::env::args().skip(1).collect());\n\n");
+
+        // Embed statics
+        if !self.captured_statics.is_empty() {
+            rust_code.push_str("    // Statics captured during pre-execution\n");
+            for (k, v) in &self.captured_statics {
+                rust_code.push_str(&format!(
+                    "    state.static_set(\"{}\".to_string(), {});\n",
+                    k,
+                    self.value_to_rust_literal(v)
+                ));
+            }
+            rust_code.push('\n');
+        }
+
+        for stmt in &program.statements {
+            rust_code.push_str(&self.transpile_stmt(stmt, "state"));
+            rust_code.push_str(
+                "    if state.var_get(\"_terminate_requested\").unwrap_or_else(|_| Value::Boolean(false)).is_truthy() {\n",
+            );
+            rust_code.push_str(
+                "        state.var_set(\"_terminate_requested\".to_string(), Value::Boolean(false));\n",
+            );
+            rust_code.push_str("        return Ok(());\n");
+            rust_code.push_str("    }\n");
+        }
+
+        rust_code.push_str("    Ok(())\n");
+        rust_code.push_str("}\n");
+        rust_code
     }
 
     pub fn transpile(mut self, program: &Program) -> String {
@@ -106,11 +169,22 @@ impl Transpiler {
 
     /// After `result = (|| { ... })();`, propagate `sys.exit` (`ExitRequest`) without running fallbacks.
     /// Keep behavior aligned with `Stmt::TryBlock` in `evaluator.rs`.
+    ///
+    /// `result` is always `Result<(), CorvoError>` here (try-body closure). At top level (`run()`)
+    /// returning `Result<(), CorvoError>` is correct; inside `NativeProcedure` callbacks we must
+    /// return `Result<Value, CorvoError>` — map success `Ok(())` to `Ok(Value::Null)` while
+    /// preserving `Err` (including `ExitRequest`) unchanged.
     fn push_exit_request_early_return(&self, code: &mut String) {
         let ind = self.indent();
+        let is_procedure = self.closure_stack.last().cloned().unwrap_or(false);
+        let ret = if self.closure_depth > 0 && is_procedure {
+            format!("{ind}        return result.map(|_| Value::Null);\n")
+        } else {
+            format!("{ind}        return result;\n")
+        };
         code.push_str(&format!(
             "{ind}    if matches!(&result, Err(CorvoError::ExitRequest {{ .. }})) {{\n\
-             {ind}        return result;\n\
+             {ret}\
              {ind}    }}\n"
         ));
     }
@@ -419,12 +493,14 @@ impl Transpiler {
                     self.indent()
                 ));
                 self.indent_level += 2;
+                self.closure_stack.push(false);
                 self.closure_depth += 1;
                 for s in body {
                     code.push_str(&self.transpile_stmt(s, state_var));
                 }
                 code.push_str(&format!("{}Ok(())\n", self.indent()));
                 self.closure_depth -= 1;
+                self.closure_stack.pop();
                 self.indent_level -= 2;
                 code.push_str(&format!("{}    }})();\n", self.indent()));
                 self.push_exit_request_early_return(&mut code);
@@ -449,12 +525,14 @@ impl Transpiler {
                         self.indent()
                     ));
                     self.indent_level += 1;
+                    self.closure_stack.push(false);
                     self.closure_depth += 1;
                     for s in &fb.body {
                         code.push_str(&self.transpile_stmt(s, state_var));
                     }
                     code.push_str(&format!("{}Ok(())\n", self.indent()));
                     self.closure_depth -= 1;
+                    self.closure_stack.pop();
                     self.indent_level -= 1;
                     code.push_str(&format!("{}    }})();\n", self.indent()));
                     self.push_exit_request_early_return(&mut code);
@@ -474,6 +552,13 @@ impl Transpiler {
                 }
                 self.indent_level -= 1;
                 code.push_str(&format!("{}    }}\n", self.indent()));
+                let is_procedure = self.closure_stack.last().cloned().unwrap_or(false);
+                let prop = if self.closure_depth > 0 && is_procedure {
+                    format!("{}result.map(|_| Value::Null)?;\n", self.indent())
+                } else {
+                    format!("{}result?;\n", self.indent())
+                };
+                code.push_str(&prop);
                 code.push_str(&format!("{}}}\n", self.indent()));
             }
             Stmt::Assert { kind, args } => {
@@ -594,12 +679,12 @@ impl Transpiler {
                 self.closure_depth -= 1;
                 self.indent_level = old_indent;
                 code.push_str(&format!(
-                    "{}corvo_lang::compiler::Evaluator::new().exec_http_listen_native(\n\
+                    "{}corvo_lang::standard_lib::http_server::HttpServer::exec_http_listen_native(\n\
                      {}    {},\n\
                      {}    {:?},\n\
                      {}    {:?},\n\
                      {}    &[{}],\n\
-                     {}    std::sync::Arc::new(move |_args, {}| {{\n\
+                     {}    std::sync::Arc::new(move |_args, mut {}| {{\n\
                      {}\
                      {}    }}),\n\
                      {}    &mut {}\n\
@@ -820,6 +905,55 @@ impl Transpiler {
                             map_build
                         )
                     }
+                } else if self.oxide_mode {
+                    // Oxide mode: direct function calls
+                    let (ns, func_name) = Self::split_function_name(name);
+                    let args_str = args_list.join(", ");
+
+                    // Type methods (string.*, number.*, list.*, map.*, re.*) go through
+                    // type_methods, not standard_lib modules.
+                    let type_method_ns = ["string", "number", "list", "map", "re"];
+                    if type_method_ns.contains(&ns.as_str()) {
+                        let method_fn = match ns.as_str() {
+                            "string" => "call_string_method",
+                            "number" => "call_number_method",
+                            "list" => "call_list_method",
+                            "map" => "call_map_method",
+                            "re" => "call_re_method",
+                            _ => unreachable!(),
+                        };
+                        format!(
+                            "corvo_lang::type_system::type_methods::{}({:?}, &[{}])?",
+                            method_fn, name, args_str
+                        )
+                    } else {
+                        // Regular stdlib function call
+                        let rust_func = Self::function_to_rust_name(name, &func_name);
+                        let needs_state = Self::function_needs_state(name);
+                        if needs_state {
+                            if named_map_items.is_empty() {
+                                format!(
+                                    "corvo_lang::standard_lib::{}::{}(&[{}], &HashMap::new(), &{})?",
+                                    ns, rust_func, args_str, state_var
+                                )
+                            } else {
+                                format!(
+                                    "corvo_lang::standard_lib::{}::{}(&[{}], &{}, &{})?",
+                                    ns, rust_func, args_str, named_map_code, state_var
+                                )
+                            }
+                        } else if named_map_items.is_empty() {
+                            format!(
+                                "corvo_lang::standard_lib::{}::{}(&[{}], &HashMap::new())?",
+                                ns, rust_func, args_str
+                            )
+                        } else {
+                            format!(
+                                "corvo_lang::standard_lib::{}::{}(&[{}], &{})?",
+                                ns, rust_func, args_str, named_map_code
+                            )
+                        }
+                    }
                 } else {
                     let macro_name = name.replace('.', "_");
                     let args_str = if args_list.is_empty() {
@@ -948,7 +1082,9 @@ impl Transpiler {
                 );
 
                 // Bind parameters
-                proc_code.push_str(&format!("    if args.len() < {} {{ return Err(CorvoError::runtime(format!(\"Procedure expects at least {} arguments, got {{}}\", args.len()))); }}\n", params.len(), params.len()));
+                if !params.is_empty() {
+                    proc_code.push_str(&format!("    if args.len() < {} {{ return Err(CorvoError::runtime(format!(\"Procedure expects at least {} arguments, got {{}}\", args.len()))); }}\n", params.len(), params.len()));
+                }
                 for (i, p) in params.iter().enumerate() {
                     proc_code.push_str(&format!(
                         "    state.var_set(\"{}\".to_string(), args[{}].clone());\n",
@@ -962,6 +1098,12 @@ impl Transpiler {
                     captured_statics: self.captured_statics.clone(),
                     closure_depth: self.closure_depth + 1,
                     loop_label_counter: 0,
+                    oxide_mode: self.oxide_mode,
+                    closure_stack: {
+                        let mut stack = self.closure_stack.clone();
+                        stack.push(true);
+                        stack
+                    },
                 };
                 for stmt in body {
                     proc_code.push_str(&sub_transpiler.transpile_stmt(stmt, "state"));
@@ -977,6 +1119,69 @@ impl Transpiler {
             }
             _ => "Value::Null".to_string(),
         }
+    }
+
+    // ─── Oxide helper methods ─────────────────────────────────────────────────
+
+    /// Split a fully-qualified function name like `"sys.echo"` into `("sys", "echo")`.
+    fn split_function_name(name: &str) -> (String, String) {
+        if let Some(dot) = name.find('.') {
+            (name[..dot].to_string(), name[dot + 1..].to_string())
+        } else {
+            ("sys".to_string(), name.to_string())
+        }
+    }
+
+    /// Map a Corvo function name to its Rust identifier in the stdlib module.
+    /// Handles cases where the Rust name differs from the Corvo name (reserved words, etc.).
+    fn function_to_rust_name(full_name: &str, func_name: &str) -> String {
+        // Handle full-name overrides first (where namespace matters)
+        match full_name {
+            "notifications.os" => return "os_notify".to_string(),
+            "sys.exit" => return "exit_process".to_string(),
+            "sys.print" => return "print_no_newline".to_string(),
+            "sys.eprint" => return "eprint_newline".to_string(),
+            _ => {}
+        }
+        // Then handle function-name-level overrides
+        match func_name {
+            "mod" => "modulo".to_string(),
+            "move" => "move_file".to_string(),
+            "parse" => {
+                if matches!(
+                    full_name.split('.').next(),
+                    Some("json" | "yaml" | "xml" | "hcl" | "csv" | "env")
+                ) {
+                    "parse_value".to_string()
+                } else {
+                    "parse".to_string()
+                }
+            }
+            "match" => "is_match".to_string(),
+            "new" => {
+                if full_name.starts_with("re.") {
+                    "new_regex".to_string()
+                } else {
+                    "new".to_string()
+                }
+            }
+            other => other.to_string(),
+        }
+    }
+
+    /// Returns true if the function requires a `&RuntimeState` parameter (3-arg signature).
+    fn function_needs_state(name: &str) -> bool {
+        matches!(
+            name,
+            "os.argv"
+                | "net.tcp_listen"
+                | "net.tcp_accept"
+                | "net.tcp_close_listener"
+                | "net.tcp_connect"
+                | "net.tcp_read"
+                | "net.tcp_write"
+                | "net.tcp_close"
+        )
     }
 
     fn value_to_rust_literal(&self, value: &Value) -> String {
