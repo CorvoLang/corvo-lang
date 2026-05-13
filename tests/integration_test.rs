@@ -406,6 +406,73 @@ fn test_try_multiple_fallbacks() {
 }
 
 #[test]
+fn test_try_sys_exit_skips_fallback() {
+    let err = run_with_state(
+        r#"
+        var.set("ran", false)
+        try {
+            sys.exit(7)
+        } fallback {
+            var.set("ran", true)
+        }
+        "#,
+    )
+    .unwrap_err();
+    assert_eq!(err.process_exit_code(), Some(7));
+}
+
+#[test]
+fn test_try_fallback_sys_exit_propagates() {
+    let err = run_with_state(
+        r#"
+        try {
+            assert_eq(1, 2)
+        } fallback {
+            sys.exit(3)
+        }
+        "#,
+    )
+    .unwrap_err();
+    assert_eq!(err.process_exit_code(), Some(3));
+}
+
+#[test]
+fn test_try_sys_exit_in_first_fallback_skips_second_fallback() {
+    let err = run_with_state(
+        r#"
+        try {
+            assert_eq(1, 2)
+        } fallback {
+            sys.exit(2)
+        } fallback {
+            var.set("second_ran", true)
+        }
+        "#,
+    )
+    .unwrap_err();
+    assert_eq!(err.process_exit_code(), Some(2));
+}
+
+#[test]
+fn test_try_nested_sys_exit_skips_outer_fallback() {
+    let err = run_with_state(
+        r#"
+        try {
+            try {
+                sys.exit(5)
+            } fallback {
+                var.set("inner_fb", true)
+            }
+        } fallback {
+            var.set("outer_fb", true)
+        }
+        "#,
+    )
+    .unwrap_err();
+    assert_eq!(err.process_exit_code(), Some(5));
+}
+
+#[test]
 fn test_loop_with_counter() {
     let state = run_with_state(
         r#"

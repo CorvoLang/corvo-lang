@@ -416,6 +416,10 @@ impl Transpiler {
                 self.closure_depth -= 1;
                 self.indent_level -= 2;
                 code.push_str(&format!("{}    }})();\n", self.indent()));
+                code.push_str(&format!(
+                    "{}    if matches!(&result, Err(CorvoError::ExitRequest {{ .. }})) {{\n{0}        return result;\n{0}    }}\n",
+                    self.indent()
+                ));
                 code.push_str(&format!("{}    if {}.var_get(\"_terminate_requested\").unwrap_or_else(|_| Value::Boolean(false)).is_truthy() {{\n", self.indent(), state_var));
                 if self.closure_depth > 0 {
                     code.push_str(&format!(
@@ -443,6 +447,12 @@ impl Transpiler {
                     self.closure_depth -= 1;
                     self.indent_level -= 1;
                     code.push_str(&format!("{}    }})();\n", self.indent()));
+                    code.push_str(&format!(
+                        "{}    if matches!(&result, Err(CorvoError::ExitRequest {{ .. }})) {{\n",
+                        self.indent()
+                    ));
+                    code.push_str(&format!("{}        return result;\n", self.indent()));
+                    code.push_str(&format!("{}}}\n", self.indent()));
                     code.push_str(&format!("{}    if {}.var_get(\"_terminate_requested\").unwrap_or_else(|_| Value::Boolean(false)).is_truthy() {{\n", self.indent(), state_var));
                     if self.closure_depth > 0 {
                         code.push_str(&format!(
