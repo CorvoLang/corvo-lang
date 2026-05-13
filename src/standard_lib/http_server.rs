@@ -156,6 +156,12 @@ impl HttpServer {
             }
         }
 
+        if header_end == 0 {
+            return Err(CorvoError::runtime(
+                "Connection closed before HTTP headers were complete",
+            ));
+        }
+
         let header_cow = String::from_utf8_lossy(&request_raw[..header_end]);
         let content_length = Self::extract_http_content_length(header_cow.as_ref());
 
@@ -252,7 +258,7 @@ impl HttpServer {
         req_map: HashMap<String, Value>,
         scope_state: &mut RuntimeState,
     ) -> Vec<Value> {
-        *scope_state = base_state.clone();
+        scope_state.clone_from(base_state);
         scope_state.var_set(req_ident.to_string(), Value::Map(req_map));
 
         let mut initial_resp = HashMap::new();
@@ -268,6 +274,26 @@ impl HttpServer {
             scope_state.var_set(shared_vars[i].clone(), val);
         }
         snapshots
+    }
+
+    fn http_status_reason(code: u16) -> &'static str {
+        match code {
+            200 => "OK",
+            201 => "Created",
+            204 => "No Content",
+            400 => "Bad Request",
+            401 => "Unauthorized",
+            403 => "Forbidden",
+            404 => "Not Found",
+            500 => "Internal Server Error",
+            502 => "Bad Gateway",
+            503 => "Service Unavailable",
+            _ if code >= 500 => "Internal Server Error",
+            _ if code >= 400 => "Bad Request",
+            _ if code >= 300 => "Redirect",
+            _ if code >= 200 => "OK",
+            _ => "OK",
+        }
     }
 
     fn write_http_response(
@@ -305,12 +331,22 @@ impl HttpServer {
             ),
         };
 
-        let mut response = format!("HTTP/1.1 {} OK\r\n", status);
-        if !headers.contains_key("content-type") {
-            response.push_str("Content-Type: text/plain\r\n");
+        let reason = Self::http_status_reason(status);
+        let mut response = format!("HTTP/1.1 {} {}\r\n", status, reason);
+
+        let mut safe_headers: Vec<(String, String)> = headers
+            .into_iter()
+            .filter(|(k, v)| !k.contains(['\r', '\n']) && !v.contains(['\r', '\n']))
+            .map(|(k, v)| (k.to_lowercase(), v))
+            .collect();
+
+        let has_content_type = safe_headers.iter().any(|(k, _)| k == "content-type");
+        if !has_content_type {
+            safe_headers.push(("content-type".to_string(), "text/plain".to_string()));
         }
-        for (k, v) in headers {
-            response.push_str(&format!("{}: {}\r\n", k, v));
+
+        for (k, v) in safe_headers {
+            response.push_str(&format!("{k}: {v}\r\n"));
         }
         response.push_str(&format!("Content-Length: {}\r\n", body.len()));
         response.push_str("\r\n");
@@ -319,11 +355,13 @@ impl HttpServer {
         let _ = stream.write_all(response.as_bytes());
         let _ = stream.flush();
 
-        for (i, arc) in shared_arcs.iter().enumerate() {
-            let thread_final = scope_state.var_get(&shared_vars[i]).unwrap_or(Value::Null);
-            let mut guard = arc.lock().unwrap();
-            let current = guard.clone();
-            *guard = Value::merge_shared_writeback(&snapshots[i], &thread_final, &current);
+        if success {
+            for (i, arc) in shared_arcs.iter().enumerate() {
+                let thread_final = scope_state.var_get(&shared_vars[i]).unwrap_or(Value::Null);
+                let mut guard = arc.lock().unwrap();
+                let current = guard.clone();
+                *guard = Value::merge_shared_writeback(&snapshots[i], &thread_final, &current);
+            }
         }
         Ok(())
     }

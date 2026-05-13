@@ -210,6 +210,22 @@ impl Read for ChunkedFakeStream {
 }
 
 #[test]
+fn test_stream_incomplete_headers_eof_rejected() {
+    let mut stream = std::io::Cursor::new(&b"GET / HTTP/1.1\r\nHost: example.com"[..]);
+    let err = HttpServer::parse_http_request_from_reader(&mut stream, "127.0.0.1").unwrap_err();
+    match err {
+        crate::CorvoError::Runtime { message, .. } => {
+            assert!(
+                message.contains("headers were complete"),
+                "expected incomplete headers error, got: {}",
+                message
+            );
+        }
+        other => panic!("expected runtime error for incomplete headers, got: {:?}", other),
+    }
+}
+
+#[test]
 fn test_stream_short_body_read_exact_success() {
     const INITIAL: &[u8] =
         b"POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 11\r\n\r\nHello ";

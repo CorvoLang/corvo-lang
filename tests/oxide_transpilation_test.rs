@@ -6,6 +6,40 @@ use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
 
+/// Path to the `corvo-lang` crate for generated Oxide projects.
+///
+/// Set `CORVO_LANG_LOCAL_PATH`, or run `cargo test` from the corvo-lang repo root (uses `current_dir`).
+fn corvo_lang_path_for_tests() -> String {
+    std::env::var("CORVO_LANG_LOCAL_PATH").unwrap_or_else(|_| {
+        std::env::current_dir()
+            .expect(
+                "set CORVO_LANG_LOCAL_PATH to the corvo-lang repo root, or run tests from that directory",
+            )
+            .display()
+            .to_string()
+    })
+}
+
+fn corvo_lang_dep_toml(local_path: &str, features: &[String]) -> String {
+    let path = local_path.replace('\\', "/");
+    if features.is_empty() {
+        format!(
+            r#"corvo-lang = {{ path = "{}", default-features = false }}"#,
+            path
+        )
+    } else {
+        let list = features
+            .iter()
+            .map(|f| format!("\"{}\"", f))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            r#"corvo-lang = {{ path = "{}", default-features = false, features = [{}] }}"#,
+            path, list
+        )
+    }
+}
+
 fn assert_oxide_exit(name: &str, source: &str, expected_code: i32) {
     let temp = tempdir().expect("Failed to create temp dir");
     let corvo_file = temp.path().join(format!("{}.corvo", name));
@@ -40,8 +74,8 @@ fn assert_oxide_exit(name: &str, source: &str, expected_code: i32) {
         deps.push_str("serde_json = \"1.0\"\n");
     }
 
-    let local_path = std::env::var("CORVO_LANG_LOCAL_PATH")
-        .unwrap_or_else(|_| "/Users/manoelhc/Documents/GitHub/CorvoLang/corvo-lang".to_string());
+    let local_path = corvo_lang_path_for_tests();
+    let corvo_dep = corvo_lang_dep_toml(&local_path, &features);
     let cargo_toml = format!(
         r#"
 [package]
@@ -50,7 +84,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-corvo-lang = {{ path = "{}" }}
+{}
 tokio = {{ version = "1.0", features = ["full"] }}
 {}
 [profile.release]
@@ -60,7 +94,7 @@ codegen-units = 1
 panic = "abort"
 strip = true
 "#,
-        name, local_path, deps
+        name, corvo_dep, deps
     );
     fs::write(output_dir.join("Cargo.toml"), cargo_toml).expect("Failed to write Cargo.toml");
 
@@ -191,6 +225,7 @@ fn test_transpile_try_error_propagation() {
     let mut parser = Parser::new(tokenizer.tokenize().expect("Tokenization failed"));
     let program = parser.parse().expect("Parsing failed");
     let usage = UsageAnalysis::from_program(&program);
+    let features = usage.required_features();
     let transpiler = OxideTranspiler::new(usage);
     let rust_code = transpiler.transpile(&program);
 
@@ -198,8 +233,8 @@ fn test_transpile_try_error_propagation() {
     fs::create_dir_all(&src_dir).expect("Failed to create src dir");
     fs::write(src_dir.join("main.rs"), rust_code).expect("Failed to write main.rs");
 
-    let local_path = std::env::var("CORVO_LANG_LOCAL_PATH")
-        .unwrap_or_else(|_| "/Users/manoelhc/Documents/GitHub/CorvoLang/corvo-lang".to_string());
+    let local_path = corvo_lang_path_for_tests();
+    let corvo_dep = corvo_lang_dep_toml(&local_path, &features);
     let cargo_toml = format!(
         r#"
 [package]
@@ -208,11 +243,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-corvo-lang = {{ path = "{}" }}
+{}
 tokio = {{ version = "1.0", features = ["full"] }}
 {}
 "#,
-        name, local_path, ""
+        name, corvo_dep, ""
     );
     fs::write(output_dir.join("Cargo.toml"), cargo_toml).expect("Failed to write Cargo.toml");
 
@@ -253,6 +288,7 @@ fn test_transpile_fs_chown_propagation() {
     let mut parser = Parser::new(lexer.tokenize().expect("Tokenization failed"));
     let program = parser.parse().expect("Parsing failed");
     let usage = UsageAnalysis::from_program(&program);
+    let features = usage.required_features();
     let transpiler = OxideTranspiler::new(usage);
     let rust_code = transpiler.transpile(&program);
 
@@ -260,8 +296,8 @@ fn test_transpile_fs_chown_propagation() {
     fs::create_dir_all(&src_dir).expect("Failed to create src dir");
     fs::write(src_dir.join("main.rs"), rust_code).expect("Failed to write main.rs");
 
-    let local_path = std::env::var("CORVO_LANG_LOCAL_PATH")
-        .unwrap_or_else(|_| "/Users/manoelhc/Documents/GitHub/CorvoLang/corvo-lang".to_string());
+    let local_path = corvo_lang_path_for_tests();
+    let corvo_dep = corvo_lang_dep_toml(&local_path, &features);
     let cargo_toml = format!(
         r#"
 [package]
@@ -270,11 +306,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-corvo-lang = {{ path = "{}" }}
+{}
 tokio = {{ version = "1.0", features = ["full"] }}
 {}
 "#,
-        name, local_path, ""
+        name, corvo_dep, ""
     );
     fs::write(output_dir.join("Cargo.toml"), cargo_toml).expect("Failed to write Cargo.toml");
 
