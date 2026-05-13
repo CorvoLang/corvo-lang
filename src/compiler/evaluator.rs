@@ -1323,7 +1323,6 @@ impl Default for Evaluator {
 ///
 /// For all other value types the thread's final value replaces the current
 /// mutex value (last-writer-wins semantics).
-
 #[cfg(test)]
 mod tests {
     use super::*;

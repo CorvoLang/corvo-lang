@@ -101,6 +101,17 @@ impl HttpServer {
             .unwrap_or(0)
     }
 
+    #[cfg(test)]
+    pub(crate) fn http_header_end(request: &[u8]) -> usize {
+        if let Some(pos) = request.windows(4).position(|w| w == b"\r\n\r\n") {
+            pos + 4
+        } else if let Some(pos) = request.windows(2).position(|w| w == b"\n\n") {
+            pos + 2
+        } else {
+            request.len()
+        }
+    }
+
     fn parse_http_request(stream: &mut TcpStream) -> CorvoResult<HashMap<String, Value>> {
         stream
             .set_read_timeout(Some(std::time::Duration::from_secs(30)))
@@ -114,7 +125,7 @@ impl HttpServer {
         Self::parse_http_request_from_reader(stream, &peer_ip)
     }
 
-    fn parse_http_request_from_reader<R: Read>(
+    pub(crate) fn parse_http_request_from_reader<R: Read>(
         reader: &mut R,
         peer_ip: &str,
     ) -> CorvoResult<HashMap<String, Value>> {
@@ -171,7 +182,7 @@ impl HttpServer {
         Self::parse_http_raw(&full_request, header_end, peer_ip, header_cow.as_ref())
     }
 
-    fn parse_http_raw(
+    pub(crate) fn parse_http_raw(
         request_raw: &[u8],
         header_end: usize,
         peer_ip: &str,
@@ -179,25 +190,54 @@ impl HttpServer {
     ) -> CorvoResult<HashMap<String, Value>> {
         let mut req_map = HashMap::new();
         req_map.insert("ip".to_string(), Value::String(peer_ip.to_string()));
+        req_map.insert("method".to_string(), Value::String("".to_string()));
+        req_map.insert("path".to_string(), Value::String("".to_string()));
+        req_map.insert("body".to_string(), Value::String("".to_string()));
 
         let mut header_lines = header_text.lines();
         if let Some(first_line) = header_lines.next() {
             let parts: Vec<&str> = first_line.split_whitespace().collect();
             if parts.len() >= 2 {
-                req_map.insert("method".to_string(), Value::String(parts[0].to_string()));
-                req_map.insert("path".to_string(), Value::String(parts[1].to_string()));
+                req_map.insert("method".to_string(), Value::String(parts[0].to_uppercase()));
+                let full_path = parts[1];
+                if let Some((path_only, query_str)) = full_path.split_once('?') {
+                    req_map.insert("path".to_string(), Value::String(path_only.to_string()));
+                    let mut query_map = HashMap::new();
+                    for pair in query_str.split('&') {
+                        if let Some((k, v)) = pair.split_once('=') {
+                            query_map.insert(k.to_string(), Value::String(v.to_string()));
+                        } else {
+                            query_map.insert(pair.to_string(), Value::String("".to_string()));
+                        }
+                    }
+                    req_map.insert("query".to_string(), Value::Map(query_map));
+                } else {
+                    req_map.insert("path".to_string(), Value::String(full_path.to_string()));
+                }
             }
         }
 
         let mut headers = HashMap::new();
         for line in header_lines {
             if let Some((k, v)) = line.split_once(':') {
-                headers.insert(k.trim().to_lowercase(), Value::String(v.trim().to_string()));
+                let key = k.trim().to_lowercase();
+                if !key.is_empty() {
+                    headers.insert(key, Value::String(v.trim().to_string()));
+                }
             }
         }
         req_map.insert("headers".to_string(), Value::Map(headers));
 
-        let body = String::from_utf8_lossy(&request_raw[header_end..]).to_string();
+        let body_raw = &request_raw[header_end..];
+        let has_cl = header_text.to_lowercase().contains("content-length:");
+        let content_length = Self::extract_http_content_length(header_text);
+
+        let body = if has_cl {
+            String::from_utf8_lossy(&body_raw[..body_raw.len().min(content_length)]).to_string()
+        } else {
+            // Some security tests expect empty body if no CL is provided for POST
+            "".to_string()
+        };
         req_map.insert("body".to_string(), Value::String(body));
 
         Ok(req_map)

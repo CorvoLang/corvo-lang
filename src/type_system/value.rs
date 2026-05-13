@@ -491,6 +491,53 @@ impl fmt::Display for Value {
     }
 }
 
+impl Value {
+    /// Merges a thread's final value back into the current mutex value for shared variables.
+    ///
+    /// This follows a "merge-whenever-possible" strategy for lists and numbers to avoid
+    /// the most common race conditions (like parallel `list.push` or `math.add`).
+    ///
+    /// For lists: if the thread only appended items, we append those same items to the
+    /// current mutex value.
+    ///
+    /// For numbers: we calculate the delta the thread contributed and add it to the
+    /// current mutex value.
+    ///
+    /// For strings: if the thread only appended a suffix, we append it to the current value.
+    ///
+    /// For all other value types the thread's final value replaces the current
+    /// mutex value (last-writer-wins semantics).
+    pub fn merge_shared_writeback(
+        snapshot: &Value,
+        thread_final: &Value,
+        current: &Value,
+    ) -> Value {
+        match (snapshot, thread_final, current) {
+            (Value::List(snap), Value::List(fin), Value::List(cur)) if fin.len() >= snap.len() => {
+                // Append only the items the thread added beyond its snapshot.
+                let new_items = &fin[snap.len()..];
+                let mut result = cur.clone();
+                result.extend_from_slice(new_items);
+                Value::List(result)
+            }
+            (Value::Number(snap), Value::Number(fin), Value::Number(cur)) => {
+                // Add the delta that the thread contributed.
+                Value::Number(cur + (fin - snap))
+            }
+            (Value::String(snap), Value::String(fin), Value::String(cur))
+                if fin.starts_with(snap) =>
+            {
+                // Append only the suffix the thread added.
+                let suffix = &fin[snap.len()..];
+                let mut result = cur.clone();
+                result.push_str(suffix);
+                Value::String(result)
+            }
+            _ => thread_final.clone(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -620,52 +667,5 @@ mod tests {
         assert_eq!(Value::Number(-1.0).to_string(), "-1");
         assert_eq!(Value::Number(0.5).to_string(), "0.5");
         assert_eq!(Value::Number(100.25).to_string(), "100.25");
-    }
-}
-
-impl Value {
-    /// Merges a thread's final value back into the current mutex value for shared variables.
-    ///
-    /// This follows a "merge-whenever-possible" strategy for lists and numbers to avoid
-    /// the most common race conditions (like parallel `list.push` or `math.add`).
-    ///
-    /// For lists: if the thread only appended items, we append those same items to the
-    /// current mutex value.
-    ///
-    /// For numbers: we calculate the delta the thread contributed and add it to the
-    /// current mutex value.
-    ///
-    /// For strings: if the thread only appended a suffix, we append it to the current value.
-    ///
-    /// For all other value types the thread's final value replaces the current
-    /// mutex value (last-writer-wins semantics).
-    pub fn merge_shared_writeback(
-        snapshot: &Value,
-        thread_final: &Value,
-        current: &Value,
-    ) -> Value {
-        match (snapshot, thread_final, current) {
-            (Value::List(snap), Value::List(fin), Value::List(cur)) if fin.len() >= snap.len() => {
-                // Append only the items the thread added beyond its snapshot.
-                let new_items = &fin[snap.len()..];
-                let mut result = cur.clone();
-                result.extend_from_slice(new_items);
-                Value::List(result)
-            }
-            (Value::Number(snap), Value::Number(fin), Value::Number(cur)) => {
-                // Add the delta that the thread contributed.
-                Value::Number(cur + (fin - snap))
-            }
-            (Value::String(snap), Value::String(fin), Value::String(cur))
-                if fin.starts_with(snap) =>
-            {
-                // Append only the suffix the thread added.
-                let suffix = &fin[snap.len()..];
-                let mut result = cur.clone();
-                result.push_str(suffix);
-                Value::String(result)
-            }
-            _ => thread_final.clone(),
-        }
     }
 }
