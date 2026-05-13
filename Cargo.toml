@@ -70,6 +70,7 @@ optional = true
 tempfile = "3.9"
 pretty_assertions = "1.4"
 proptest = "1.4"
+fs4 = "0.13"
 
 [features]
 default = ["repl", "full-stdlib"]

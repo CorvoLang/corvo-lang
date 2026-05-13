@@ -1,9 +1,13 @@
+#[path = "common/mod.rs"]
+mod common;
+
 use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
 
 #[test]
 fn test_transpile_http_listen_compiles() {
+    let _nested_cargo = common::nested_cargo_lock().expect("nested cargo lock");
     let source = r#"
         @hit_count = 0
         http_listen(port: 8080, @req, @resp, shared @hit_count) {

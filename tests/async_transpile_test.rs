@@ -1,3 +1,6 @@
+#[path = "common/mod.rs"]
+mod common;
+
 use corvo_lang::compiler::Compiler;
 
 use std::fs;
@@ -6,6 +9,7 @@ use tempfile::tempdir;
 
 #[test]
 fn test_transpile_async_browse() {
+    let _nested_cargo = common::nested_cargo_lock().expect("nested cargo lock");
     let dir = tempdir().expect("Failed to create temp dir");
     let script_path = dir.path().join("async_test.corvo");
     let project_path = dir.path().join("async_project");

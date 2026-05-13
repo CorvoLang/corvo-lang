@@ -1,12 +1,16 @@
 //! Regression tests for transpilation: issue #13 (`args.parse` + map literals), plus terminate and
 //! related control-flow parity with the interpreter (GitHub Copilot / PR #24 follow-ups).
 
+#[path = "common/mod.rs"]
+mod common;
+
 use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
 
 #[test]
 fn transpiled_args_parse_short_value_space_same_as_glued() {
+    let _nested_cargo = common::nested_cargo_lock().expect("nested cargo lock");
     let source = r#"
 prep {}
 
@@ -86,6 +90,7 @@ sys.echo(
 
 #[test]
 fn transpiled_terminate_inside_procedure_exits_loop_cleanly() {
+    let _nested_cargo = common::nested_cargo_lock().expect("nested cargo lock");
     let source = r#"
 @g = procedure(@av, @out_av) {
   @out_av = []
@@ -146,6 +151,7 @@ sys.echo(number.to_string(list.len(@acc)))
 /// Copilot PR #24: top-level `terminate` must skip subsequent statements in transpiled `run()`.
 #[test]
 fn transpiled_top_level_terminate_skips_following_statements() {
+    let _nested_cargo = common::nested_cargo_lock().expect("nested cargo lock");
     let source = r#"
 sys.echo("first")
 terminate

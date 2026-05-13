@@ -1,9 +1,13 @@
+#[path = "common/mod.rs"]
+mod common;
+
 use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
 
 #[test]
 fn test_transpile_amqp_consume_compiles() {
+    let _nested_cargo = common::nested_cargo_lock().expect("nested cargo lock");
     let source = r#"
         @messages_received = 0
         @conn_url = "amqp://127.0.0.1:5672/%2f"

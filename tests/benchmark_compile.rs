@@ -12,6 +12,9 @@
 //! - `CORVO_BENCHMARK_SKIP_PER_FILE_COLD` — if `1`, skip the per-example cold-cache phase
 //!   (each example uses a fresh `CORVO_CACHE_DIR`; very expensive for large sets).
 
+#[path = "common/mod.rs"]
+mod common;
+
 use corvo_lang::compiler::builder::corvo_cache_dir_test_lock;
 use corvo_lang::compiler::{append_corvo_lang_patch_to_cargo_toml, Compiler};
 use std::ffi::OsString;
@@ -117,6 +120,7 @@ fn append_patch_crates_io(project_dir: &Path, crate_root: &Path) -> Result<(), S
 }
 
 fn cargo_build_release(project_dir: &Path) -> Result<Duration, String> {
+    let _nested_cargo = common::nested_cargo_lock().map_err(|e| e.to_string())?;
     let t0 = Instant::now();
     let out = Command::new("cargo")
         .args(["build", "--release"])

@@ -1,9 +1,13 @@
+#[path = "common/mod.rs"]
+mod common;
+
 use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
 
 /// Transpile `source` to a temp project named `stem`, patch in path dependency, run the binary.
 fn transpile_and_run(stem: &str, source: &str) -> std::process::Output {
+    let _nested_cargo = common::nested_cargo_lock().expect("nested cargo lock");
     let dir = tempdir().unwrap();
     let script_path = dir.path().join(format!("{stem}.corvo"));
     fs::write(&script_path, source).unwrap();
