@@ -221,10 +221,16 @@ impl Evaluator {
             }
             Stmt::TryBlock { body, fallbacks } => {
                 let result = self.execute_block(body, state);
-
+                if matches!(&result, Err(CorvoError::ExitRequest { .. })) {
+                    return result;
+                }
                 if result.is_err() {
                     for fallback in fallbacks {
-                        if self.execute_block(&fallback.body, state).is_ok() {
+                        let fb = self.execute_block(&fallback.body, state);
+                        if matches!(&fb, Err(CorvoError::ExitRequest { .. })) {
+                            return fb;
+                        }
+                        if fb.is_ok() {
                             return Ok(());
                         }
                     }
@@ -1721,6 +1727,20 @@ mod tests {
         eval_source(source).expect_err(&format!("Expected error for: {}", source))
     }
 
+    fn eval_source_capture(source: &str) -> (CorvoResult<()>, RuntimeState) {
+        let mut state = RuntimeState::new();
+        let res: CorvoResult<()> = (|| {
+            let mut lexer = Lexer::new(source);
+            let tokens = lexer.tokenize()?;
+            let mut parser = Parser::new(tokens);
+            let program = parser.parse()?;
+            let mut evaluator = Evaluator::new();
+            evaluator.run(&program, &mut state)?;
+            Ok(())
+        })();
+        (res, state)
+    }
+
     // --- Basic Literals ---
 
     #[test]
@@ -2029,6 +2049,92 @@ mod tests {
             state.var_get("result").unwrap(),
             Value::String("inner fallback ran".to_string())
         );
+    }
+
+    #[test]
+    fn test_eval_try_sys_exit_skips_fallback() {
+        let (res, state) = eval_source_capture(
+            r#"
+            var.set("ran", false)
+            try {
+                sys.exit(7)
+            } fallback {
+                var.set("ran", true)
+            }
+            "#,
+        );
+        assert_eq!(res.unwrap_err().process_exit_code(), Some(7));
+        assert_eq!(state.var_get("ran").unwrap(), Value::Boolean(false));
+    }
+
+    #[test]
+    fn test_eval_try_fallback_sys_exit_propagates() {
+        let err = eval_source(
+            r#"
+            try {
+                assert_eq(1, 2)
+            } fallback {
+                sys.exit(3)
+            }
+            "#,
+        )
+        .unwrap_err();
+        assert_eq!(err.process_exit_code(), Some(3));
+    }
+
+    #[test]
+    fn test_eval_try_sys_exit_in_first_fallback_skips_later_fallbacks() {
+        let (res, state) = eval_source_capture(
+            r#"
+            try {
+                assert_eq(1, 2)
+            } fallback {
+                sys.exit(2)
+            } fallback {
+                var.set("second_ran", true)
+            }
+            "#,
+        );
+        assert_eq!(res.unwrap_err().process_exit_code(), Some(2));
+        assert!(state.var_get("second_ran").is_err());
+    }
+
+    #[test]
+    fn test_eval_try_nested_sys_exit_skips_outer_fallback() {
+        let (res, state) = eval_source_capture(
+            r#"
+            try {
+                try {
+                    sys.exit(5)
+                } fallback {
+                    var.set("inner_fb", true)
+                }
+            } fallback {
+                var.set("outer_fb", true)
+            }
+            "#,
+        );
+        assert_eq!(res.unwrap_err().process_exit_code(), Some(5));
+        assert!(state.var_get("inner_fb").is_err());
+        assert!(state.var_get("outer_fb").is_err());
+    }
+
+    #[test]
+    fn test_eval_try_first_fallback_ok_skips_second() {
+        let state = eval_source(
+            r#"
+            try {
+                assert_eq(1, 2)
+            } fallback {
+                var.set("a", 1)
+            } fallback {
+                var.set("b", 2)
+            }
+            "#,
+        )
+        .unwrap();
+        assert_eq!(state.var_get("a").unwrap(), Value::Number(1.0));
+        assert!(state.var_get("b").is_err());
     }
 
     #[test]

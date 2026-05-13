@@ -104,6 +104,17 @@ impl Transpiler {
         "    ".repeat(self.indent_level)
     }
 
+    /// After `result = (|| { ... })();`, propagate `sys.exit` (`ExitRequest`) without running fallbacks.
+    /// Keep behavior aligned with `Stmt::TryBlock` in `evaluator.rs`.
+    fn push_exit_request_early_return(&self, code: &mut String) {
+        let ind = self.indent();
+        code.push_str(&format!(
+            "{ind}    if matches!(&result, Err(CorvoError::ExitRequest {{ .. }})) {{\n\
+             {ind}        return result;\n\
+             {ind}    }}\n"
+        ));
+    }
+
     // skipcq: RS-R1000
     fn transpile_stmt(&mut self, stmt: &Stmt, state_var: &str) -> String {
         let mut code = String::new();
@@ -416,6 +427,7 @@ impl Transpiler {
                 self.closure_depth -= 1;
                 self.indent_level -= 2;
                 code.push_str(&format!("{}    }})();\n", self.indent()));
+                self.push_exit_request_early_return(&mut code);
                 code.push_str(&format!("{}    if {}.var_get(\"_terminate_requested\").unwrap_or_else(|_| Value::Boolean(false)).is_truthy() {{\n", self.indent(), state_var));
                 if self.closure_depth > 0 {
                     code.push_str(&format!(
@@ -430,6 +442,8 @@ impl Transpiler {
                 code.push_str(&format!("{}    if result.is_err() {{\n", self.indent()));
                 self.indent_level += 1;
                 for fb in fallbacks {
+                    code.push_str(&format!("{}    if result.is_err() {{\n", self.indent()));
+                    self.indent_level += 1;
                     code.push_str(&format!(
                         "{}result = (|| -> Result<(), CorvoError> {{\n",
                         self.indent()
@@ -443,6 +457,7 @@ impl Transpiler {
                     self.closure_depth -= 1;
                     self.indent_level -= 1;
                     code.push_str(&format!("{}    }})();\n", self.indent()));
+                    self.push_exit_request_early_return(&mut code);
                     code.push_str(&format!("{}    if {}.var_get(\"_terminate_requested\").unwrap_or_else(|_| Value::Boolean(false)).is_truthy() {{\n", self.indent(), state_var));
                     if self.closure_depth > 0 {
                         code.push_str(&format!(
@@ -454,10 +469,8 @@ impl Transpiler {
                         code.push_str(&format!("{}        return Ok(());\n", self.indent()));
                     }
                     code.push_str(&format!("{}    }}\n", self.indent()));
-                    code.push_str(&format!(
-                        "{}    if result.is_ok() {{ /* break fallback loop */ }}\n",
-                        self.indent()
-                    ));
+                    self.indent_level -= 1;
+                    code.push_str(&format!("{}    }}\n", self.indent()));
                 }
                 self.indent_level -= 1;
                 code.push_str(&format!("{}    }}\n", self.indent()));

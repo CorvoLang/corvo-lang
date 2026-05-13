@@ -26,6 +26,21 @@ fn run_with_script_argv(source: &str, script_argv: Vec<String>) -> CorvoResult<R
     Ok(state)
 }
 
+/// Like `run_with_state`, but returns the (possibly partial) runtime state even when execution errors.
+fn run_with_state_capture(source: &str) -> (CorvoResult<()>, RuntimeState) {
+    let mut state = RuntimeState::new();
+    let res: CorvoResult<()> = (|| {
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize()?;
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse()?;
+        let mut evaluator = Evaluator::new();
+        evaluator.run(&program, &mut state)?;
+        Ok(())
+    })();
+    (res, state)
+}
+
 // --- End-to-End Programs ---
 
 #[test]
@@ -403,6 +418,98 @@ fn test_try_multiple_fallbacks() {
         state.var_get("result").unwrap(),
         corvo_lang::type_system::Value::String("third time's the charm".to_string())
     );
+}
+
+#[test]
+fn test_try_sys_exit_skips_fallback() {
+    let (res, state) = run_with_state_capture(
+        r#"
+        var.set("ran", false)
+        try {
+            sys.exit(7)
+        } fallback {
+            var.set("ran", true)
+        }
+        "#,
+    );
+    assert_eq!(res.unwrap_err().process_exit_code(), Some(7));
+    assert_eq!(
+        state.var_get("ran").unwrap(),
+        corvo_lang::type_system::Value::Boolean(false)
+    );
+}
+
+#[test]
+fn test_try_fallback_sys_exit_propagates() {
+    let err = run_with_state(
+        r#"
+        try {
+            assert_eq(1, 2)
+        } fallback {
+            sys.exit(3)
+        }
+        "#,
+    )
+    .unwrap_err();
+    assert_eq!(err.process_exit_code(), Some(3));
+}
+
+#[test]
+fn test_try_sys_exit_in_first_fallback_skips_second_fallback() {
+    let (res, state) = run_with_state_capture(
+        r#"
+        try {
+            assert_eq(1, 2)
+        } fallback {
+            sys.exit(2)
+        } fallback {
+            var.set("second_ran", true)
+        }
+        "#,
+    );
+    assert_eq!(res.unwrap_err().process_exit_code(), Some(2));
+    assert!(state.var_get("second_ran").is_err());
+}
+
+#[test]
+fn test_try_nested_sys_exit_skips_outer_fallback() {
+    let (res, state) = run_with_state_capture(
+        r#"
+        try {
+            try {
+                sys.exit(5)
+            } fallback {
+                var.set("inner_fb", true)
+            }
+        } fallback {
+            var.set("outer_fb", true)
+        }
+        "#,
+    );
+    assert_eq!(res.unwrap_err().process_exit_code(), Some(5));
+    assert!(state.var_get("inner_fb").is_err());
+    assert!(state.var_get("outer_fb").is_err());
+}
+
+#[test]
+fn test_try_first_fallback_ok_skips_second_fallback() {
+    let state = run_with_state(
+        r#"
+        try {
+            assert_eq(1, 2)
+        } fallback {
+            var.set("a", 1)
+        } fallback {
+            var.set("b", 2)
+        }
+        "#,
+    )
+    .unwrap();
+    assert_eq!(
+        state.var_get("a").unwrap(),
+        corvo_lang::type_system::Value::Number(1.0)
+    );
+    assert!(state.var_get("b").is_err());
 }
 
 #[test]
