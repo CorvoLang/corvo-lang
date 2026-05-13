@@ -48,45 +48,42 @@ fn corvo_lang_dep_toml(local_path: &str, features: &[String]) -> String {
     }
 }
 
-fn assert_oxide_exit(name: &str, source: &str, expected_code: i32) {
-    with_oxide_cargo_lock(|| {
-        let temp = tempdir().expect("Failed to create temp dir");
-        let corvo_file = temp.path().join(format!("{}.corvo", name));
-        fs::write(&corvo_file, source).expect("Failed to write corvo file");
+fn prepare_oxide_temp_project(name: &str, source: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+    let temp = tempdir().expect("Failed to create temp dir");
+    let corvo_file = temp.path().join(format!("{}.corvo", name));
+    fs::write(&corvo_file, source).expect("Failed to write corvo file");
 
-        let output_dir = temp.path().join(format!("oxide_{}", name));
+    let output_dir = temp.path().join(format!("oxide_{}", name));
 
-        // 1. Transpile
-        let mut lexer = Lexer::new(source);
-        let mut parser = Parser::new(lexer.tokenize().expect("Tokenization failed"));
-        let program = parser.parse().expect("Parsing failed");
+    let mut lexer = Lexer::new(source);
+    let mut parser = Parser::new(lexer.tokenize().expect("Tokenization failed"));
+    let program = parser.parse().expect("Parsing failed");
 
-        let usage = UsageAnalysis::from_program(&program);
-        let features = usage.required_features();
+    let usage = UsageAnalysis::from_program(&program);
+    let features = usage.required_features();
 
-        let transpiler = OxideTranspiler::new(usage);
-        let rust_code = transpiler.transpile(&program);
+    let transpiler = OxideTranspiler::new(usage);
+    let rust_code = transpiler.transpile(&program);
 
-        let src_dir = output_dir.join("src");
-        fs::create_dir_all(&src_dir).expect("Failed to create src dir");
-        fs::write(src_dir.join("main.rs"), rust_code).expect("Failed to write main.rs");
+    let src_dir = output_dir.join("src");
+    fs::create_dir_all(&src_dir).expect("Failed to create src dir");
+    fs::write(src_dir.join("main.rs"), rust_code).expect("Failed to write main.rs");
 
-        // Create Cargo.toml with selective dependencies
-        let mut deps = String::new();
-        if features.contains(&"stdlib-http".to_string()) {
-            deps.push_str("reqwest = { version = \"0.12\", features = [\"json\"] }\n");
-        }
-        if features.contains(&"stdlib-json".to_string())
-            || features.contains(&"stdlib-http".to_string())
-        {
-            deps.push_str("serde = { version = \"1.0\", features = [\"derive\"] }\n");
-            deps.push_str("serde_json = \"1.0\"\n");
-        }
+    let mut deps = String::new();
+    if features.contains(&"stdlib-http".to_string()) {
+        deps.push_str("reqwest = { version = \"0.12\", features = [\"json\"] }\n");
+    }
+    if features.contains(&"stdlib-json".to_string())
+        || features.contains(&"stdlib-http".to_string())
+    {
+        deps.push_str("serde = { version = \"1.0\", features = [\"derive\"] }\n");
+        deps.push_str("serde_json = \"1.0\"\n");
+    }
 
-        let local_path = corvo_lang_path_for_tests();
-        let corvo_dep = corvo_lang_dep_toml(&local_path, &features);
-        let cargo_toml = format!(
-            r#"
+    let local_path = corvo_lang_path_for_tests();
+    let corvo_dep = corvo_lang_dep_toml(&local_path, &features);
+    let cargo_toml = format!(
+        r#"
 [package]
 name = "oxide_{}"
 version = "0.1.0"
@@ -103,9 +100,33 @@ codegen-units = 1
 panic = "abort"
 strip = true
 "#,
-            name, corvo_dep, deps
+        name, corvo_dep, deps
+    );
+    fs::write(output_dir.join("Cargo.toml"), cargo_toml).expect("Failed to write Cargo.toml");
+
+    (temp, output_dir)
+}
+
+/// Like `assert_oxide_exit`, but only runs `cargo check --release` (for programs that block on `cargo run`, e.g. `http_listen`).
+fn assert_oxide_cargo_check_release(name: &str, source: &str) {
+    with_oxide_cargo_lock(|| {
+        let (_temp, output_dir) = prepare_oxide_temp_project(name, source);
+        let status = Command::new("cargo")
+            .args(["check", "--release"])
+            .current_dir(&output_dir)
+            .status()
+            .expect("cargo check (oxide project)");
+        assert!(
+            status.success(),
+            "oxide-transpiled {} failed `cargo check --release`",
+            name
         );
-        fs::write(output_dir.join("Cargo.toml"), cargo_toml).expect("Failed to write Cargo.toml");
+    });
+}
+
+fn assert_oxide_exit(name: &str, source: &str, expected_code: i32) {
+    with_oxide_cargo_lock(|| {
+        let (_temp, output_dir) = prepare_oxide_temp_project(name, source);
 
         let run_status = Command::new("cargo")
             .arg("run")
@@ -173,15 +194,15 @@ fn test_oxide_shared_vars() {
 
 #[test]
 fn test_oxide_http_listen_mock() {
-    // We can't easily test a real server in CI without ports, but we can test transpilation
+    // `http_listen` blocks accepting connections; like `http_listen_transpile_test`, only verify the Oxide output builds.
     let source = r#"
-        http_listen(port: "127.0.0.1:0", @req, @resp) {
+        http_listen(port: 0, @req, @resp) {
             sys.echo("Request: " + @req.to_string())
             terminate
         }
         sys.exit(0)
     "#;
-    assert_oxide_exit("oxide_http_trigger", source, 0);
+    assert_oxide_cargo_check_release("oxide_http_trigger", source);
 }
 
 #[test]
