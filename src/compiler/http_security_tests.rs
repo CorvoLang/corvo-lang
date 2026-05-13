@@ -221,7 +221,10 @@ fn test_stream_incomplete_headers_eof_rejected() {
                 message
             );
         }
-        other => panic!("expected runtime error for incomplete headers, got: {:?}", other),
+        other => panic!(
+            "expected runtime error for incomplete headers, got: {:?}",
+            other
+        ),
     }
 }
 
