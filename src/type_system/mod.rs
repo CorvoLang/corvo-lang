@@ -3,6 +3,6 @@ pub mod types;
 pub mod value;
 
 pub use types::Type;
-pub use value::{
-    AmqpConnectionValue, DatabasePoolValue, NativeCallback, ProcedureValue, SupportedSqlPool, Value,
-};
+#[cfg(feature = "stdlib-db")]
+pub use value::SupportedSqlPool;
+pub use value::{AmqpConnectionValue, DatabasePoolValue, NativeCallback, ProcedureValue, Value};

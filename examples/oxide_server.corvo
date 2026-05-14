@@ -1,0 +1,12 @@
+@port = 8080
+sys.echo("Starting server on port " + @port.to_string())
+
+@counter = 0
+
+http_listen(port: @port, @req, @resp, shared @counter) {
+    @counter = math.add(@counter, 1)
+    sys.echo("Request " + @counter.to_string() + ": " + @req["path"])
+    
+    @resp["status"] = 200
+    @resp["body"] = "Hello from Corvo Oxide! Request count: " + @counter.to_string()
+}

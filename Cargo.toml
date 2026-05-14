@@ -28,37 +28,39 @@ miette = { version = "5.10", features = ["fancy"] }
 thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-serde_yaml = "0.9"
-csv = "1.3"
-quick-xml = { version = "0.31", features = ["serialize"] }
 regex = "1.10"
-uuid = { version = "1.6", features = ["v4", "serde"] }
-aes-gcm = "0.10"
-sha2 = "0.10"
-md-5 = "0.10"
-rand = "0.8"
-reqwest = { version = "0.12", default-features = false, features = ["json", "blocking", "rustls-tls"] }
-tokio = { version = "1.35", features = ["full"] }
+chrono = "0.4"
+hostname = "0.4"
+directories = "5.0"
+clap = { version = "4.5", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-directories = "5.0"
-chrono = "0.4"
-hmac = "0.12"
+rand = "0.8"
 base64 = "0.21"
-dns-lookup = "2.0"
-hostname = "0.4"
-clap = { version = "4.5", features = ["derive"] }
-lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "builder", "rustls-tls"] }
-sha1 = "0.10"
-blake2 = "0.10"
-handlebars = "6.4.0"
+
+# Optional heavy dependencies (gated behind features)
+serde_yaml = { version = "0.9", optional = true }
+csv = { version = "1.3", optional = true }
+quick-xml = { version = "0.31", features = ["serialize"], optional = true }
+uuid = { version = "1.6", features = ["v4", "serde"], optional = true }
+aes-gcm = { version = "0.10", optional = true }
+sha2 = { version = "0.10", optional = true }
+md-5 = { version = "0.10", optional = true }
+sha1 = { version = "0.10", optional = true }
+blake2 = { version = "0.10", optional = true }
+hmac = { version = "0.12", optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "blocking", "rustls-tls"], optional = true }
+tokio = { version = "1.35", features = ["full"], optional = true }
+dns-lookup = { version = "2.0", optional = true }
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "builder", "rustls-tls"], optional = true }
+handlebars = { version = "6.4.0", optional = true }
 sqlx = { version = "0.8", default-features = false, features = [
     "runtime-tokio-rustls",
     "sqlite",
     "postgres",
-] }
-lapin = "3"
-futures-util = "0.3"
+], optional = true }
+lapin = { version = "3", optional = true }
+futures-util = { version = "0.3", optional = true }
 
 [dependencies.rustyline]
 version = "12.0"
@@ -68,10 +70,48 @@ optional = true
 tempfile = "3.9"
 pretty_assertions = "1.4"
 proptest = "1.4"
+fs4 = "0.13"
 
 [features]
-default = ["repl"]
+default = ["repl", "full-stdlib"]
 repl = ["rustyline"]
+
+# All stdlib modules bundled (current default behavior)
+full-stdlib = [
+    "stdlib-http",
+    "stdlib-crypto",
+    "stdlib-db",
+    "stdlib-amqp",
+    "stdlib-notifications",
+    "stdlib-llm",
+    "stdlib-template",
+    "stdlib-dns",
+    "stdlib-csv",
+    "stdlib-xml",
+    "stdlib-yaml",
+    "stdlib-env",
+    "stdlib-hcl",
+    "stdlib-net",
+]
+
+# Core modules (always available, no heavy deps):
+#   sys, os, fs, math, re, args, json, time
+
+# Heavy optional modules
+stdlib-http = ["dep:reqwest"]
+stdlib-crypto = ["dep:uuid", "dep:aes-gcm", "dep:sha2", "dep:md-5", "dep:sha1", "dep:blake2", "dep:hmac"]
+stdlib-db = ["dep:sqlx", "dep:tokio"]
+stdlib-amqp = ["dep:lapin", "dep:tokio", "dep:futures-util"]
+stdlib-notifications = ["dep:lettre", "dep:reqwest"]
+stdlib-llm = ["dep:reqwest"]
+stdlib-template = ["dep:handlebars"]
+stdlib-dns = ["dep:dns-lookup"]
+stdlib-csv = ["dep:csv"]
+stdlib-xml = ["dep:quick-xml"]
+stdlib-yaml = ["dep:serde_yaml"]
+stdlib-env = []
+stdlib-hcl = []
+stdlib-net = []
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

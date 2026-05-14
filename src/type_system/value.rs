@@ -62,6 +62,7 @@ impl<'de> Deserialize<'de> for SharedValue {
 }
 
 /// Supported SQL drivers compiled into Corvo (`db.connect`).
+#[cfg(feature = "stdlib-db")]
 #[derive(Debug, Clone)]
 pub enum SupportedSqlPool {
     Sqlite(sqlx::Pool<sqlx::Sqlite>),
@@ -69,9 +70,11 @@ pub enum SupportedSqlPool {
 }
 
 /// A wrapper for an active database pool and its associated Tokio runtime.
+#[cfg(feature = "stdlib-db")]
 #[derive(Clone)]
 pub struct DatabasePoolValue(pub Arc<tokio::runtime::Runtime>, pub Arc<SupportedSqlPool>);
 
+#[cfg(feature = "stdlib-db")]
 impl fmt::Debug for DatabasePoolValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("DatabasePoolValue")
@@ -81,12 +84,14 @@ impl fmt::Debug for DatabasePoolValue {
     }
 }
 
+#[cfg(feature = "stdlib-db")]
 impl PartialEq for DatabasePoolValue {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.1, &other.1)
     }
 }
 
+#[cfg(feature = "stdlib-db")]
 impl Serialize for DatabasePoolValue {
     fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
         Err(serde::ser::Error::custom(
@@ -95,6 +100,30 @@ impl Serialize for DatabasePoolValue {
     }
 }
 
+#[cfg(feature = "stdlib-db")]
+impl<'de> Deserialize<'de> for DatabasePoolValue {
+    fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
+        Err(serde::de::Error::custom(
+            "database pools cannot be deserialized",
+        ))
+    }
+}
+
+/// Stub type when `stdlib-db` is not enabled.
+#[cfg(not(feature = "stdlib-db"))]
+#[derive(Debug, Clone, PartialEq)]
+pub struct DatabasePoolValue;
+
+#[cfg(not(feature = "stdlib-db"))]
+impl Serialize for DatabasePoolValue {
+    fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
+        Err(serde::ser::Error::custom(
+            "database pools cannot be serialized as statics",
+        ))
+    }
+}
+
+#[cfg(not(feature = "stdlib-db"))]
 impl<'de> Deserialize<'de> for DatabasePoolValue {
     fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
         Err(serde::de::Error::custom(
@@ -104,15 +133,18 @@ impl<'de> Deserialize<'de> for DatabasePoolValue {
 }
 
 /// A wrapper for an active AMQP connection and its associated Tokio runtime.
+#[cfg(feature = "stdlib-amqp")]
 #[derive(Debug, Clone)]
 pub struct AmqpConnectionValue(pub Arc<tokio::runtime::Runtime>, pub Arc<lapin::Connection>);
 
+#[cfg(feature = "stdlib-amqp")]
 impl PartialEq for AmqpConnectionValue {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.1, &other.1)
     }
 }
 
+#[cfg(feature = "stdlib-amqp")]
 impl Serialize for AmqpConnectionValue {
     fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
         Err(serde::ser::Error::custom(
@@ -121,6 +153,30 @@ impl Serialize for AmqpConnectionValue {
     }
 }
 
+#[cfg(feature = "stdlib-amqp")]
+impl<'de> Deserialize<'de> for AmqpConnectionValue {
+    fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
+        Err(serde::de::Error::custom(
+            "AMQP connections cannot be deserialized",
+        ))
+    }
+}
+
+/// Stub type when `stdlib-amqp` is not enabled.
+#[cfg(not(feature = "stdlib-amqp"))]
+#[derive(Debug, Clone, PartialEq)]
+pub struct AmqpConnectionValue;
+
+#[cfg(not(feature = "stdlib-amqp"))]
+impl Serialize for AmqpConnectionValue {
+    fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
+        Err(serde::ser::Error::custom(
+            "AMQP connections cannot be serialized as statics",
+        ))
+    }
+}
+
+#[cfg(not(feature = "stdlib-amqp"))]
 impl<'de> Deserialize<'de> for AmqpConnectionValue {
     fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
         Err(serde::de::Error::custom(
@@ -435,6 +491,55 @@ impl fmt::Display for Value {
     }
 }
 
+impl Value {
+    /// Merges a thread's final value back into the current mutex value for shared variables.
+    ///
+    /// This follows a "merge-whenever-possible" strategy for lists and numbers to avoid
+    /// the most common race conditions (like parallel `list.push` or `math.add`).
+    ///
+    /// For lists: if the thread's list still matches the snapshot prefix and only grew, we append
+    /// the tail to the current mutex value.
+    ///
+    /// For numbers: we calculate the delta the thread contributed and add it to the
+    /// current mutex value.
+    ///
+    /// For strings: if the thread only appended a suffix, we append it to the current value.
+    ///
+    /// For all other value types the thread's final value replaces the current
+    /// mutex value (last-writer-wins semantics).
+    pub fn merge_shared_writeback(
+        snapshot: &Value,
+        thread_final: &Value,
+        current: &Value,
+    ) -> Value {
+        match (snapshot, thread_final, current) {
+            (Value::List(snap), Value::List(fin), Value::List(cur))
+                if fin.len() >= snap.len() && fin[..snap.len()] == snap[..] =>
+            {
+                // Append only when the thread's list still matches the snapshot prefix.
+                let new_items = &fin[snap.len()..];
+                let mut result = cur.clone();
+                result.extend_from_slice(new_items);
+                Value::List(result)
+            }
+            (Value::Number(snap), Value::Number(fin), Value::Number(cur)) => {
+                // Add the delta that the thread contributed.
+                Value::Number(cur + (fin - snap))
+            }
+            (Value::String(snap), Value::String(fin), Value::String(cur))
+                if fin.starts_with(snap) =>
+            {
+                // Append only the suffix the thread added.
+                let suffix = &fin[snap.len()..];
+                let mut result = cur.clone();
+                result.push_str(suffix);
+                Value::String(result)
+            }
+            _ => thread_final.clone(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -555,6 +660,71 @@ mod tests {
         let original = Value::List(vec![Value::String("a".to_string()), Value::Number(1.0)]);
         let cloned = original.clone();
         assert_eq!(original, cloned);
+    }
+
+    #[test]
+    fn test_merge_shared_writeback_list_append_only() {
+        let snap = Value::List(vec![Value::Number(1.0), Value::Number(2.0)]);
+        let fin = Value::List(vec![
+            Value::Number(1.0),
+            Value::Number(2.0),
+            Value::Number(3.0),
+        ]);
+        let cur = Value::List(vec![Value::Number(10.0)]);
+        let merged = Value::merge_shared_writeback(&snap, &fin, &cur);
+        assert_eq!(
+            merged,
+            Value::List(vec![Value::Number(10.0), Value::Number(3.0)])
+        );
+    }
+
+    #[test]
+    fn test_merge_shared_writeback_list_prefix_divergence_last_writer() {
+        let snap = Value::List(vec![Value::Number(1.0), Value::Number(2.0)]);
+        let fin = Value::List(vec![
+            Value::Number(1.0),
+            Value::Number(99.0),
+            Value::Number(3.0),
+        ]);
+        let cur = Value::List(vec![Value::Number(10.0)]);
+        let merged = Value::merge_shared_writeback(&snap, &fin, &cur);
+        assert_eq!(merged, fin);
+    }
+
+    #[test]
+    fn test_merge_shared_writeback_number_delta() {
+        let snap = Value::Number(1.0);
+        let fin = Value::Number(5.0);
+        let cur = Value::Number(10.0);
+        let merged = Value::merge_shared_writeback(&snap, &fin, &cur);
+        assert_eq!(merged, Value::Number(14.0));
+    }
+
+    #[test]
+    fn test_merge_shared_writeback_string_suffix() {
+        let snap = Value::String("ab".to_string());
+        let fin = Value::String("abxy".to_string());
+        let cur = Value::String("zz".to_string());
+        let merged = Value::merge_shared_writeback(&snap, &fin, &cur);
+        assert_eq!(merged, Value::String("zzxy".to_string()));
+    }
+
+    #[test]
+    fn test_merge_shared_writeback_string_non_suffix_last_writer() {
+        let snap = Value::String("ab".to_string());
+        let fin = Value::String("axy".to_string());
+        let cur = Value::String("z".to_string());
+        let merged = Value::merge_shared_writeback(&snap, &fin, &cur);
+        assert_eq!(merged, fin);
+    }
+
+    #[test]
+    fn test_merge_shared_writeback_type_mismatch_last_writer() {
+        let snap = Value::Number(1.0);
+        let fin = Value::List(vec![Value::Null]);
+        let cur = Value::String("x".to_string());
+        let merged = Value::merge_shared_writeback(&snap, &fin, &cur);
+        assert_eq!(merged, fin);
     }
 
     #[test]

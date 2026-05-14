@@ -44,3 +44,7 @@ Before proposing any changes or committing files, you **MUST** run the following
   - Run `cargo clippy` to catch common mistakes and enforce idiomatic Rust. Ensure there are no warnings.
 - **Corvo Scripts**: 
   - Run `corvo --lint <file.corvo>` on any modified or newly created `.corvo` files to catch syntax errors and unknown function calls statically.
+- **Oxide Mode**:
+  - Ensure any new standard library feature is correctly mapped in `src/compiler/usage_analyzer.rs`.
+  - Verify that Oxide transpilation (`corvo --oxide <file>`) produces a lean project that compiles successfully.
+  - Run `tests/oxide_transpilation_test.rs` for regressions in lean binary generation.

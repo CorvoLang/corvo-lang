@@ -1,9 +1,13 @@
+#[path = "common/mod.rs"]
+mod common;
+
 use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
 
 /// Transpile `source` to a temp project named `stem`, patch in path dependency, run the binary.
 fn transpile_and_run(stem: &str, source: &str) -> std::process::Output {
+    let _nested_cargo = common::nested_cargo_lock().expect("nested cargo lock");
     let dir = tempdir().unwrap();
     let script_path = dir.path().join(format!("{stem}.corvo"));
     fs::write(&script_path, source).unwrap();
@@ -202,4 +206,20 @@ fn test_transpile_and_run_fizzbuzz() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout
         .contains("1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz\n"));
+}
+
+#[test]
+fn test_transpile_exit_mismatch_repro() {
+    let source = r#"
+        prep {}
+        @p = procedure() {
+          try {
+            sys.exit(0)
+          } fallback {
+            # This should be skipped on exit request
+          }
+        }
+        @p.call()
+    "#;
+    assert_transpile_exit("repro_exit_mismatch", source, 0);
 }

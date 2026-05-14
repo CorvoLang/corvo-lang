@@ -1,4 +1,4 @@
-use super::*;
+use crate::standard_lib::http_server::HttpServer;
 use crate::type_system::Value;
 use std::io::{self, Read};
 
@@ -7,15 +7,15 @@ use std::io::{self, Read};
 // ---------------------------------------------------------------------------
 
 fn parse_raw(request: &[u8]) -> std::collections::HashMap<String, Value> {
-    let header_end = Evaluator::http_header_end(request);
+    let header_end = HttpServer::http_header_end(request);
     let header_text = String::from_utf8_lossy(&request[..header_end]);
-    Evaluator::parse_http_raw(request, header_end, "127.0.0.1", header_text.as_ref()).unwrap()
+    HttpServer::parse_http_raw(request, header_end, "127.0.0.1", header_text.as_ref()).unwrap()
 }
 
 fn parse_raw_with_ip(request: &[u8], ip: &str) -> std::collections::HashMap<String, Value> {
-    let header_end = Evaluator::http_header_end(request);
+    let header_end = HttpServer::http_header_end(request);
     let header_text = String::from_utf8_lossy(&request[..header_end]);
-    Evaluator::parse_http_raw(request, header_end, ip, header_text.as_ref()).unwrap()
+    HttpServer::parse_http_raw(request, header_end, ip, header_text.as_ref()).unwrap()
 }
 
 fn method(result: &std::collections::HashMap<String, Value>) -> String {
@@ -210,12 +210,31 @@ impl Read for ChunkedFakeStream {
 }
 
 #[test]
+fn test_stream_incomplete_headers_eof_rejected() {
+    let mut stream = std::io::Cursor::new(&b"GET / HTTP/1.1\r\nHost: example.com"[..]);
+    let err = HttpServer::parse_http_request_from_reader(&mut stream, "127.0.0.1").unwrap_err();
+    match err {
+        crate::CorvoError::Runtime { message, .. } => {
+            assert!(
+                message.contains("headers were complete"),
+                "expected incomplete headers error, got: {}",
+                message
+            );
+        }
+        other => panic!(
+            "expected runtime error for incomplete headers, got: {:?}",
+            other
+        ),
+    }
+}
+
+#[test]
 fn test_stream_short_body_read_exact_success() {
     const INITIAL: &[u8] =
         b"POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 11\r\n\r\nHello ";
     const REMAINING: &[u8] = b"world";
     let mut stream = ChunkedFakeStream::new(vec![INITIAL, REMAINING]);
-    let result = Evaluator::parse_http_request_from_reader(&mut stream, "127.0.0.1").unwrap();
+    let result = HttpServer::parse_http_request_from_reader(&mut stream, "127.0.0.1").unwrap();
     assert_eq!(body(&result), "Hello world");
 }
 
@@ -224,7 +243,7 @@ fn test_stream_short_body_read_exact_eof_error() {
     const TRUNCATED: &[u8] =
         b"POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 20\r\n\r\nshort";
     let mut stream = ChunkedFakeStream::new(vec![TRUNCATED]);
-    let err = Evaluator::parse_http_request_from_reader(&mut stream, "127.0.0.1").unwrap_err();
+    let err = HttpServer::parse_http_request_from_reader(&mut stream, "127.0.0.1").unwrap_err();
     match err {
         crate::CorvoError::Runtime { message, .. } => {
             assert!(
@@ -244,7 +263,7 @@ fn test_stream_short_body_read_exact_eof_error() {
 fn test_stream_content_length_over_limit_rejected() {
     let raw = b"POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 10485761\r\n\r\n";
     let mut stream = ChunkedFakeStream::new(vec![raw]);
-    let err = Evaluator::parse_http_request_from_reader(&mut stream, "127.0.0.1").unwrap_err();
+    let err = HttpServer::parse_http_request_from_reader(&mut stream, "127.0.0.1").unwrap_err();
     match err {
         crate::CorvoError::Runtime { message, .. } => {
             assert!(

@@ -220,6 +220,102 @@ impl Compiler {
         Ok(())
     }
 
+    /// Oxide transpile: generate a lean Rust project with direct stdlib calls
+    /// and only the Cargo features actually needed by the script.
+    pub fn oxide(&self, output_dir: &Path) -> Result<(), CorvoError> {
+        let bin_name = self
+            ._source_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("main");
+
+        std::fs::create_dir_all(output_dir)
+            .map_err(|e| CorvoError::io(format!("Failed to create output directory: {}", e)))?;
+
+        // Parse AST
+        let mut lexer = crate::lexer::Lexer::new(&self.source_without_prep);
+        let tokens = lexer.tokenize()?;
+        let mut parser = crate::parser::Parser::new(tokens);
+        let program = parser.parse()?;
+
+        // Analyze usage
+        let usage = crate::compiler::usage_analyzer::UsageAnalysis::from_program(&program);
+        let features = usage.required_features();
+
+        // Generate Cargo.toml with minimal features
+        self.generate_oxide_cargo_toml(output_dir, bin_name, &features)?;
+
+        if let Ok(root) = std::env::var(CORVO_LANG_LOCAL_PATH_ENV) {
+            let canon = resolve_corvo_lang_local_path(&root)?;
+            append_corvo_lang_patch_to_cargo_toml(&output_dir.join("Cargo.toml"), &canon)?;
+        }
+
+        // Generate Rust source via OxideTranspiler
+        let oxide = crate::compiler::oxide_transpiler::OxideTranspiler::new(usage)
+            .with_statics(self.statics.clone());
+        let rust_code = oxide.transpile(&program);
+
+        let src_dir = output_dir.join("src");
+        std::fs::create_dir_all(&src_dir)
+            .map_err(|e| CorvoError::io(format!("Failed to create src dir: {}", e)))?;
+
+        let output_file = src_dir.join(format!("{}.rs", bin_name));
+        std::fs::write(&output_file, rust_code)
+            .map_err(|e| CorvoError::io(format!("Failed to write {}.rs: {}", bin_name, e)))?;
+
+        Ok(())
+    }
+
+    fn generate_oxide_cargo_toml(
+        &self,
+        build_dir: &Path,
+        bin_name: &str,
+        features: &[String],
+    ) -> Result<(), CorvoError> {
+        let package_name = transpile_package_name_from_build_dir(build_dir);
+
+        let features_str = if features.is_empty() {
+            String::new()
+        } else {
+            format!(
+                ", features = [{}]",
+                features
+                    .iter()
+                    .map(|f| format!("\"{}\"", f))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+
+        let content = format!(
+            "[package]\n\
+             name = \"{}\"\n\
+             version = \"0.1.0\"\n\
+             edition = \"2021\"\n\
+             \n\
+             [dependencies]\n\
+             corvo-lang = {{ version = \"*\", default-features = false{} }}\n\
+             regex = \"1.10\"\n\
+             serde_json = \"1.0\"\n\
+             \n\
+             [profile.release]\n\
+             opt-level = \"z\"\n\
+             lto = true\n\
+             codegen-units = 1\n\
+             strip = true\n\
+             \n\
+             [[bin]]\n\
+             name = \"{}\"\n\
+             path = \"src/{}.rs\"\n",
+            package_name, features_str, bin_name, bin_name,
+        );
+
+        let cargo_toml_path = build_dir.join("Cargo.toml");
+        std::fs::write(&cargo_toml_path, content)
+            .map_err(|e| CorvoError::io(format!("Failed to write Cargo.toml: {}", e)))?;
+
+        Ok(())
+    }
     fn generate_cargo_toml(&self, build_dir: &Path, bin_name: &str) -> Result<(), CorvoError> {
         let cargo_toml_path = build_dir.join("Cargo.toml");
 
