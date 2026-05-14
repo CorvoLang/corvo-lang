@@ -497,8 +497,8 @@ impl Value {
     /// This follows a "merge-whenever-possible" strategy for lists and numbers to avoid
     /// the most common race conditions (like parallel `list.push` or `math.add`).
     ///
-    /// For lists: if the thread only appended items, we append those same items to the
-    /// current mutex value.
+    /// For lists: if the thread's list still matches the snapshot prefix and only grew, we append
+    /// the tail to the current mutex value.
     ///
     /// For numbers: we calculate the delta the thread contributed and add it to the
     /// current mutex value.
@@ -513,8 +513,10 @@ impl Value {
         current: &Value,
     ) -> Value {
         match (snapshot, thread_final, current) {
-            (Value::List(snap), Value::List(fin), Value::List(cur)) if fin.len() >= snap.len() => {
-                // Append only the items the thread added beyond its snapshot.
+            (Value::List(snap), Value::List(fin), Value::List(cur))
+                if fin.len() >= snap.len() && fin[..snap.len()] == snap[..] =>
+            {
+                // Append only when the thread's list still matches the snapshot prefix.
                 let new_items = &fin[snap.len()..];
                 let mut result = cur.clone();
                 result.extend_from_slice(new_items);
@@ -658,6 +660,71 @@ mod tests {
         let original = Value::List(vec![Value::String("a".to_string()), Value::Number(1.0)]);
         let cloned = original.clone();
         assert_eq!(original, cloned);
+    }
+
+    #[test]
+    fn test_merge_shared_writeback_list_append_only() {
+        let snap = Value::List(vec![Value::Number(1.0), Value::Number(2.0)]);
+        let fin = Value::List(vec![
+            Value::Number(1.0),
+            Value::Number(2.0),
+            Value::Number(3.0),
+        ]);
+        let cur = Value::List(vec![Value::Number(10.0)]);
+        let merged = Value::merge_shared_writeback(&snap, &fin, &cur);
+        assert_eq!(
+            merged,
+            Value::List(vec![Value::Number(10.0), Value::Number(3.0)])
+        );
+    }
+
+    #[test]
+    fn test_merge_shared_writeback_list_prefix_divergence_last_writer() {
+        let snap = Value::List(vec![Value::Number(1.0), Value::Number(2.0)]);
+        let fin = Value::List(vec![
+            Value::Number(1.0),
+            Value::Number(99.0),
+            Value::Number(3.0),
+        ]);
+        let cur = Value::List(vec![Value::Number(10.0)]);
+        let merged = Value::merge_shared_writeback(&snap, &fin, &cur);
+        assert_eq!(merged, fin);
+    }
+
+    #[test]
+    fn test_merge_shared_writeback_number_delta() {
+        let snap = Value::Number(1.0);
+        let fin = Value::Number(5.0);
+        let cur = Value::Number(10.0);
+        let merged = Value::merge_shared_writeback(&snap, &fin, &cur);
+        assert_eq!(merged, Value::Number(14.0));
+    }
+
+    #[test]
+    fn test_merge_shared_writeback_string_suffix() {
+        let snap = Value::String("ab".to_string());
+        let fin = Value::String("abxy".to_string());
+        let cur = Value::String("zz".to_string());
+        let merged = Value::merge_shared_writeback(&snap, &fin, &cur);
+        assert_eq!(merged, Value::String("zzxy".to_string()));
+    }
+
+    #[test]
+    fn test_merge_shared_writeback_string_non_suffix_last_writer() {
+        let snap = Value::String("ab".to_string());
+        let fin = Value::String("axy".to_string());
+        let cur = Value::String("z".to_string());
+        let merged = Value::merge_shared_writeback(&snap, &fin, &cur);
+        assert_eq!(merged, fin);
+    }
+
+    #[test]
+    fn test_merge_shared_writeback_type_mismatch_last_writer() {
+        let snap = Value::Number(1.0);
+        let fin = Value::List(vec![Value::Null]);
+        let cur = Value::String("x".to_string());
+        let merged = Value::merge_shared_writeback(&snap, &fin, &cur);
+        assert_eq!(merged, fin);
     }
 
     #[test]
