@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN useradd --create-home --uid 1000 --user-group corvo
 # Update the corvo-lang version in Cargo.toml with the latest tag from the repository. Remember to remove the initial version `v` from the tag.
 COPY . /app
+COPY .git /app/.git
 RUN cd /app && git checkout $(git describe --tags $(git rev-list --tags --max-count=1))
 RUN VERSION=$(git describe --tags $(git rev-list --tags --max-count=1))
 RUN VERSION=${VERSION#v}
