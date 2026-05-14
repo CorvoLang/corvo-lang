@@ -1,12 +1,52 @@
-FROM debian:bookworm-slim
+# syntax=docker/dockerfile:1
+#
+# Stage `builder`: install the `corvo` CLI from this tree (Cargo.lock); bump `[package].version`
+# from the newest git tag (expects `.git` in the build context; strip optional `v` prefix).
+#
+# Final image: `rust` slim + toolchain so `cargo build` succeeds on `--transpile` / `--oxide` output,
+# plus the same crates.io/cache under the builder `CARGO_HOME` reused as `corvo`'s writable
+# `$CARGO_HOME` to skip re-fetching dependencies that installing `corvo-lang` already resolved.
+
+FROM rust:1-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    git \
     libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY build/out/corvo /usr/local/bin/corvo
+WORKDIR /app
+COPY . .
 
-RUN chmod +x /usr/local/bin/corvo && corvo --version
+RUN VERSION=$(git tag --list | sort -Vr | head -n 1) \
+    && VERSION=${VERSION#v} \
+    && rm -rf target \
+    && sed -i "0,/^version = /s/^version = .*/version = \"$VERSION\"/" Cargo.toml \
+    && cargo install --path . --locked \
+    && mkdir -p /usr/local/cargo/git
 
-ENTRYPOINT ["corvo"]
+FROM rust:1-slim-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    cmake \
+    git \
+    libssl-dev \
+    libssl3 \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 1000 --user-group corvo
+
+COPY --from=builder /usr/local/cargo/bin/corvo /usr/local/cargo/bin/corvo
+
+RUN mkdir -p /home/corvo/.cargo \
+    && chown corvo:corvo /home/corvo/.cargo
+COPY --chown=corvo:corvo --from=builder /usr/local/cargo/registry /home/corvo/.cargo/registry
+COPY --chown=corvo:corvo --from=builder /usr/local/cargo/git /home/corvo/.cargo/git
+
+ENV CARGO_HOME=/home/corvo/.cargo
+WORKDIR /home/corvo
+USER corvo
+
+CMD ["corvo", "--repl"]
