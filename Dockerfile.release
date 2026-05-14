@@ -1,5 +1,13 @@
-# Rust is needed to build the Corvo CLI and transpile to Rust projects
-FROM rust:1-bookworm
+# syntax=docker/dockerfile:1
+#
+# Stage `builder`: install the `corvo` CLI from this tree (Cargo.lock); bump `[package].version`
+# from the newest git tag (expects `.git` in the build context; strip optional `v` prefix).
+#
+# Final image: `rust` slim + toolchain so `cargo build` succeeds on `--transpile` / `--oxide` output,
+# plus the same crates.io/cache under the builder `CARGO_HOME` reused as `corvo`'s writable
+# `$CARGO_HOME` to skip re-fetching dependencies that installing `corvo-lang` already resolved.
+
+FROM rust:1-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -7,23 +15,37 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --create-home --uid 1000 --user-group corvo
-# Update the corvo-lang version in Cargo.toml with the latest tag from the repository. Remember to remove the initial version `v` from the tag.
-COPY . /app
-COPY .git /app/.git
 WORKDIR /app
-RUN VERSION=$(git tag --list | sort -Vr | head -n 1) && \
-    VERSION=${VERSION#v} && \
-    rm -rf /app/target && \
-    # Change only [package]'s version — first ^version = line in Cargo.toml
-    sed -i "0,/^version = /s/^version = .*/version = \"$VERSION\"/" /app/Cargo.toml && \
-    echo "VERSION: $VERSION" && \
-    git diff Cargo.toml && \
-    cargo install corvo-lang --path /app && \
-    cp /usr/local/cargo/bin/corvo /usr/local/bin/corvo && \
-    corvo --version && \
-    rm -rf /app
+COPY . .
 
+RUN VERSION=$(git tag --list | sort -Vr | head -n 1) \
+    && VERSION=${VERSION#v} \
+    && rm -rf target \
+    && sed -i "0,/^version = /s/^version = .*/version = \"$VERSION\"/" Cargo.toml \
+    && cargo install --path . --locked \
+    && mkdir -p /usr/local/cargo/git
+
+FROM rust:1-slim-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    cmake \
+    git \
+    libssl-dev \
+    libssl3 \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 1000 --user-group corvo
+
+COPY --from=builder /usr/local/cargo/bin/corvo /usr/local/cargo/bin/corvo
+
+RUN mkdir -p /home/corvo/.cargo \
+    && chown corvo:corvo /home/corvo/.cargo
+COPY --chown=corvo:corvo --from=builder /usr/local/cargo/registry /home/corvo/.cargo/registry
+COPY --chown=corvo:corvo --from=builder /usr/local/cargo/git /home/corvo/.cargo/git
+
+ENV CARGO_HOME=/home/corvo/.cargo
 WORKDIR /home/corvo
 USER corvo
 
