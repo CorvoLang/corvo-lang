@@ -12,14 +12,17 @@ RUN useradd --create-home --uid 1000 --user-group corvo
 COPY . /app
 COPY .git /app/.git
 WORKDIR /app
-RUN git checkout $(git describe --tags $(git rev-list --tags --max-count=1))
-RUN VERSION=$(git tag --list | sort -Vr | head -n 1)
-RUN VERSION=${VERSION#v}
-RUN sed -i "s/^version = .*/version = \"$VERSION\"/" /app/Cargo.toml
-RUN cargo install corvo-lang --path /app
-RUN cp /usr/local/cargo/bin/corvo /usr/local/bin/corvo
-RUN corvo --version
-RUN rm -rf /app
+RUN VERSION=$(git tag --list | sort -Vr | head -n 1) && \
+    VERSION=${VERSION#v} && \
+    rm -rf /app/target && \
+    # Change only [package]'s version — first ^version = line in Cargo.toml
+    sed -i "0,/^version = /s/^version = .*/version = \"$VERSION\"/" /app/Cargo.toml && \
+    echo "VERSION: $VERSION" && \
+    git diff Cargo.toml && \
+    cargo install corvo-lang --path /app && \
+    cp /usr/local/cargo/bin/corvo /usr/local/bin/corvo && \
+    corvo --version && \
+    rm -rf /app
 
 WORKDIR /home/corvo
 USER corvo
