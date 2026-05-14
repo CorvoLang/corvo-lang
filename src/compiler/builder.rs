@@ -118,7 +118,10 @@ fn merge_oxide_feature_lists(existing: &[String], added: &[String]) -> Vec<Strin
 }
 
 /// Replace the oxide `corvo-lang` dependency line, preserving the rest of `Cargo.toml`.
-fn replace_oxide_corvo_lang_line(content: &str, merged_features: &[String]) -> Result<String, CorvoError> {
+fn replace_oxide_corvo_lang_line(
+    content: &str,
+    merged_features: &[String],
+) -> Result<String, CorvoError> {
     const PREFIX: &str = "corvo-lang = { version = \"*\", default-features = false";
     let Some(idx) = content.find(PREFIX) else {
         return Err(CorvoError::runtime(
