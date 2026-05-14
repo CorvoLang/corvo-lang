@@ -1,10 +1,24 @@
+# Rust is needed to build the Corvo CLI and transpile to Rust projects
 FROM rust:1-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    git \
     libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN cargo install corvo-lang
+RUN useradd --create-home --uid 1000 --user-group corvo
+# Update the corvo-lang version in Cargo.toml with the latest tag from the repository. Remember to remove the initial version `v` from the tag.
+COPY . /app
+RUN cd /app && git checkout $(git describe --tags $(git rev-list --tags --max-count=1))
+RUN VERSION=$(git describe --tags $(git rev-list --tags --max-count=1))
+RUN VERSION=${VERSION#v}
+RUN sed -i "s/^version = .*/version = \"$VERSION\"/" /app/Cargo.toml
+RUN cargo install corvo-lang --path /app
+RUN cp /usr/local/cargo/bin/corvo /usr/local/bin/corvo
+RUN corvo --version
+RUN rm -rf /app
+
+USER corvo
 
 CMD ["corvo", "--repl"]
