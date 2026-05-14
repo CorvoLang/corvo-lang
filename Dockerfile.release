@@ -1,12 +1,10 @@
-FROM debian:bookworm-slim
+FROM rust:1-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY build/out/corvo /usr/local/bin/corvo
+RUN cargo install corvo-lang
 
-RUN chmod +x /usr/local/bin/corvo && corvo --version
-
-ENTRYPOINT ["corvo"]
+CMD ["corvo", "--repl"]

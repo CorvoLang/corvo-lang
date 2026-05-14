@@ -53,6 +53,92 @@ fn cargo_toml_has_bin_target_named(content: &str, name: &str) -> bool {
     false
 }
 
+/// Oxide `Cargo.toml` dependency line for `corvo-lang` with optional feature flags.
+fn oxide_corvo_lang_dependency_line(features: &[String]) -> String {
+    let features_str = if features.is_empty() {
+        String::new()
+    } else {
+        format!(
+            ", features = [{}]",
+            features
+                .iter()
+                .map(|f| format!("\"{}\"", f))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    };
+    format!(
+        "corvo-lang = {{ version = \"*\", default-features = false{} }}",
+        features_str
+    )
+}
+
+/// Parse `features = [ ... ]` from an oxide-style `corvo-lang = { ... }` dependency line.
+fn parse_oxide_features_from_cargo_toml(content: &str) -> Vec<String> {
+    const PREFIX: &str = "corvo-lang = { version = \"*\", default-features = false";
+    let Some(idx) = content.find(PREFIX) else {
+        return Vec::new();
+    };
+    let mut rest = content[idx + PREFIX.len()..].trim_start();
+    if rest.starts_with('}') {
+        return Vec::new();
+    }
+    const FEAT: &str = ", features = [";
+    if !rest.starts_with(FEAT) {
+        return Vec::new();
+    }
+    rest = &rest[FEAT.len()..];
+    let Some(end) = rest.find(']') else {
+        return Vec::new();
+    };
+    let inner = &rest[..end];
+    inner
+        .split(',')
+        .filter_map(|s| {
+            let t = s.trim();
+            if t.len() >= 2 && t.starts_with('"') && t.ends_with('"') {
+                Some(t[1..t.len() - 1].to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn merge_oxide_feature_lists(existing: &[String], added: &[String]) -> Vec<String> {
+    use std::collections::BTreeSet;
+    let mut set: BTreeSet<String> = BTreeSet::new();
+    for x in existing {
+        set.insert(x.clone());
+    }
+    for x in added {
+        set.insert(x.clone());
+    }
+    set.into_iter().collect()
+}
+
+/// Replace the oxide `corvo-lang` dependency line, preserving the rest of `Cargo.toml`.
+fn replace_oxide_corvo_lang_line(content: &str, merged_features: &[String]) -> Result<String, CorvoError> {
+    const PREFIX: &str = "corvo-lang = { version = \"*\", default-features = false";
+    let Some(idx) = content.find(PREFIX) else {
+        return Err(CorvoError::runtime(
+            "oxide merge: Cargo.toml missing oxide-style corvo-lang dependency line".to_string(),
+        ));
+    };
+    let line_start = content[..idx].rfind('\n').map(|i| i + 1).unwrap_or(0);
+    let line_end = content[line_start..]
+        .find('\n')
+        .map(|i| line_start + i + 1)
+        .unwrap_or(content.len());
+    let new_line = oxide_corvo_lang_dependency_line(merged_features);
+    Ok(format!(
+        "{}{}{}",
+        &content[..line_start],
+        new_line,
+        &content[line_end..]
+    ))
+}
+
 /// Cargo `[package] name` must satisfy identifier rules (Unicode XID). Tempdirs from
 /// `tempfile` often look like `.tmpXXXXXX`, whose leading `.` breaks `cargo build`.
 fn transpile_package_name_from_build_dir(build_dir: &Path) -> String {
@@ -272,45 +358,67 @@ impl Compiler {
         bin_name: &str,
         features: &[String],
     ) -> Result<(), CorvoError> {
+        let cargo_toml_path = build_dir.join("Cargo.toml");
         let package_name = transpile_package_name_from_build_dir(build_dir);
 
-        let features_str = if features.is_empty() {
-            String::new()
-        } else {
-            format!(
-                ", features = [{}]",
-                features
-                    .iter()
-                    .map(|f| format!("\"{}\"", f))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        };
+        if !cargo_toml_path.exists() {
+            let features_str = if features.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    ", features = [{}]",
+                    features
+                        .iter()
+                        .map(|f| format!("\"{}\"", f))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            };
 
-        let content = format!(
-            "[package]\n\
-             name = \"{}\"\n\
-             version = \"0.1.0\"\n\
-             edition = \"2021\"\n\
-             \n\
-             [dependencies]\n\
-             corvo-lang = {{ version = \"*\", default-features = false{} }}\n\
-             regex = \"1.10\"\n\
-             serde_json = \"1.0\"\n\
-             \n\
-             [profile.release]\n\
-             opt-level = \"z\"\n\
-             lto = true\n\
-             codegen-units = 1\n\
-             strip = true\n\
-             \n\
-             [[bin]]\n\
-             name = \"{}\"\n\
-             path = \"src/{}.rs\"\n",
-            package_name, features_str, bin_name, bin_name,
+            let content = format!(
+                "[package]\n\
+                 name = \"{}\"\n\
+                 version = \"0.1.0\"\n\
+                 edition = \"2021\"\n\
+                 \n\
+                 [dependencies]\n\
+                 corvo-lang = {{ version = \"*\", default-features = false{} }}\n\
+                 regex = \"1.10\"\n\
+                 serde_json = \"1.0\"\n\
+                 \n\
+                 [profile.release]\n\
+                 opt-level = \"z\"\n\
+                 lto = true\n\
+                 codegen-units = 1\n\
+                 strip = true\n\
+                 \n\
+                 [[bin]]\n\
+                 name = \"{}\"\n\
+                 path = \"src/{}.rs\"\n",
+                package_name, features_str, bin_name, bin_name,
+            );
+
+            std::fs::write(&cargo_toml_path, content)
+                .map_err(|e| CorvoError::io(format!("Failed to write Cargo.toml: {}", e)))?;
+            return Ok(());
+        }
+
+        // Subsequent oxide transpiles into the same directory: merge `corvo-lang` features and append [[bin]].
+        let mut content = std::fs::read_to_string(&cargo_toml_path)
+            .map_err(|e| CorvoError::io(format!("Failed to read Cargo.toml: {}", e)))?;
+
+        let parsed = parse_oxide_features_from_cargo_toml(&content);
+        let merged = merge_oxide_feature_lists(&parsed, features);
+        content = replace_oxide_corvo_lang_line(&content, &merged)?;
+
+        let bin_entry = format!(
+            "\n[[bin]]\nname = \"{}\"\npath = \"src/{}.rs\"\n",
+            bin_name, bin_name
         );
+        if !cargo_toml_has_bin_target_named(&content, bin_name) {
+            content.push_str(&bin_entry);
+        }
 
-        let cargo_toml_path = build_dir.join("Cargo.toml");
         std::fs::write(&cargo_toml_path, content)
             .map_err(|e| CorvoError::io(format!("Failed to write Cargo.toml: {}", e)))?;
 
