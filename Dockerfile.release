@@ -13,7 +13,7 @@ COPY . /app
 COPY .git /app/.git
 WORKDIR /app
 RUN git checkout $(git describe --tags $(git rev-list --tags --max-count=1))
-RUN VERSION=$(git describe --tags $(git rev-list --tags --max-count=1))
+RUN VERSION=$(git tag --list | sort -Vr | head -n 1)
 RUN VERSION=${VERSION#v}
 RUN sed -i "s/^version = .*/version = \"$VERSION\"/" /app/Cargo.toml
 RUN cargo install corvo-lang --path /app
