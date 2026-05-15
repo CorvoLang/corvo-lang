@@ -38,6 +38,16 @@ pub fn corvo_cache_dir_test_lock() -> std::sync::MutexGuard<'static, ()> {
         .unwrap_or_else(|p| p.into_inner())
 }
 
+static CORVO_LANG_LOCAL_PATH_ENV_TEST_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+
+/// Serialize tests that mutate `CORVO_LANG_LOCAL_PATH`.
+pub fn corvo_lang_local_path_env_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    CORVO_LANG_LOCAL_PATH_ENV_TEST_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+}
+
 /// True if `Cargo.toml` already defines a `[[bin]]` stanza with `name = "{name}"`.
 ///
 /// We only scan text inside `[[bin]]` sections so we do not mistake `[package] name = "..."`
@@ -52,10 +62,6 @@ fn cargo_toml_has_bin_target_named(content: &str, name: &str) -> bool {
     }
     false
 }
-
-/// Prefix Cargo uses for oxide-style crates.io `corvo-lang` lines we generate and merge.
-const OXIDE_CORVO_LANG_CRATES_IO_LINE_PREFIX: &str =
-    "corvo-lang = { version = \"*\", default-features = false";
 
 /// Oxide `[dependencies]` line for crates.io `corvo-lang`, with optional Cargo feature flags.
 fn oxide_corvo_lang_crates_io_dep_line(features: &[String]) -> String {
@@ -77,14 +83,79 @@ fn oxide_corvo_lang_crates_io_dep_line(features: &[String]) -> String {
     )
 }
 
-/// Reads `features = [ … ]` from an oxide crates.io `corvo-lang` dependency line next to PREFIX.
+/// Byte prefix matching the start of [`oxide_corvo_lang_crates_io_dep_line`], shared with parsing.
 ///
-/// Matching is intentional and strict — only lines matching our oxide crates.io emitter are parsed.
-fn parse_oxide_crates_io_corvo_features(content: &str) -> Vec<String> {
-    let Some(idx) = content.find(OXIDE_CORVO_LANG_CRATES_IO_LINE_PREFIX) else {
-        return Vec::new();
-    };
-    let mut rest = content[idx + OXIDE_CORVO_LANG_CRATES_IO_LINE_PREFIX.len()..].trim_start();
+/// Derived from the empty-features line so formatting changes cannot drift from string searches.
+fn oxide_corvo_lang_crates_io_dep_prefix() -> String {
+    let full = oxide_corvo_lang_crates_io_dep_line(&[]);
+    full.strip_suffix('}')
+        .map(|s| s.trim_end().to_string())
+        .unwrap_or(full)
+}
+
+/// Headers for TOML tables where we look for the oxide `corvo-lang` crates.io line.
+fn is_scanned_dependencies_table_header(header_line_trimmed: &str) -> bool {
+    let t = header_line_trimmed.trim();
+    if !(t.starts_with('[') && t.ends_with(']')) {
+        return false;
+    }
+    if t == "[dependencies]" {
+        return true;
+    }
+    // e.g. `[target.'cfg(unix)'.dependencies]`
+    t.starts_with("[target.") && t.ends_with(".dependencies]")
+}
+
+#[derive(Clone, Copy)]
+struct OxideCorvoDepLineMatch {
+    line_start: usize,
+    line_end: usize,
+    prefix_start: usize,
+}
+
+/// Locates oxide-style crates.io `corvo-lang` lines only inside active `[dependencies]` (and
+/// `target.*.dependencies`) tables; ignores `#` comments and duplicate headers elsewhere.
+fn scan_oxide_corvo_crates_io_dep_matches(
+    content: &str,
+    prefix: &str,
+) -> Result<Vec<OxideCorvoDepLineMatch>, CorvoError> {
+    let mut in_deps_table = false;
+    let mut hits: Vec<OxideCorvoDepLineMatch> = Vec::new();
+    let mut offset = 0usize;
+
+    for line in content.split_inclusive('\n') {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.contains(']') {
+            in_deps_table = is_scanned_dependencies_table_header(trimmed);
+        }
+        let body = line.trim_start();
+        let is_comment = body.trim_start().starts_with('#');
+        if in_deps_table && !is_comment && body.starts_with(prefix) {
+            let line_start = offset;
+            let line_end = offset + line.len();
+            let prefix_start = offset + (line.len() - body.len());
+            hits.push(OxideCorvoDepLineMatch {
+                line_start,
+                line_end,
+                prefix_start,
+            });
+        }
+        offset += line.len();
+    }
+
+    if hits.len() > 1 {
+        return Err(CorvoError::runtime(
+            "oxide merge: Cargo.toml contains multiple oxide-style corvo-lang dependency lines in [dependencies]"
+                .to_string(),
+        ));
+    }
+
+    Ok(hits)
+}
+
+/// Reads `features = [ … ]` from the suffix after `prefix` on the same line (oxide emitter shape).
+fn parse_oxide_corvo_features_after_prefix_suffix(rest: &str) -> Vec<String> {
+    let mut rest = rest.trim_start();
     if rest.starts_with('}') {
         return Vec::new();
     }
@@ -109,6 +180,23 @@ fn parse_oxide_crates_io_corvo_features(content: &str) -> Vec<String> {
         .collect()
 }
 
+/// Reads `features = [ … ]` from a full manifest: only matches in `[dependencies]` (see scan).
+///
+/// Matching is intentional and strict — only lines matching our oxide crates.io emitter are parsed.
+fn parse_oxide_crates_io_corvo_features(content: &str) -> Vec<String> {
+    let prefix = oxide_corvo_lang_crates_io_dep_prefix();
+    let Ok(hits) = scan_oxide_corvo_crates_io_dep_matches(content, &prefix) else {
+        return Vec::new();
+    };
+    let Some(m) = hits.first() else {
+        return Vec::new();
+    };
+    let line = content[m.line_start..m.line_end].trim_end_matches(['\r', '\n']);
+    let col = m.prefix_start.saturating_sub(m.line_start);
+    let after_prefix = line.get(col + prefix.len()..).unwrap_or("");
+    parse_oxide_corvo_features_after_prefix_suffix(after_prefix)
+}
+
 fn merge_oxide_feature_name_sets(existing: &[String], added: &[String]) -> Vec<String> {
     use std::collections::BTreeSet;
     let mut set = BTreeSet::<String>::default();
@@ -125,31 +213,24 @@ fn replace_first_oxide_crates_io_corvo_line(
     content: &str,
     merged_features: &[String],
 ) -> Result<String, CorvoError> {
-    let Some(idx) = content.find(OXIDE_CORVO_LANG_CRATES_IO_LINE_PREFIX) else {
+    let prefix = oxide_corvo_lang_crates_io_dep_prefix();
+    let hits = scan_oxide_corvo_crates_io_dep_matches(content, &prefix)?;
+    let Some(m) = hits.first() else {
         return Err(CorvoError::runtime(
             "oxide merge: Cargo.toml missing oxide-style corvo-lang crates.io dependency line"
                 .to_string(),
         ));
     };
-    if content[idx + 1..].contains(OXIDE_CORVO_LANG_CRATES_IO_LINE_PREFIX) {
-        return Err(CorvoError::runtime(
-            "oxide merge: Cargo.toml contains multiple oxide-style corvo-lang dependency lines"
-                .to_string(),
-        ));
-    }
-    let line_start = content[..idx].rfind('\n').map_or(0, |i| i + 1);
-    let line_tail = &content[line_start..];
     let new_line = oxide_corvo_lang_crates_io_dep_line(merged_features);
-    if let Some(i) = line_tail.find('\n') {
-        Ok(format!(
-            "{}{}\n{}",
-            &content[..line_start],
-            new_line,
-            &content[line_start + i + 1..]
-        ))
-    } else {
-        Ok(format!("{}{}", &content[..line_start], new_line))
-    }
+    let old_line = &content[m.line_start..m.line_end];
+    let suffix_nl = if old_line.ends_with('\n') { "\n" } else { "" };
+    Ok(format!(
+        "{}{}{}{}",
+        &content[..m.line_start],
+        new_line,
+        suffix_nl,
+        &content[m.line_end..]
+    ))
 }
 
 /// Updates the crates.io `corvo-lang` dependency line features when present; leaves `Cargo.toml` unchanged otherwise.
@@ -157,7 +238,9 @@ fn merge_into_existing_oxide_cargo_deps(
     content: &str,
     added_features: &[String],
 ) -> Result<String, CorvoError> {
-    if !content.contains(OXIDE_CORVO_LANG_CRATES_IO_LINE_PREFIX) {
+    let prefix = oxide_corvo_lang_crates_io_dep_prefix();
+    let hits = scan_oxide_corvo_crates_io_dep_matches(content, &prefix)?;
+    if hits.is_empty() {
         return Ok(content.to_string());
     }
     let parsed = parse_oxide_crates_io_corvo_features(content);
@@ -1248,7 +1331,65 @@ mod tests {
     }
 
     #[test]
+    fn merge_into_oxide_ignores_commented_corvo_line_in_dependencies() {
+        let before = "[package]\nname = \"p\"\nedition = \"2021\"\n\n[dependencies]\n\
+            # corvo-lang = { version = \"*\", default-features = false, features = [\"decoy\"] }\n\
+            corvo-lang = { version = \"*\", default-features = false }\n\
+            regex = \"1.10\"\n";
+        let after =
+            merge_into_existing_oxide_cargo_deps(before, &["stdlib-http".into()]).expect("merge");
+        assert!(
+            after.contains("stdlib-http"),
+            "expected real dep line to gain features:\n{after}"
+        );
+        for line in after.lines() {
+            let t = line.trim_start();
+            if !t.starts_with('#') && t.starts_with("corvo-lang") {
+                assert!(
+                    !t.contains("decoy"),
+                    "active corvo-lang line must not merge from commented decoy:\n{after}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn merge_into_oxide_errors_on_duplicate_active_corvo_lines() {
+        let toml = "[dependencies]\n\
+            corvo-lang = { version = \"*\", default-features = false }\n\
+            corvo-lang = { version = \"*\", default-features = false }\n";
+        let err = merge_into_existing_oxide_cargo_deps(toml, &["a".into()]).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("multiple") || msg.contains("oxide"), "{msg}");
+    }
+
+    #[test]
+    fn merge_into_skips_merge_when_corvo_only_appears_in_comments() {
+        let before =
+            "[dependencies]\n# corvo-lang = { version = \"*\", default-features = false }\nregex = \"1\"\n";
+        let after = merge_into_existing_oxide_cargo_deps(before, &["http".into()]).unwrap();
+        assert_eq!(
+            after, before,
+            "no oxide corvo line in active deps — manifest unchanged:\n{after}"
+        );
+    }
+
+    #[test]
     fn oxide_incremental_writes_second_bin_without_dropping_first() {
+        let _corvo_lang_lock = super::corvo_lang_local_path_env_test_lock();
+        let prev_corvo_lang = std::env::var_os("CORVO_LANG_LOCAL_PATH");
+        std::env::remove_var("CORVO_LANG_LOCAL_PATH");
+        struct RestoreCorvoLangLocalPath(Option<std::ffi::OsString>);
+        impl Drop for RestoreCorvoLangLocalPath {
+            fn drop(&mut self) {
+                match self.0.take() {
+                    Some(v) => std::env::set_var("CORVO_LANG_LOCAL_PATH", v),
+                    None => std::env::remove_var("CORVO_LANG_LOCAL_PATH"),
+                }
+            }
+        }
+        let _restore_corvo_lang = RestoreCorvoLangLocalPath(prev_corvo_lang);
+
         let td = tempfile::tempdir().expect("temp dir");
         let project = td.path().join("oxide_multi_bin_workspace");
         fs::create_dir_all(&project).expect("project dir");
@@ -2109,6 +2250,7 @@ mod tests {
 
     #[test]
     fn test_corvo_lang_local_path_must_be_absolute_for_compile() {
+        let _corvo_lang_lock = super::corvo_lang_local_path_env_test_lock();
         let _lock = corvo_cache_dir_test_lock();
         let out = std::env::temp_dir().join(format!("corvo_compile_out_{}", std::process::id()));
         let _ = std::fs::remove_file(&out);
