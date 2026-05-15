@@ -7,6 +7,8 @@
 # plus the same crates.io/cache under the builder `CARGO_HOME` reused as `corvo`'s writable
 # `$CARGO_HOME` to skip re-fetching dependencies that installing `corvo-lang` already resolved.
 
+# Note: keep git as dependency once this image will be used for CI/CD.
+
 FROM rust:1-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -33,13 +35,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     git \
     libssl-dev \
+    git \
     libssl3 \
     pkg-config \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 1000 --user-group corvo
 
 COPY --from=builder /usr/local/cargo/bin/corvo /usr/local/cargo/bin/corvo
-
+RUN mkdir -p /workspace/build && \
+    chown -R corvo:corvo /workspace && \
+    chmod -R 755 /workspace
 RUN mkdir -p /home/corvo/.cargo \
     && chown corvo:corvo /home/corvo/.cargo
 COPY --chown=corvo:corvo --from=builder /usr/local/cargo/registry /home/corvo/.cargo/registry
@@ -49,4 +54,3 @@ ENV CARGO_HOME=/home/corvo/.cargo
 WORKDIR /home/corvo
 USER corvo
 
-CMD ["corvo", "--repl"]
