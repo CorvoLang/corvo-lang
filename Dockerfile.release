@@ -33,13 +33,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     git \
     libssl-dev \
+    git \
     libssl3 \
     pkg-config \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 1000 --user-group corvo
 
 COPY --from=builder /usr/local/cargo/bin/corvo /usr/local/cargo/bin/corvo
-
+RUN mkdir -p /workspace/build && \
+    chown -R corvo:corvo /workspace && \
+    chmod -R 755 /workspace
 RUN mkdir -p /home/corvo/.cargo \
     && chown corvo:corvo /home/corvo/.cargo
 COPY --chown=corvo:corvo --from=builder /usr/local/cargo/registry /home/corvo/.cargo/registry
@@ -49,4 +52,3 @@ ENV CARGO_HOME=/home/corvo/.cargo
 WORKDIR /home/corvo
 USER corvo
 
-CMD ["corvo", "--repl"]
