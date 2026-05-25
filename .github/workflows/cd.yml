@@ -102,6 +102,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      write_package: write
     strategy:
       fail-fast: false
       matrix:
