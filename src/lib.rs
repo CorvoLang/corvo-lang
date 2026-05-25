@@ -37,7 +37,7 @@ pub use span::{Position, Span};
 use crate::compiler::Evaluator;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Runs a Corvo script from a given file path.
 ///

@@ -653,7 +653,7 @@ mod tests {
             &state,
         )
         .unwrap();
-        wait_for_prompt(&[session.clone()], &empty_args(), &state).unwrap();
+        wait_for_prompt(std::slice::from_ref(&session), &empty_args(), &state).unwrap();
         close(&[session], &empty_args(), &state).unwrap();
     }
 
@@ -690,7 +690,7 @@ mod tests {
             &state,
         )
         .unwrap();
-        close(&[session.clone()], &empty_args(), &state).unwrap();
+        close(std::slice::from_ref(&session), &empty_args(), &state).unwrap();
         let err =
             send_line(&[session, Value::String("x".into())], &empty_args(), &state).unwrap_err();
         let msg = format!("{err}");

@@ -4,7 +4,7 @@ use crate::standard_lib;
 use crate::type_system::{NativeCallback, ProcedureValue, Value};
 use crate::{CorvoError, CorvoResult};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
@@ -68,13 +68,9 @@ impl Evaluator {
     }
 
     fn run_tests(&mut self, program: &Program, state: &mut RuntimeState) -> CorvoResult<()> {
-        let EvalMode::TestRunner {
-            script_path,
-            corvo_exe,
-        } = self.mode.clone()
-        else {
+        if !matches!(self.mode, EvalMode::TestRunner { .. }) {
             return Ok(());
-        };
+        }
 
         let tests: Vec<&Stmt> = program
             .statements
@@ -112,15 +108,7 @@ impl Evaluator {
             print!("test {test_name} ... ");
             let _ = std::io::Write::flush(&mut std::io::stdout());
 
-            match self.exec_run_test(
-                name,
-                argv,
-                session_var,
-                body,
-                state,
-                &script_path,
-                &corvo_exe,
-            ) {
+            match self.exec_run_test(argv, session_var, body, state) {
                 Ok(()) => {
                     passed += 1;
                     eprintln!("ok");
@@ -152,14 +140,19 @@ impl Evaluator {
 
     fn exec_run_test(
         &mut self,
-        _name: &Expr,
         argv: &Expr,
         session_var: &str,
         body: &[Stmt],
         state: &mut RuntimeState,
-        script_path: &Path,
-        corvo_exe: &Path,
     ) -> CorvoResult<()> {
+        let EvalMode::TestRunner {
+            script_path,
+            corvo_exe,
+        } = &self.mode
+        else {
+            return Ok(());
+        };
+
         let argv_val = self.eval_expr(argv, state)?;
         let script_argv = Self::argv_list_from_value(&argv_val)?;
 
@@ -174,7 +167,7 @@ impl Evaluator {
 
         let body_result = self.execute_block(body, state);
 
-        let _ = standard_lib::pex::close(&[handle], &HashMap::new(), state);
+        let _ = standard_lib::pex::close(std::slice::from_ref(&handle), &HashMap::new(), state);
 
         body_result
     }
