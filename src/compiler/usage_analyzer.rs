@@ -66,6 +66,7 @@ impl UsageAnalysis {
             ("env", "stdlib-env"),
             ("hcl", "stdlib-hcl"),
             ("net", "stdlib-net"),
+            ("pex", "stdlib-pex"),
         ];
 
         for (ns, feature) in ns_map {
@@ -180,6 +181,15 @@ impl UsageAnalysis {
                 self.uses_amqp_consume = true;
                 self.walk_expr(connection);
                 self.walk_expr(queue);
+                for s in body {
+                    self.walk_stmt(s);
+                }
+            }
+            Stmt::RunTest {
+                name, argv, body, ..
+            } => {
+                self.walk_expr(name);
+                self.walk_expr(argv);
                 for s in body {
                     self.walk_stmt(s);
                 }

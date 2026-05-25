@@ -19,7 +19,7 @@
 | `sys.stdout_isatty` | `` | `Boolean` | Checks if stdout is a terminal | `examples/sys_example.corvo` |
 | `os.get_env` | `name` | `String` | Gets environment variable | `examples/os_example.corvo` |
 | `os.set_env` | `name, value` | `Boolean` | Sets environment variable | `examples/os_example.corvo` |
-| `os.exec` | `cmd_list` | `Map` | Alias for sys.exec | `examples/os_example.corvo` |
+| `os.exec` | `cmd_list` | `Map` | Alias for sys.exec (one-shot; captures stdout/stderr) | `examples/os_example.corvo` |
 | `os.info` | `` | `Map` | Gets OS information | `examples/os_example.corvo` |
 | `os.environ` | `` | `Map` | Gets all environment variables | `examples/os_example.corvo` |
 | `os.groups` | `` | `List` | Gets current user groups | `examples/os_example.corvo` |
@@ -96,6 +96,18 @@
 | `net.tcp_read` | `conn` | `String` | Reads from TCP connection | `examples/net_tcp.corvo` |
 | `net.tcp_write` | `conn, data` | `Boolean` | Writes to TCP connection | `examples/net_tcp.corvo` |
 | `net.tcp_close` | `conn` | `Boolean` | Closes TCP connection | `examples/net_tcp.corvo` |
+| `pex.spawn` | `command, [timeout_ms]` | `Map` | Spawns a command in a PTY (Unix only; default timeout 30s) | `examples/pex_example.corvo` |
+| `pex.spawn_bash` | `[timeout_ms]` | `Map` | Spawns an interactive bash REPL in a PTY (Unix only) | `examples/pex_example.corvo` |
+| `pex.send_line` | `session, line` | `Null` | Sends a line to the PTY session | `examples/pex_example.corvo` |
+| `pex.send` | `session, text` | `Null` | Sends text (no newline) and flushes | `examples/pex_example.corvo` |
+| `pex.send_control` | `session, char` | `Null` | Sends a control character (e.g. `"c"` for Ctrl-C) | `examples/pex_example.corvo` |
+| `pex.read_line` | `session` | `String` | Reads one line from session output | `examples/pex_example.corvo` |
+| `pex.exp_string` | `session, needle` | `Map` | Waits for string; returns `{before}` | `examples/pex_example.corvo` |
+| `pex.exp_regex` | `session, pattern` | `Map` | Waits for regex; returns `{before, match}` | `examples/pex_example.corvo` |
+| `pex.exp_eof` | `session` | `String` | Waits for EOF; returns remaining output | `examples/pex_example.corvo` |
+| `pex.execute` | `session, cmd, ready_regex` | `Null` | Runs cmd in bash session until `ready_regex` (bash only) | `examples/pex_example.corvo` |
+| `pex.wait_for_prompt` | `session` | `String` | Waits for bash prompt (bash only) | `examples/pex_example.corvo` |
+| `pex.close` | `session` | `Null` | Closes the PTY session handle | `examples/pex_example.corvo` |
 | `dns.resolve` | `domain` | `List` | Resolves A records | `examples/dns_example.corvo` |
 | `dns.lookup` | `domain` | `List` | Performs full DNS lookup | `examples/dns_example.corvo` |
 | `crypto.hash` | `algo, data` | `String` | Hashes string | `examples/crypto_example.corvo` |
@@ -250,6 +262,16 @@
 | `static.set` | `name, value` | `Value` | Sets static variable | `examples/variables.corvo` |
 | `http_listen` | `addr` or `port:`, `@req`, `@resp`, optional `shared @var`… | `Null` | HTTP server; optional named `port:`; `shared` vars for cross-request state | `examples/http_listen.corvo`, `examples/oxide_server.corvo` |
 
+### `pex.*` (Unix only)
+
+The `pex.*` namespace drives interactive pseudo-terminal sessions (prompts, passwords, REPL-style shells). It requires **Unix** (Linux or macOS) and the `stdlib-pex` Cargo feature (included in `full-stdlib`). On other platforms, calls return a clear runtime error.
+
+Use `os.exec` / `sys.exec` when you only need to run a command once and read its output. Use `pex.*` when the program expects ongoing terminal interaction. See `examples/pex_example.corvo`.
+
+### `run_test` (Unix + pex, `--run-test` only)
+
+Define integration tests inline with `run_test(name, argv, @session) { ... }`. During normal execution the blocks are skipped. With `corvo --run-test script.corvo`, only top-level `run_test` blocks run; each spawns `corvo script.corvo <argv…>` in a pex PTY and binds `@session` before running the body. See `examples/run_test_example.corvo`.
+
 ## Oxide Deployment (Lean Binaries)
 
 Corvo supports a specialized transpilation mode called **Oxide** for creating ultra-lean binaries.
@@ -258,6 +280,7 @@ Corvo supports a specialized transpilation mode called **Oxide** for creating ul
 | --- | --- |
 | `corvo --oxide <file.corvo>` | Transpiles to a lean Rust project with static dispatch |
 | `corvo --oxide <file> -o <dir>` | Specifies the output directory for the oxide project |
+| `corvo --oxide <file2> -o <dir>` (same dir) | Appends a new `[[bin]]` target; existing bins and merged `corvo-lang` features are preserved |
 
 **Optimization Tips:**
 - Oxide automatically excludes unused standard library modules.
@@ -293,4 +316,5 @@ Corvo has several built-in block structures for control flow, iteration, and ser
 | `dont_panic` | Suppresses runtime errors within the block | `dont_panic { sys.panic() }` |
 | `http_listen` | Concurrent HTTP server loop | `http_listen("0.0.0.0:8080", @req, @resp) { ... }` or `http_listen(port: "127.0.0.1:3000", @req, @resp, shared @count) { ... }` |
 | `amqp_consume` | Starts an AMQP queue consumer | `amqp_consume(@conn, "queue", @msg) { ... }` |
+| `run_test` | In-script integration test (Unix + pex; `--run-test` only) | `run_test("name", ["--help"], @pex) { ... }` |
 | `procedure` | Defines a reusable function block | `@my_func = procedure(@arg) { ... }` |

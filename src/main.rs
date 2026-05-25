@@ -8,7 +8,7 @@ use clap::{CommandFactory, Parser};
     about = "Corvo Programming Language",
     disable_help_flag = true,
     disable_version_flag = true,
-    after_help = "Corvo CLI help (no script):\n  corvo -h | corvo --help\n\nExamples:\n  corvo script.corvo              Run a file\n  corvo script.corvo -lh /        Run a script with args (same flag ordering as GNU ls)\n  corvo --repl                    Start interactive REPL\n  corvo --eval 'sys.echo(\"hi\")'  Evaluate an expression\n  corvo --compile script.corvo    Compile to standalone executable\n  corvo --check script.corvo      Check syntax\n  corvo --lint script.corvo       Analyse code for errors and unknown functions\n  corvo --clean                   Remove the persistent compile cache directory"
+    after_help = "Corvo CLI help (no script):\n  corvo -h | corvo --help\n\nExamples:\n  corvo script.corvo              Run a file\n  corvo script.corvo -lh /        Run a script with args (same flag ordering as GNU ls)\n  corvo --repl                    Start interactive REPL\n  corvo --eval 'sys.echo(\"hi\")'  Evaluate an expression\n  corvo --compile script.corvo    Compile to standalone executable\n  corvo --check script.corvo      Check syntax\n  corvo --lint script.corvo       Analyse code for errors and unknown functions\n  corvo --run-test script.corvo   Run in-script run_test blocks (Unix + pex)\n  corvo --clean                   Remove the persistent compile cache directory"
 )]
 struct Args {
     /// Corvo file to execute or compile
@@ -64,6 +64,10 @@ struct Args {
     /// Remove the persistent compile cache directory used by --compile
     #[arg(long)]
     clean: bool,
+
+    /// Run only top-level run_test blocks in the script (Unix + pex)
+    #[arg(long)]
+    run_test: bool,
 
     /// Arguments forwarded to the script (`os.argv()`); may start with `-` (GNU ls-style flags after FILE)
     #[arg(
@@ -137,6 +141,8 @@ fn main() {
             lint_file(&file);
         } else if args.check {
             check_syntax(&file);
+        } else if args.run_test {
+            run_tests_file(&file);
         } else {
             run_file(&file, args.script_args);
         }
@@ -145,6 +151,21 @@ fn main() {
 
     print_usage();
     std::process::exit(1);
+}
+
+fn run_tests_file(file: &std::path::Path) {
+    match corvo_lang::run_tests_file(file) {
+        Ok(_) => {}
+        Err(e) => {
+            if let Some(code) = e.process_exit_code() {
+                std::process::exit(code);
+            }
+            let source = std::fs::read_to_string(file).unwrap_or_default();
+            let filename = file.display().to_string();
+            corvo_lang::diagnostic::print_error(&e, &source, &filename);
+            std::process::exit(e.exit_code());
+        }
+    }
 }
 
 fn run_file(file: &std::path::Path, script_args: Vec<String>) {
@@ -478,6 +499,7 @@ fn print_usage() {
     eprintln!("  -v, --version        Print version");
     eprintln!("      --check          Check syntax without executing");
     eprintln!("      --lint           Analyse code for errors (like cargo clippy)");
+    eprintln!("      --run-test         Run only run_test blocks in the script (Unix + pex)");
     eprintln!("      --debug          Use debug build mode (faster compile)");
     eprintln!("      --no-debug       Generate a binary that aborts under debuggers/tracers");
     eprintln!("      --clean          Remove the persistent compile cache directory");
@@ -495,4 +517,5 @@ fn print_usage() {
     eprintln!("  corvo --clean                    Wipe the persistent compile cache");
     eprintln!("  corvo --eval 'sys.echo(\"hi\")'   Evaluate an expression");
     eprintln!("  corvo --lint script.corvo        Analyse code for issues");
+    eprintln!("  corvo --run-test script.corvo    Run in-script run_test blocks");
 }

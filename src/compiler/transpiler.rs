@@ -760,6 +760,12 @@ impl Transpiler {
                     self.indent()
                 ));
             }
+            Stmt::RunTest { .. } => {
+                code.push_str(&format!(
+                    "{}// run_test: test-only (skipped in transpile)\n",
+                    self.indent()
+                ));
+            }
         }
         code
     }
@@ -1181,6 +1187,18 @@ impl Transpiler {
                 | "net.tcp_read"
                 | "net.tcp_write"
                 | "net.tcp_close"
+                | "pex.spawn"
+                | "pex.spawn_bash"
+                | "pex.send_line"
+                | "pex.send"
+                | "pex.send_control"
+                | "pex.read_line"
+                | "pex.exp_string"
+                | "pex.exp_regex"
+                | "pex.exp_eof"
+                | "pex.execute"
+                | "pex.wait_for_prompt"
+                | "pex.close"
         )
     }
 

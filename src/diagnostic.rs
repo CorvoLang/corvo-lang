@@ -236,6 +236,15 @@ fn lint_stmt(stmt: &Stmt, out: &mut Vec<LintDiagnostic>) {
                 lint_stmt(s, out);
             }
         }
+        Stmt::RunTest {
+            name, argv, body, ..
+        } => {
+            lint_expr(name, out);
+            lint_expr(argv, out);
+            for s in body {
+                lint_stmt(s, out);
+            }
+        }
         Stmt::Terminate => {}
         Stmt::VarIndexSet { index, value, .. } => {
             lint_expr(index, out);
@@ -495,6 +504,19 @@ pub const KNOWN_FUNCTIONS: &[&str] = &[
     "net.tcp_read",
     "net.tcp_write",
     "net.tcp_close",
+    // pex (Unix PTY interactive shell; requires stdlib-pex)
+    "pex.spawn",
+    "pex.spawn_bash",
+    "pex.send_line",
+    "pex.send",
+    "pex.send_control",
+    "pex.read_line",
+    "pex.exp_string",
+    "pex.exp_regex",
+    "pex.exp_eof",
+    "pex.execute",
+    "pex.wait_for_prompt",
+    "pex.close",
     // dns
     "dns.resolve",
     "dns.lookup",

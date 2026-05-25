@@ -28,6 +28,7 @@ pub enum TokenType {
     Shared,
     HttpListen,
     AmqpConsume,
+    RunTest,
 
     // Literals
     String(String),
@@ -104,6 +105,7 @@ impl fmt::Display for TokenType {
             Self::Shared => write!(f, "shared"),
             Self::HttpListen => write!(f, "http_listen"),
             Self::AmqpConsume => write!(f, "amqp_consume"),
+            Self::RunTest => write!(f, "run_test"),
             Self::String(s) => write!(f, "\"{}\"", s),
             Self::Regex(pattern, flags) => write!(f, "/{}/{}", pattern, flags),
             Self::Number(n) => {

@@ -9,3 +9,5 @@ In addition to the rules in `AGENTS.md`, please follow these unique idiomatic pa
    - Prefer built-in shorthands (`@var++`, `@var += 5`, `@var or= (...)`).
    - Use `try` / `fallback` blocks for robust error handling.
    - When iterating, use `browse` or `async_browse` instead of manual index management.
+   - Use `os.exec` for one-shot shell commands; use `pex.*` on Unix when a program needs interactive PTY sessions (prompts, passwords, REPL-style shells).
+   - Use `run_test(name, argv, @session) { ... }` for in-script integration tests; run them with `corvo --run-test file.corvo` (Unix + pex only; skipped in normal runs).

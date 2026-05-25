@@ -1,3 +1,4 @@
+use super::pex_registry::PexRegistry;
 use super::tcp_registry::TcpRegistry;
 use crate::type_system::Value;
 use crate::CorvoError;
@@ -16,6 +17,7 @@ pub struct RuntimeState {
     /// the interpreter, or after the executable when running a compiled binary).
     script_argv: Vec<String>,
     pub(crate) tcp: TcpRegistry,
+    pub(crate) pex: PexRegistry,
 }
 
 impl RuntimeState {
@@ -25,11 +27,16 @@ impl RuntimeState {
             statics: HashMap::new(),
             script_argv: Vec::new(),
             tcp: TcpRegistry::new(),
+            pex: PexRegistry::new(),
         }
     }
 
     pub(crate) fn tcp(&self) -> &TcpRegistry {
         &self.tcp
+    }
+
+    pub(crate) fn pex(&self) -> &PexRegistry {
+        &self.pex
     }
 
     pub fn set_script_argv(&mut self, argv: Vec<String>) {
@@ -139,6 +146,7 @@ impl Clone for RuntimeState {
             script_argv: self.script_argv.clone(),
             // Sockets are not duplicated; cloned state starts with no live handles.
             tcp: TcpRegistry::new(),
+            pex: PexRegistry::new(),
         }
     }
 }

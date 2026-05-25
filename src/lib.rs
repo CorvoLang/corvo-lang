@@ -52,6 +52,46 @@ pub fn run_file(path: &Path) -> CorvoResult<()> {
     run_source(&source)
 }
 
+/// Run only top-level `run_test` blocks in a Corvo script file.
+///
+/// Each block spawns `corvo <file> <argv…>` in a pex PTY session and executes its body.
+/// Requires Unix and the `stdlib-pex` feature.
+pub fn run_tests_file(path: &Path) -> CorvoResult<()> {
+    #[cfg(not(all(unix, feature = "stdlib-pex")))]
+    {
+        let _ = path;
+        return Err(CorvoError::runtime(
+            "run_test requires Unix and the stdlib-pex feature".to_string(),
+        ));
+    }
+
+    #[cfg(all(unix, feature = "stdlib-pex"))]
+    {
+        let source = std::fs::read_to_string(path).map_err(|e| CorvoError::io(e.to_string()))?;
+        let script_path = path
+            .canonicalize()
+            .map_err(|e| CorvoError::io(e.to_string()))?;
+        let corvo_exe = std::env::var("CORVO_BIN")
+            .map(PathBuf::from)
+            .or_else(|_| std::env::var("CARGO_BIN_EXE_corvo").map(PathBuf::from))
+            .or_else(|_| std::env::current_exe().map_err(|e| CorvoError::io(e.to_string())))?;
+
+        let mut lexer = Lexer::new(&source);
+        let tokens = lexer.tokenize()?;
+        let mut parser = Parser::new(
+            tokens
+                .into_iter()
+                .filter(|t| !matches!(t.token_type, crate::lexer::token::TokenType::Comment(_)))
+                .collect(),
+        );
+        let program = parser.parse()?;
+
+        let mut state = RuntimeState::new();
+        let mut evaluator = Evaluator::new().with_test_runner(script_path, corvo_exe);
+        evaluator.run(&program, &mut state)
+    }
+}
+
 /// Runs Corvo source code directly from a string.
 ///
 /// # Arguments

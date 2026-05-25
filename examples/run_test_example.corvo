@@ -1,0 +1,15 @@
+# run_test_example.corvo — in-script integration tests (Unix + pex)
+#
+# Normal run: responds to --help when passed on the command line.
+# Test run:   corvo --run-test run_test_example.corvo
+
+browse(os.argv(), @i, @arg) {
+    if @arg == "--help" {
+        sys.echo("Usage: run_test_example.corvo [--help]")
+    }
+}
+
+run_test("help flag prints usage", ["--help"], @pex) {
+    @out = pex.exp_string(@pex, "Usage:")
+    assert_match("Usage:", map.get(@out, "before"))
+}

@@ -84,6 +84,12 @@ pub enum Stmt {
         shared_vars: Vec<String>,
         body: Vec<Stmt>,
     },
+    RunTest {
+        name: Box<Expr>,
+        argv: Box<Expr>,
+        session_var: String,
+        body: Vec<Stmt>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
