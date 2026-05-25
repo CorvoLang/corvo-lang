@@ -4,7 +4,6 @@ mod common;
 use corvo_lang::compiler::Compiler;
 
 use std::fs;
-use std::process::Command;
 use tempfile::tempdir;
 
 #[test]
@@ -49,7 +48,8 @@ fn test_transpile_async_browse() {
     ));
     fs::write(&cargo_toml_path, cargo_toml).unwrap();
 
-    let output = Command::new("cargo")
+    let output = common::nested_project_cargo()
+        .expect("nested cargo target dir")
         .arg("run")
         .current_dir(&project_path)
         .output()

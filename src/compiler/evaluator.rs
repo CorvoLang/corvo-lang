@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 #[derive(Debug, Clone)]
 pub enum EvalMode {
     Normal,
+    #[cfg(all(unix, feature = "stdlib-pex"))]
     TestRunner {
         script_path: PathBuf,
         corvo_exe: PathBuf,
@@ -43,6 +44,7 @@ impl Evaluator {
         self
     }
 
+    #[cfg(all(unix, feature = "stdlib-pex"))]
     pub fn with_test_runner(mut self, script_path: PathBuf, corvo_exe: PathBuf) -> Self {
         self.mode = EvalMode::TestRunner {
             script_path,
@@ -52,6 +54,7 @@ impl Evaluator {
     }
 
     pub fn run(&mut self, program: &Program, state: &mut RuntimeState) -> CorvoResult<()> {
+        #[cfg(all(unix, feature = "stdlib-pex"))]
         if matches!(self.mode, EvalMode::TestRunner { .. }) {
             return self.run_tests(program, state);
         }
@@ -67,6 +70,7 @@ impl Evaluator {
         Ok(())
     }
 
+    #[cfg(all(unix, feature = "stdlib-pex"))]
     fn run_tests(&mut self, program: &Program, state: &mut RuntimeState) -> CorvoResult<()> {
         if !matches!(self.mode, EvalMode::TestRunner { .. }) {
             return Ok(());
@@ -138,6 +142,7 @@ impl Evaluator {
         Ok(())
     }
 
+    #[cfg(all(unix, feature = "stdlib-pex"))]
     fn exec_run_test(
         &mut self,
         argv: &Expr,
@@ -153,6 +158,9 @@ impl Evaluator {
             return Ok(());
         };
 
+        self.terminate_requested = false;
+        state.clear_vars();
+
         let argv_val = self.eval_expr(argv, state)?;
         let script_argv = Self::argv_list_from_value(&argv_val)?;
 
@@ -166,10 +174,10 @@ impl Evaluator {
         state.var_set(session_var.to_string(), handle.clone());
 
         let body_result = self.execute_block(body, state);
-
-        let _ = standard_lib::pex::close(std::slice::from_ref(&handle), &HashMap::new(), state);
-
-        body_result
+        let close_result =
+            standard_lib::pex::close(std::slice::from_ref(&handle), &HashMap::new(), state);
+        body_result?;
+        close_result.map(|_| ())
     }
 
     // skipcq: RS-R1000
@@ -469,6 +477,7 @@ impl Evaluator {
         }
     }
 
+    #[cfg(all(unix, feature = "stdlib-pex"))]
     fn argv_list_from_value(value: &Value) -> CorvoResult<Vec<String>> {
         let list = value.as_list().ok_or_else(|| {
             CorvoError::invalid_argument("run_test argv must be a list of strings")

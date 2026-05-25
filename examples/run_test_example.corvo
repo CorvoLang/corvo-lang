@@ -9,6 +9,5 @@ if (list.len(@args) > 0 && list.get(@args, 0) == "--help") {
 }
 
 run_test("help flag prints usage", ["--help"], @pex) {
-    @out = pex.exp_string(@pex, "Usage:")
-    assert_match("Usage:", map.get(@out, "before"))
+    pex.exp_string(@pex, "Usage:")
 }

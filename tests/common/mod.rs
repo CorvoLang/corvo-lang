@@ -9,8 +9,10 @@
 //! first, then an `flock` so different test *processes* also serialize.
 
 use fs4::fs_std::FileExt;
-use std::fs::OpenOptions;
+use std::fs::{self, OpenOptions};
 use std::io;
+use std::path::PathBuf;
+use std::process::Command;
 use std::sync::Mutex;
 
 static IN_PROCESS: Mutex<()> = Mutex::new(());
@@ -25,11 +27,32 @@ pub struct NestedCargoLockGuard {
 
 type MutexGuard = std::sync::MutexGuard<'static, ()>;
 
+/// Shared `target/` for nested `cargo build` / `cargo run` in generated projects.
+///
+/// Without this, each temp project compiles heavy deps (e.g. `aws-lc-sys`) into `/tmp` and can
+/// exhaust disk on developer machines and CI runners.
+#[allow(dead_code)]
+pub fn nested_cargo_target_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("nested-integration")
+}
+
+/// `cargo` for building/running generated integration-test projects.
+#[allow(dead_code)]
+pub fn nested_project_cargo() -> io::Result<Command> {
+    let target_dir = nested_cargo_target_dir();
+    fs::create_dir_all(&target_dir)?;
+    let mut cmd = Command::new("cargo");
+    cmd.env("CARGO_TARGET_DIR", target_dir);
+    Ok(cmd)
+}
+
 /// Blocks until no other integration test holds the nested-cargo lock.
 pub fn nested_cargo_lock() -> io::Result<NestedCargoLockGuard> {
     let in_process = IN_PROCESS
         .lock()
-        .map_err(|_| io::Error::other("nested cargo in-process mutex poisoned"))?;
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let path = std::env::temp_dir().join("corvo_lang_nested_cargo_integration.lock");
     let f = OpenOptions::new()
         .read(true)

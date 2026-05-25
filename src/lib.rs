@@ -37,7 +37,9 @@ pub use span::{Position, Span};
 use crate::compiler::Evaluator;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(all(unix, feature = "stdlib-pex"))]
+use std::path::PathBuf;
 
 /// Runs a Corvo script from a given file path.
 ///
@@ -50,6 +52,17 @@ use std::path::{Path, PathBuf};
 pub fn run_file(path: &Path) -> CorvoResult<()> {
     let source = std::fs::read_to_string(path).map_err(|e| CorvoError::io(e.to_string()))?;
     run_source(&source)
+}
+
+#[cfg(all(unix, feature = "stdlib-pex"))]
+fn resolve_corvo_exe() -> CorvoResult<PathBuf> {
+    if let Ok(path) = std::env::var("CORVO_BIN") {
+        return Ok(PathBuf::from(path));
+    }
+    if let Ok(path) = std::env::var("CARGO_BIN_EXE_corvo") {
+        return Ok(PathBuf::from(path));
+    }
+    std::env::current_exe().map_err(|e| CorvoError::io(e.to_string()))
 }
 
 /// Run only top-level `run_test` blocks in a Corvo script file.
@@ -71,10 +84,7 @@ pub fn run_tests_file(path: &Path) -> CorvoResult<()> {
         let script_path = path
             .canonicalize()
             .map_err(|e| CorvoError::io(e.to_string()))?;
-        let corvo_exe = std::env::var("CORVO_BIN")
-            .map(PathBuf::from)
-            .or_else(|_| std::env::var("CARGO_BIN_EXE_corvo").map(PathBuf::from))
-            .or_else(|_| std::env::current_exe().map_err(|e| CorvoError::io(e.to_string())))?;
+        let corvo_exe = resolve_corvo_exe()?;
 
         let mut lexer = Lexer::new(&source);
         let tokens = lexer.tokenize()?;

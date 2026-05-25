@@ -6,7 +6,6 @@ use corvo_lang::compiler::usage_analyzer::UsageAnalysis;
 use corvo_lang::lexer::tokenizer::Lexer;
 use corvo_lang::parser::recursive_descent::Parser;
 use std::fs;
-use std::process::Command;
 use tempfile::tempdir;
 
 fn with_oxide_cargo_lock<T>(f: impl FnOnce() -> T) -> T {
@@ -111,7 +110,8 @@ strip = true
 fn assert_oxide_cargo_check_release(name: &str, source: &str) {
     with_oxide_cargo_lock(|| {
         let (_temp, output_dir) = prepare_oxide_temp_project(name, source);
-        let status = Command::new("cargo")
+        let status = common::nested_project_cargo()
+            .expect("nested cargo target dir")
             .args(["check", "--release"])
             .current_dir(&output_dir)
             .status()
@@ -128,7 +128,8 @@ fn assert_oxide_exit(name: &str, source: &str, expected_code: i32) {
     with_oxide_cargo_lock(|| {
         let (_temp, output_dir) = prepare_oxide_temp_project(name, source);
 
-        let run_status = Command::new("cargo")
+        let run_status = common::nested_project_cargo()
+            .expect("nested cargo target dir")
             .arg("run")
             .arg("--release")
             .current_dir(&output_dir)
@@ -270,7 +271,8 @@ tokio = {{ version = "1.0", features = ["full"] }}
         );
         fs::write(output_dir.join("Cargo.toml"), cargo_toml).expect("Failed to write Cargo.toml");
 
-        let status = Command::new("cargo")
+        let status = common::nested_project_cargo()
+            .expect("nested cargo target dir")
             .arg("run")
             .arg("--release")
             .current_dir(&output_dir)
@@ -335,7 +337,8 @@ tokio = {{ version = "1.0", features = ["full"] }}
         );
         fs::write(output_dir.join("Cargo.toml"), cargo_toml).expect("Failed to write Cargo.toml");
 
-        let status = Command::new("cargo")
+        let status = common::nested_project_cargo()
+            .expect("nested cargo target dir")
             .arg("run")
             .arg("--release")
             .current_dir(&output_dir)

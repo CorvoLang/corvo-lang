@@ -1776,7 +1776,13 @@ mod tests {
                 body,
             } => {
                 assert!(matches!(name.as_ref(), Expr::Literal { .. }));
-                assert!(matches!(argv.as_ref(), Expr::Literal { .. }));
+                match argv.as_ref() {
+                    Expr::FunctionCall { name, args, .. } => {
+                        assert_eq!(name, "__list__");
+                        assert_eq!(args.len(), 1);
+                    }
+                    _ => panic!("Expected argv list literal"),
+                }
                 assert_eq!(session_var, "pex");
                 assert_eq!(body.len(), 1);
             }

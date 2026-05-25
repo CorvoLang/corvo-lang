@@ -2,35 +2,39 @@
 mod unix_run_test {
     use corvo_lang::run_tests_file;
     use std::io::Write;
-    use tempfile::NamedTempFile;
 
     #[test]
     fn run_test_spawns_self_and_asserts_output() {
-        let mut file = NamedTempFile::new().expect("temp file");
+        let mut file = tempfile::Builder::new()
+            .suffix(".corvo")
+            .tempfile()
+            .expect("temp file");
         write!(
             file,
             r#"
-browse(os.argv(), @i, @arg) {{
-    if @arg == "--ping" {{
-        sys.echo("pong")
-    }}
+@args = os.argv()
+if (list.len(@args) > 0 && list.get(@args, 0) == "--ping") {{
+    sys.echo("pong")
 }}
 
 run_test("ping", ["--ping"], @pex) {{
-    @out = pex.exp_string(@pex, "pong")
-    assert_eq("pong", map.get(@out, "before"))
+    pex.exp_string(@pex, "pong")
 }}
 "#
         )
         .expect("write temp script");
         file.flush().expect("flush");
 
+        std::env::set_var("CORVO_BIN", env!("CARGO_BIN_EXE_corvo"));
         run_tests_file(file.path()).expect("run_test should pass");
     }
 
     #[test]
     fn run_test_reports_failure() {
-        let mut file = NamedTempFile::new().expect("temp file");
+        let mut file = tempfile::Builder::new()
+            .suffix(".corvo")
+            .tempfile()
+            .expect("temp file");
         write!(
             file,
             r#"
@@ -42,6 +46,7 @@ run_test("bad", [], @pex) {{
         .expect("write temp script");
         file.flush().expect("flush");
 
+        std::env::set_var("CORVO_BIN", env!("CARGO_BIN_EXE_corvo"));
         let err = run_tests_file(file.path()).expect_err("run_test should fail");
         assert!(format!("{err}").contains("failed"));
     }

@@ -8,19 +8,6 @@ use std::collections::HashMap;
 
 const DEFAULT_TIMEOUT_MS: u64 = 30_000;
 
-/// Escape a single argument for `/bin/sh -c` style command strings used by rexpect.
-fn shell_escape_unix(s: &str) -> String {
-    if s.is_empty() {
-        return "''".to_string();
-    }
-    if s.chars()
-        .all(|c| c.is_ascii_alphanumeric() || "-._/:".contains(c))
-    {
-        return s.to_string();
-    }
-    format!("'{}'", s.replace('\'', "'\\''"))
-}
-
 /// Spawn a subprocess in a PTY from an argv vector (used by `run_test`).
 #[cfg(all(unix, feature = "stdlib-pex"))]
 pub(crate) fn spawn_argv_for_test(
@@ -28,18 +15,19 @@ pub(crate) fn spawn_argv_for_test(
     timeout_ms: u64,
     state: &RuntimeState,
 ) -> CorvoResult<Value> {
+    use std::process::Command;
+
     if argv.is_empty() {
         return Err(CorvoError::invalid_argument(
             "run_test spawn requires at least one argv element (executable path)",
         ));
     }
-    let command = argv
-        .iter()
-        .map(|s| shell_escape_unix(s))
-        .collect::<Vec<_>>()
-        .join(" ");
-    let session = rexpect::spawn(command.as_str(), Some(timeout_ms)).map_err(map_rexpect_err)?;
+    let mut cmd = Command::new(&argv[0]);
+    cmd.args(&argv[1..]);
+    let session =
+        rexpect::session::spawn_command(cmd, Some(timeout_ms)).map_err(map_rexpect_err)?;
     let id = state.pex().insert_session(session);
+    let command = argv.join(" ");
     Ok(session_handle_map(KIND_SESSION, id, Some(command.as_str())))
 }
 
@@ -266,9 +254,15 @@ pub fn send_control(
         let ch_str = args.get(1).and_then(|v| v.as_string()).ok_or_else(|| {
             CorvoError::invalid_argument("pex.send_control requires a single-character string")
         })?;
-        let ch = ch_str.chars().next().ok_or_else(|| {
+        let mut chars = ch_str.chars();
+        let ch = chars.next().ok_or_else(|| {
             CorvoError::invalid_argument("pex.send_control requires a non-empty character string")
         })?;
+        if chars.next().is_some() {
+            return Err(CorvoError::invalid_argument(
+                "pex.send_control requires a single-character string",
+            ));
+        }
         with_pex_session(state, handle, |entry| {
             with_pex_io(entry, |s| {
                 s.send_control(ch).map_err(map_rexpect_err)?;
@@ -678,6 +672,26 @@ mod tests {
         .unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("spawn_bash"), "{msg}");
+        close(&[session], &empty_args(), &state).unwrap();
+    }
+
+    #[test]
+    fn send_control_rejects_multi_character_string() {
+        let state = RuntimeState::new();
+        let session = spawn(
+            &[Value::String("cat".into()), Value::Number(5000.0)],
+            &empty_args(),
+            &state,
+        )
+        .unwrap();
+        let err = send_control(
+            &[session.clone(), Value::String("^C".into())],
+            &empty_args(),
+            &state,
+        )
+        .unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("single-character"), "{msg}");
         close(&[session], &empty_args(), &state).unwrap();
     }
 

@@ -1,6 +1,10 @@
+#[cfg(all(unix, feature = "stdlib-pex"))]
 use crate::{CorvoError, CorvoResult};
+#[cfg(all(unix, feature = "stdlib-pex"))]
 use std::collections::HashMap;
+#[cfg(all(unix, feature = "stdlib-pex"))]
 use std::sync::atomic::{AtomicU64, Ordering};
+#[cfg(all(unix, feature = "stdlib-pex"))]
 use std::sync::Mutex;
 
 pub const KIND_SESSION: &str = "pex_session";
