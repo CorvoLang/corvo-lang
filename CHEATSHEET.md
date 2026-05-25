@@ -262,13 +262,13 @@
 | `static.set` | `name, value` | `Value` | Sets static variable | `examples/variables.corvo` |
 | `http_listen` | `addr` or `port:`, `@req`, `@resp`, optional `shared @var`… | `Null` | HTTP server; optional named `port:`; `shared` vars for cross-request state | `examples/http_listen.corvo`, `examples/oxide_server.corvo` |
 
-### `pex.*` (Unix only)
+## `pex.*` (Unix only)
 
 The `pex.*` namespace drives interactive pseudo-terminal sessions (prompts, passwords, REPL-style shells). It requires **Unix** (Linux or macOS) and the `stdlib-pex` Cargo feature (included in `full-stdlib`). On other platforms, calls return a clear runtime error.
 
 Use `os.exec` / `sys.exec` when you only need to run a command once and read its output. Use `pex.*` when the program expects ongoing terminal interaction. See `examples/pex_example.corvo`.
 
-### `run_test` (Unix + pex, `--run-test` only)
+## `run_test` (Unix + pex, `--run-test` only)
 
 Define integration tests inline with `run_test(name, argv, @session) { ... }`. During normal execution the blocks are skipped. With `corvo --run-test script.corvo`, only top-level `run_test` blocks run; each spawns `corvo script.corvo <argv…>` in a pex PTY and binds `@session` before running the body. See `examples/run_test_example.corvo`.
 

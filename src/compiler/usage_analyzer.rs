@@ -185,14 +185,8 @@ impl UsageAnalysis {
                     self.walk_stmt(s);
                 }
             }
-            Stmt::RunTest {
-                name, argv, body, ..
-            } => {
-                self.walk_expr(name);
-                self.walk_expr(argv);
-                for s in body {
-                    self.walk_stmt(s);
-                }
+            Stmt::RunTest { .. } => {
+                // Interpreter-only; stripped from transpiled output — do not affect Oxide features.
             }
         }
     }

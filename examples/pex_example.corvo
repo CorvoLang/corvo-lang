@@ -3,7 +3,8 @@
 # Unlike os.exec (one-shot capture), pex.* drives programs that expect prompts,
 # passwords, or ongoing shell interaction via rexpect.
 #
-# Requires Unix + stdlib-pex. Default spawn timeout is 30 seconds unless overridden.
+# Requires Unix + stdlib-pex. Timeout values are in milliseconds (default 30000 = 30s;
+# overrides below: 10000 = 10s, 5000 = 5s).
 
 @bash = pex.spawn_bash(10000)
 pex.execute(@bash, "echo hello", "hello")

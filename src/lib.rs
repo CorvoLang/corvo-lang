@@ -324,4 +324,41 @@ mod tests {
         load_statics_from_encrypted_bytes(&mut state, &encrypted, key);
         assert_eq!(state.static_count(), 0);
     }
+
+    #[test]
+    fn run_tests_file_reports_missing_feature_on_unsupported_builds() {
+        #[cfg(not(all(unix, feature = "stdlib-pex")))]
+        {
+            let err = run_tests_file(Path::new("missing.corvo")).unwrap_err();
+            assert!(format!("{err}").contains("stdlib-pex"));
+        }
+    }
+
+    #[cfg(all(unix, feature = "stdlib-pex"))]
+    #[test]
+    fn run_tests_file_succeeds_when_no_run_test_blocks() {
+        use std::io::Write;
+
+        let mut file = tempfile::Builder::new()
+            .suffix(".corvo")
+            .tempfile()
+            .expect("temp file");
+        write!(file, "sys.echo(\"hello\")").expect("write temp script");
+        file.flush().expect("flush");
+
+        let corvo_bin = std::env::var("CARGO_BIN_EXE_corvo").unwrap_or_else(|_| {
+            std::env::current_exe()
+                .expect("current_exe")
+                .display()
+                .to_string()
+        });
+        let previous = std::env::var_os("CORVO_BIN");
+        std::env::set_var("CORVO_BIN", &corvo_bin);
+        let result = run_tests_file(file.path());
+        match previous {
+            Some(value) => std::env::set_var("CORVO_BIN", value),
+            None => std::env::remove_var("CORVO_BIN"),
+        }
+        result.expect("no run_test blocks should succeed");
+    }
 }

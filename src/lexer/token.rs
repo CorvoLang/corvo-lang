@@ -209,6 +209,10 @@ mod tests {
             Token::new(TokenType::Var, span).to_string(),
             "var @ 1:1..1:1"
         );
+        assert_eq!(
+            Token::new(TokenType::RunTest, span).to_string(),
+            "run_test @ 1:1..1:1"
+        );
     }
 
     #[test]

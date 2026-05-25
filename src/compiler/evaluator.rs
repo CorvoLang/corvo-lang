@@ -103,6 +103,9 @@ impl Evaluator {
                 continue;
             };
 
+            self.terminate_requested = false;
+            state.clear_vars();
+
             let test_name_val = self.eval_expr(name, state)?;
             let test_name = test_name_val
                 .as_string()
@@ -177,7 +180,17 @@ impl Evaluator {
         let close_result =
             standard_lib::pex::close(std::slice::from_ref(&handle), &HashMap::new(), state);
         body_result?;
-        close_result.map(|_| ())
+        match close_result {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                let msg = format!("{e}");
+                if msg.contains("unknown session handle") || msg.contains("unknown or closed") {
+                    Ok(())
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 
     // skipcq: RS-R1000
@@ -2111,6 +2124,46 @@ mod tests {
     #[test]
     fn test_run_test_skipped_in_normal_mode() {
         assert!(eval_source(r#"run_test("x", [], @p) { assert_eq("1", "2") }"#).is_ok());
+    }
+
+    #[cfg(all(unix, feature = "stdlib-pex"))]
+    mod run_test_runner_tests {
+        use super::*;
+        use crate::ast::Program;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+        use std::path::PathBuf;
+
+        fn parse_program(source: &str) -> Program {
+            let mut lexer = Lexer::new(source);
+            let tokens = lexer.tokenize().unwrap();
+            let mut parser = Parser::new(
+                tokens
+                    .into_iter()
+                    .filter(|t| !matches!(t.token_type, crate::lexer::token::TokenType::Comment(_)))
+                    .collect(),
+            );
+            parser.parse().unwrap()
+        }
+
+        fn run_test_runner(source: &str) -> CorvoResult<()> {
+            let program = parse_program(source);
+            let mut state = RuntimeState::new();
+            let mut evaluator = Evaluator::new().with_test_runner(
+                PathBuf::from("/nonexistent/script.corvo"),
+                PathBuf::from("/nonexistent/corvo"),
+            );
+            evaluator.run(&program, &mut state)
+        }
+
+        #[test]
+        fn test_run_test_invalid_argv_type() {
+            let err = run_test_runner(r#"run_test("x", 1, @p) { }"#).unwrap_err();
+            assert!(
+                format!("{err}").contains("failed"),
+                "run_tests should report failure for invalid argv"
+            );
+        }
     }
 }
 

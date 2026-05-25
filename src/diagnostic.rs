@@ -401,6 +401,7 @@ const KNOWN_NAMESPACES: &[&str] = &[
     "var",
     "static",
     "amqp",
+    "pex",
 ];
 
 /// All functions recognised by the standard library and type system.

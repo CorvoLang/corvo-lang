@@ -52,6 +52,7 @@ impl Parser {
                 | TokenType::Shared
                 | TokenType::If
                 | TokenType::Else
+                | TokenType::RunTest
         )
     }
 
@@ -80,6 +81,7 @@ impl Parser {
             TokenType::Shared => "shared".to_string(),
             TokenType::If => "if".to_string(),
             TokenType::Else => "else".to_string(),
+            TokenType::RunTest => "run_test".to_string(),
             _ => return Err(self.error("Expected variable name after '@'")),
         };
         self.advance();
@@ -1763,6 +1765,15 @@ mod tests {
     }
 
     // --- Assertion Tests ---
+
+    #[test]
+    fn test_parse_run_test_session_var_keyword() {
+        let program = parse_source(r#"run_test("x", [], @run_test) { assert_eq(1, 1) }"#).unwrap();
+        match &program.statements[0] {
+            Stmt::RunTest { session_var, .. } => assert_eq!(session_var, "run_test"),
+            _ => panic!("Expected RunTest"),
+        }
+    }
 
     #[test]
     fn test_parse_run_test() {

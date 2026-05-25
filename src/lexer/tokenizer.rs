@@ -1302,6 +1302,34 @@ mod tests {
     // --- Display Tests ---
 
     #[test]
+    fn test_tokenize_run_test_keyword() {
+        let tokens = tokenize("run_test").unwrap();
+        assert_eq!(tokens[0].token_type, TokenType::RunTest);
+    }
+
+    #[test]
+    fn test_tokenize_run_test_in_interpolation() {
+        fn contains_run_test_token(parts: &[Token]) -> bool {
+            parts.iter().any(|t| match &t.token_type {
+                TokenType::RunTest => true,
+                TokenType::StringInterpolation(inner) => contains_run_test_token(inner),
+                _ => false,
+            })
+        }
+
+        let tokens = tokenize("\"${run_test}\"").unwrap();
+        match &tokens[0].token_type {
+            TokenType::StringInterpolation(parts) => {
+                assert!(
+                    contains_run_test_token(parts),
+                    "expected RunTest inside interpolation, got {parts:?}"
+                );
+            }
+            other => panic!("Expected StringInterpolation token, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn test_token_display() {
         let tokens = tokenize("var").unwrap();
         let display = format!("{}", tokens[0]);
