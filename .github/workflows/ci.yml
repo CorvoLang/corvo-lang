@@ -56,5 +56,75 @@ jobs:
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
-      - run: cargo test --all-features
+      - name: Run tests
+        env:
+          CORVO_LANG_LOCAL_PATH: ${{ github.workspace }}
+        run: cargo test --all-features
+      - name: Run pex unit tests (Unix)
+        if: runner.os != 'Windows'
+        run: cargo test pex --lib --all-features
+      - name: Run run_test integration tests (Unix)
+        if: runner.os != 'Windows'
+        run: cargo test --test run_test_integration --all-features
 
+  oxide:
+    permissions:
+      contents: read
+    name: Oxide transpilation
+    runs-on: ubuntu-latest
+    needs: [fmt, clippy]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install dependencies (Linux)
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      - name: Run oxide integration tests
+        env:
+          CORVO_LANG_LOCAL_PATH: ${{ github.workspace }}
+        run: cargo test --test oxide_transpilation_test --all-features
+
+  lint-examples:
+    permissions:
+      contents: read
+    name: Lint examples
+    runs-on: ubuntu-latest
+    needs: [fmt, clippy]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install dependencies (Linux)
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      - name: Build corvo CLI
+        run: cargo build --bin corvo
+      - name: Lint all example scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for f in examples/*.corvo; do
+            echo "Linting ${f}"
+            ./target/debug/corvo --lint "${f}"
+          done
+
+  smoke-unix:
+    permissions:
+      contents: read
+    name: Smoke (Unix examples)
+    runs-on: ubuntu-latest
+    needs: [fmt, clippy]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install dependencies (Linux)
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      - name: Build corvo and smoke pex + run_test examples
+        run: |
+          cargo build --bin corvo
+          ./target/debug/corvo examples/pex_example.corvo
+          ./target/debug/corvo --run-test examples/run_test_example.corvo

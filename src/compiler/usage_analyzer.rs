@@ -66,6 +66,7 @@ impl UsageAnalysis {
             ("env", "stdlib-env"),
             ("hcl", "stdlib-hcl"),
             ("net", "stdlib-net"),
+            ("pex", "stdlib-pex"),
         ];
 
         for (ns, feature) in ns_map {
@@ -183,6 +184,9 @@ impl UsageAnalysis {
                 for s in body {
                     self.walk_stmt(s);
                 }
+            }
+            Stmt::RunTest { .. } => {
+                // Interpreter-only; stripped from transpiled output — do not affect Oxide features.
             }
         }
     }

@@ -92,6 +92,7 @@ full-stdlib = [
     "stdlib-env",
     "stdlib-hcl",
     "stdlib-net",
+    "stdlib-pex",
 ]
 
 # Core modules (always available, no heavy deps):
@@ -112,7 +113,9 @@ stdlib-yaml = ["dep:serde_yaml"]
 stdlib-env = []
 stdlib-hcl = []
 stdlib-net = []
+stdlib-pex = ["dep:rexpect"]
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 uzers = "0.11"
+rexpect = { version = "0.7", optional = true }

@@ -37,7 +37,8 @@ fn transpile_and_run(stem: &str, source: &str) -> std::process::Output {
     ));
     fs::write(&cargo_toml_path, cargo_toml).unwrap();
 
-    Command::new("cargo")
+    common::nested_project_cargo()
+        .expect("nested cargo target dir")
         .args(["run", "--bin", stem])
         .current_dir(&output_dir)
         .output()

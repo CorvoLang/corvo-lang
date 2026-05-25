@@ -63,7 +63,8 @@ fn test_transpile_amqp_consume_compiles() {
     // Check that the transpiled code compiles successfully.
     // We don't use 'cargo run' because the AMQP consumer loop would block forever
     // and would fail without a broker.
-    let output = Command::new("cargo")
+    let output = common::nested_project_cargo()
+        .expect("nested cargo target dir")
         .args(["check"])
         .current_dir(&output_dir)
         .output()

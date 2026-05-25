@@ -21,7 +21,7 @@ Use the **Benchmark (manual)** workflow (`.github/workflows/benchmark.yml`): **A
 
 | Variable | Effect |
 |----------|--------|
-| `CORVO_BENCHMARK_LIMIT` | Maximum number of `examples/*.corvo` files (after sorting, with `hello.corvo` moved first). Default: all (45 files). |
+| `CORVO_BENCHMARK_LIMIT` | Maximum number of `examples/*.corvo` files (after sorting, with `hello.corvo` moved first). Default: all (50 files). |
 | `CORVO_BENCHMARK_SKIP_PER_FILE_COLD` | If `1`, skips the **fresh cache per example** phase (each phase does a full dependency rebuild; very slow for large sets). |
 
 ### What is measured
@@ -44,7 +44,7 @@ Use the **Benchmark (manual)** workflow (`.github/workflows/benchmark.yml`): **A
 | Field | Value |
 |-------|--------|
 | Status | Not executed while updating this document (host had insufficient free disk for a full nested `cargo` build). |
-| Example count | 45 × `examples/*.corvo` |
+| Example count | 50 × `examples/*.corvo` |
 
 Run the command in **How to regenerate** locally to fill the tables below.
 
@@ -85,7 +85,7 @@ Run the command in **How to regenerate** locally to fill the tables below.
 | *…one row per `examples/*.corvo`…* | — | — |
 
 **Total wall time (compile steps)** : — ms  
-**Succeeded** : — / 45
+**Succeeded** : — / 50
 
 ---
 
@@ -96,7 +96,7 @@ Run the command in **How to regenerate** locally to fill the tables below.
 | *…* | — | — |
 
 **Total wall time** : — ms  
-**Succeeded** : — / 45  
+**Succeeded** : — / 50  
 
 *(Omit this section when `CORVO_BENCHMARK_SKIP_PER_FILE_COLD=1`; the generator inserts a short “skipped” note instead.)*
 

@@ -3,7 +3,19 @@ use crate::runtime::RuntimeState;
 use crate::standard_lib;
 use crate::type_system::{NativeCallback, ProcedureValue, Value};
 use crate::{CorvoError, CorvoResult};
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+
+#[derive(Debug, Clone)]
+pub enum EvalMode {
+    Normal,
+    #[cfg(all(unix, feature = "stdlib-pex"))]
+    TestRunner {
+        script_path: PathBuf,
+        corvo_exe: PathBuf,
+    },
+}
 
 #[derive(Debug)]
 pub enum ControlFlow {
@@ -15,6 +27,7 @@ pub enum ControlFlow {
 pub struct Evaluator {
     terminate_requested: bool,
     pre_exec_mode: bool,
+    mode: EvalMode,
 }
 
 impl Evaluator {
@@ -22,6 +35,7 @@ impl Evaluator {
         Self {
             terminate_requested: false,
             pre_exec_mode: false,
+            mode: EvalMode::Normal,
         }
     }
 
@@ -30,7 +44,20 @@ impl Evaluator {
         self
     }
 
+    #[cfg(all(unix, feature = "stdlib-pex"))]
+    pub fn with_test_runner(mut self, script_path: PathBuf, corvo_exe: PathBuf) -> Self {
+        self.mode = EvalMode::TestRunner {
+            script_path,
+            corvo_exe,
+        };
+        self
+    }
+
     pub fn run(&mut self, program: &Program, state: &mut RuntimeState) -> CorvoResult<()> {
+        #[cfg(all(unix, feature = "stdlib-pex"))]
+        if matches!(self.mode, EvalMode::TestRunner { .. }) {
+            return self.run_tests(program, state);
+        }
         for stmt in &program.statements {
             if self.pre_exec_mode && !matches!(stmt, Stmt::PrepBlock { .. }) {
                 continue;
@@ -41,6 +68,129 @@ impl Evaluator {
             }
         }
         Ok(())
+    }
+
+    #[cfg(all(unix, feature = "stdlib-pex"))]
+    fn run_tests(&mut self, program: &Program, state: &mut RuntimeState) -> CorvoResult<()> {
+        if !matches!(self.mode, EvalMode::TestRunner { .. }) {
+            return Ok(());
+        }
+
+        let tests: Vec<&Stmt> = program
+            .statements
+            .iter()
+            .filter(|s| matches!(s, Stmt::RunTest { .. }))
+            .collect();
+
+        if tests.is_empty() {
+            eprintln!("no run_test blocks found");
+            return Ok(());
+        }
+
+        eprintln!("\nrunning {} test(s)\n", tests.len());
+        let mut passed = 0usize;
+        let mut failed = 0usize;
+        let mut failure_msgs: Vec<(String, String)> = Vec::new();
+
+        for test in tests {
+            let Stmt::RunTest {
+                name,
+                argv,
+                session_var,
+                body,
+            } = test
+            else {
+                continue;
+            };
+
+            self.terminate_requested = false;
+            state.clear_vars();
+
+            let test_name_val = self.eval_expr(name, state)?;
+            let test_name = test_name_val
+                .as_string()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| test_name_val.to_string());
+
+            print!("test {test_name} ... ");
+            let _ = std::io::Write::flush(&mut std::io::stdout());
+
+            match self.exec_run_test(argv, session_var, body, state) {
+                Ok(()) => {
+                    passed += 1;
+                    eprintln!("ok");
+                }
+                Err(e) => {
+                    failed += 1;
+                    eprintln!("FAILED");
+                    failure_msgs.push((test_name, format!("{e}")));
+                }
+            }
+        }
+
+        eprintln!(
+            "\ntest result: {}. {passed} passed; {failed} failed",
+            if failed == 0 { "ok" } else { "FAILED" }
+        );
+
+        for (name, msg) in &failure_msgs {
+            eprintln!("\n---- {name} ----\n{msg}");
+        }
+
+        if failed > 0 {
+            return Err(CorvoError::runtime(format!(
+                "{failed} run_test block(s) failed"
+            )));
+        }
+        Ok(())
+    }
+
+    #[cfg(all(unix, feature = "stdlib-pex"))]
+    fn exec_run_test(
+        &mut self,
+        argv: &Expr,
+        session_var: &str,
+        body: &[Stmt],
+        state: &mut RuntimeState,
+    ) -> CorvoResult<()> {
+        let EvalMode::TestRunner {
+            script_path,
+            corvo_exe,
+        } = &self.mode
+        else {
+            return Ok(());
+        };
+
+        self.terminate_requested = false;
+        state.clear_vars();
+
+        let argv_val = self.eval_expr(argv, state)?;
+        let script_argv = Self::argv_list_from_value(&argv_val)?;
+
+        let mut spawn_argv = vec![
+            corvo_exe.to_string_lossy().into_owned(),
+            script_path.to_string_lossy().into_owned(),
+        ];
+        spawn_argv.extend(script_argv);
+
+        let handle = standard_lib::pex::spawn_argv_for_test(&spawn_argv, 30_000, state)?;
+        state.var_set(session_var.to_string(), handle.clone());
+
+        let body_result = self.execute_block(body, state);
+        let close_result =
+            standard_lib::pex::close(std::slice::from_ref(&handle), &HashMap::new(), state);
+        body_result?;
+        match close_result {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                let msg = format!("{e}");
+                if msg.contains("unknown session handle") || msg.contains("unknown or closed") {
+                    Ok(())
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 
     // skipcq: RS-R1000
@@ -336,7 +486,22 @@ impl Evaluator {
                     ))
                 }
             }
+            Stmt::RunTest { .. } => Ok(()),
         }
+    }
+
+    #[cfg(all(unix, feature = "stdlib-pex"))]
+    fn argv_list_from_value(value: &Value) -> CorvoResult<Vec<String>> {
+        let list = value.as_list().ok_or_else(|| {
+            CorvoError::invalid_argument("run_test argv must be a list of strings")
+        })?;
+        list.iter()
+            .map(|v| {
+                v.as_string().map(|s| s.to_string()).ok_or_else(|| {
+                    CorvoError::invalid_argument("run_test argv must be a list of strings")
+                })
+            })
+            .collect()
     }
 
     fn execute_block(&mut self, body: &[Stmt], state: &mut RuntimeState) -> Result<(), CorvoError> {
@@ -1954,6 +2119,51 @@ mod tests {
             state.var_get("msg").unwrap(),
             Value::String("HELLO WORLD".to_string())
         );
+    }
+
+    #[test]
+    fn test_run_test_skipped_in_normal_mode() {
+        assert!(eval_source(r#"run_test("x", [], @p) { assert_eq("1", "2") }"#).is_ok());
+    }
+
+    #[cfg(all(unix, feature = "stdlib-pex"))]
+    mod run_test_runner_tests {
+        use super::*;
+        use crate::ast::Program;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+        use std::path::PathBuf;
+
+        fn parse_program(source: &str) -> Program {
+            let mut lexer = Lexer::new(source);
+            let tokens = lexer.tokenize().unwrap();
+            let mut parser = Parser::new(
+                tokens
+                    .into_iter()
+                    .filter(|t| !matches!(t.token_type, crate::lexer::token::TokenType::Comment(_)))
+                    .collect(),
+            );
+            parser.parse().unwrap()
+        }
+
+        fn run_test_runner(source: &str) -> CorvoResult<()> {
+            let program = parse_program(source);
+            let mut state = RuntimeState::new();
+            let mut evaluator = Evaluator::new().with_test_runner(
+                PathBuf::from("/nonexistent/script.corvo"),
+                PathBuf::from("/nonexistent/corvo"),
+            );
+            evaluator.run(&program, &mut state)
+        }
+
+        #[test]
+        fn test_run_test_invalid_argv_type() {
+            let err = run_test_runner(r#"run_test("x", 1, @p) { }"#).unwrap_err();
+            assert!(
+                format!("{err}").contains("failed"),
+                "run_tests should report failure for invalid argv"
+            );
+        }
     }
 }
 

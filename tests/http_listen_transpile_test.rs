@@ -54,7 +54,8 @@ fn test_transpile_http_listen_compiles() {
 
     // Check that the transpiled code compiles successfully.
     // We don't use 'cargo run' because the server would block forever.
-    let output = Command::new("cargo")
+    let output = common::nested_project_cargo()
+        .expect("nested cargo target dir")
         .args(["check"])
         .current_dir(&output_dir)
         .output()

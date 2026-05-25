@@ -52,6 +52,7 @@ impl Parser {
                 | TokenType::Shared
                 | TokenType::If
                 | TokenType::Else
+                | TokenType::RunTest
         )
     }
 
@@ -80,6 +81,7 @@ impl Parser {
             TokenType::Shared => "shared".to_string(),
             TokenType::If => "if".to_string(),
             TokenType::Else => "else".to_string(),
+            TokenType::RunTest => "run_test".to_string(),
             _ => return Err(self.error("Expected variable name after '@'")),
         };
         self.advance();
@@ -143,6 +145,7 @@ impl Parser {
             TokenType::If => self.parse_if()?,
             TokenType::HttpListen => self.parse_http_listen_stmt()?,
             TokenType::AmqpConsume => self.parse_amqp_consume_stmt()?,
+            TokenType::RunTest => self.parse_run_test()?,
             TokenType::At => {
                 // @name = value       → VarSet shortcut
                 // @name[index] = val  → VarIndexSet shortcut
@@ -533,6 +536,43 @@ impl Parser {
             queue,
             msg_ident,
             shared_vars,
+            body,
+        })
+    }
+
+    fn parse_run_test(&mut self) -> CorvoResult<Stmt> {
+        if self.in_prep_block {
+            return Err(self.error("run_test not allowed inside prep block"));
+        }
+        self.advance(); // consume 'run_test'
+        self.consume(TokenType::LeftParen, "Expected '(' after 'run_test'")?;
+
+        let name = Box::new(self.parse_expression()?);
+
+        self.consume(TokenType::Comma, "Expected ',' after run_test name")?;
+
+        let argv = Box::new(self.parse_expression()?);
+
+        self.consume(TokenType::Comma, "Expected ',' after run_test argv")?;
+
+        self.consume(
+            TokenType::At,
+            "Expected '@' before pex session variable name in run_test",
+        )?;
+        let session_var = self.parse_name_after_at()?;
+
+        self.consume(
+            TokenType::RightParen,
+            "Expected ')' after run_test arguments",
+        )?;
+        self.consume(TokenType::LeftBrace, "Expected '{' before run_test body")?;
+
+        let body = self.parse_block_body("run_test block")?;
+
+        Ok(Stmt::RunTest {
+            name,
+            argv,
+            session_var,
             body,
         })
     }
@@ -1725,6 +1765,41 @@ mod tests {
     }
 
     // --- Assertion Tests ---
+
+    #[test]
+    fn test_parse_run_test_session_var_keyword() {
+        let program = parse_source(r#"run_test("x", [], @run_test) { assert_eq(1, 1) }"#).unwrap();
+        match &program.statements[0] {
+            Stmt::RunTest { session_var, .. } => assert_eq!(session_var, "run_test"),
+            _ => panic!("Expected RunTest"),
+        }
+    }
+
+    #[test]
+    fn test_parse_run_test() {
+        let program =
+            parse_source(r#"run_test("help", ["--help"], @pex) { assert_eq(1, 1) }"#).unwrap();
+        match &program.statements[0] {
+            Stmt::RunTest {
+                name,
+                argv,
+                session_var,
+                body,
+            } => {
+                assert!(matches!(name.as_ref(), Expr::Literal { .. }));
+                match argv.as_ref() {
+                    Expr::FunctionCall { name, args, .. } => {
+                        assert_eq!(name, "__list__");
+                        assert_eq!(args.len(), 1);
+                    }
+                    _ => panic!("Expected argv list literal"),
+                }
+                assert_eq!(session_var, "pex");
+                assert_eq!(body.len(), 1);
+            }
+            _ => panic!("Expected RunTest"),
+        }
+    }
 
     #[test]
     fn test_parse_assert_eq() {

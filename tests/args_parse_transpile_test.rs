@@ -54,7 +54,8 @@ sys.echo(
     ));
     fs::write(&cargo_toml_path, cargo_toml).unwrap();
 
-    let out_space = Command::new("cargo")
+    let out_space = common::nested_project_cargo()
+        .expect("nested cargo target dir")
         .args(["run", "--quiet", "--", "-w", "80"])
         .current_dir(&output_dir)
         .output()
@@ -72,7 +73,8 @@ sys.echo(
         "expected `0:80` (no stray positionals, width 80) for `-w 80`"
     );
 
-    let out_glued = Command::new("cargo")
+    let out_glued = common::nested_project_cargo()
+        .expect("nested cargo target dir")
         .args(["run", "--quiet", "--", "-w80"])
         .current_dir(&output_dir)
         .output()
@@ -134,7 +136,8 @@ sys.echo(number.to_string(list.len(@acc)))
     ));
     fs::write(&cargo_toml_path, cargo_toml).unwrap();
 
-    let out = Command::new("cargo")
+    let out = common::nested_project_cargo()
+        .expect("nested cargo target dir")
         .args(["run", "--quiet", "--", "a", "b", "c"])
         .current_dir(&output_dir)
         .output()
@@ -185,7 +188,8 @@ sys.echo("second")
     ));
     fs::write(&cargo_toml_path, cargo_toml).unwrap();
 
-    let out = Command::new("cargo")
+    let out = common::nested_project_cargo()
+        .expect("nested cargo target dir")
         .args(["run", "--quiet", "--"])
         .current_dir(&output_dir)
         .output()

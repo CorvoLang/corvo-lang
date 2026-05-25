@@ -38,6 +38,8 @@ use crate::compiler::Evaluator;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
 use std::path::Path;
+#[cfg(all(unix, feature = "stdlib-pex"))]
+use std::path::PathBuf;
 
 /// Runs a Corvo script from a given file path.
 ///
@@ -50,6 +52,54 @@ use std::path::Path;
 pub fn run_file(path: &Path) -> CorvoResult<()> {
     let source = std::fs::read_to_string(path).map_err(|e| CorvoError::io(e.to_string()))?;
     run_source(&source)
+}
+
+#[cfg(all(unix, feature = "stdlib-pex"))]
+fn resolve_corvo_exe() -> CorvoResult<PathBuf> {
+    if let Ok(path) = std::env::var("CORVO_BIN") {
+        return Ok(PathBuf::from(path));
+    }
+    if let Ok(path) = std::env::var("CARGO_BIN_EXE_corvo") {
+        return Ok(PathBuf::from(path));
+    }
+    std::env::current_exe().map_err(|e| CorvoError::io(e.to_string()))
+}
+
+/// Run only top-level `run_test` blocks in a Corvo script file.
+///
+/// Each block spawns `corvo <file> <argv…>` in a pex PTY session and executes its body.
+/// Requires Unix and the `stdlib-pex` feature.
+pub fn run_tests_file(path: &Path) -> CorvoResult<()> {
+    #[cfg(not(all(unix, feature = "stdlib-pex")))]
+    {
+        let _ = path;
+        return Err(CorvoError::runtime(
+            "run_test requires Unix and the stdlib-pex feature".to_string(),
+        ));
+    }
+
+    #[cfg(all(unix, feature = "stdlib-pex"))]
+    {
+        let source = std::fs::read_to_string(path).map_err(|e| CorvoError::io(e.to_string()))?;
+        let script_path = path
+            .canonicalize()
+            .map_err(|e| CorvoError::io(e.to_string()))?;
+        let corvo_exe = resolve_corvo_exe()?;
+
+        let mut lexer = Lexer::new(&source);
+        let tokens = lexer.tokenize()?;
+        let mut parser = Parser::new(
+            tokens
+                .into_iter()
+                .filter(|t| !matches!(t.token_type, crate::lexer::token::TokenType::Comment(_)))
+                .collect(),
+        );
+        let program = parser.parse()?;
+
+        let mut state = RuntimeState::new();
+        let mut evaluator = Evaluator::new().with_test_runner(script_path, corvo_exe);
+        evaluator.run(&program, &mut state)
+    }
 }
 
 /// Runs Corvo source code directly from a string.
@@ -273,5 +323,42 @@ mod tests {
         let mut state = RuntimeState::new();
         load_statics_from_encrypted_bytes(&mut state, &encrypted, key);
         assert_eq!(state.static_count(), 0);
+    }
+
+    #[test]
+    fn run_tests_file_reports_missing_feature_on_unsupported_builds() {
+        #[cfg(not(all(unix, feature = "stdlib-pex")))]
+        {
+            let err = run_tests_file(Path::new("missing.corvo")).unwrap_err();
+            assert!(format!("{err}").contains("stdlib-pex"));
+        }
+    }
+
+    #[cfg(all(unix, feature = "stdlib-pex"))]
+    #[test]
+    fn run_tests_file_succeeds_when_no_run_test_blocks() {
+        use std::io::Write;
+
+        let mut file = tempfile::Builder::new()
+            .suffix(".corvo")
+            .tempfile()
+            .expect("temp file");
+        write!(file, "sys.echo(\"hello\")").expect("write temp script");
+        file.flush().expect("flush");
+
+        let corvo_bin = std::env::var("CARGO_BIN_EXE_corvo").unwrap_or_else(|_| {
+            std::env::current_exe()
+                .expect("current_exe")
+                .display()
+                .to_string()
+        });
+        let previous = std::env::var_os("CORVO_BIN");
+        std::env::set_var("CORVO_BIN", &corvo_bin);
+        let result = run_tests_file(file.path());
+        match previous {
+            Some(value) => std::env::set_var("CORVO_BIN", value),
+            None => std::env::remove_var("CORVO_BIN"),
+        }
+        result.expect("no run_test blocks should succeed");
     }
 }

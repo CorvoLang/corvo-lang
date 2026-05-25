@@ -27,6 +27,8 @@ pub mod net;
 #[cfg(feature = "stdlib-notifications")]
 pub mod notifications;
 pub mod os;
+#[cfg(feature = "stdlib-pex")]
+pub mod pex;
 pub mod re;
 pub mod sys;
 #[cfg(feature = "stdlib-template")]
@@ -173,6 +175,31 @@ pub fn call(
         "net.tcp_write" => net::tcp_write(args, named_args, state),
         #[cfg(feature = "stdlib-net")]
         "net.tcp_close" => net::tcp_close(args, named_args, state),
+
+        #[cfg(feature = "stdlib-pex")]
+        "pex.spawn" => pex::spawn(args, named_args, state),
+        #[cfg(feature = "stdlib-pex")]
+        "pex.spawn_bash" => pex::spawn_bash(args, named_args, state),
+        #[cfg(feature = "stdlib-pex")]
+        "pex.send_line" => pex::send_line(args, named_args, state),
+        #[cfg(feature = "stdlib-pex")]
+        "pex.send" => pex::send(args, named_args, state),
+        #[cfg(feature = "stdlib-pex")]
+        "pex.send_control" => pex::send_control(args, named_args, state),
+        #[cfg(feature = "stdlib-pex")]
+        "pex.read_line" => pex::read_line(args, named_args, state),
+        #[cfg(feature = "stdlib-pex")]
+        "pex.exp_string" => pex::exp_string(args, named_args, state),
+        #[cfg(feature = "stdlib-pex")]
+        "pex.exp_regex" => pex::exp_regex(args, named_args, state),
+        #[cfg(feature = "stdlib-pex")]
+        "pex.exp_eof" => pex::exp_eof(args, named_args, state),
+        #[cfg(feature = "stdlib-pex")]
+        "pex.execute" => pex::execute(args, named_args, state),
+        #[cfg(feature = "stdlib-pex")]
+        "pex.wait_for_prompt" => pex::wait_for_prompt(args, named_args, state),
+        #[cfg(feature = "stdlib-pex")]
+        "pex.close" => pex::close(args, named_args, state),
 
         #[cfg(feature = "stdlib-dns")]
         "dns.resolve" => dns::resolve(args, named_args),

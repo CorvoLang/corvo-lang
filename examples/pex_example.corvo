@@ -1,0 +1,18 @@
+# pex_example.corvo — interactive PTY sessions (Unix only)
+#
+# Unlike os.exec (one-shot capture), pex.* drives programs that expect prompts,
+# passwords, or ongoing shell interaction via rexpect.
+#
+# Requires Unix + stdlib-pex. Timeout values are in milliseconds (default 30000 = 30s;
+# overrides below: 10000 = 10s, 5000 = 5s).
+
+@bash = pex.spawn_bash(10000)
+pex.execute(@bash, "echo hello", "hello")
+pex.wait_for_prompt(@bash)
+pex.close(@bash)
+
+@cat = pex.spawn("cat", 5000)
+pex.send_line(@cat, "line from corvo")
+@out = pex.exp_string(@cat, "line from corvo")
+sys.echo(map.get(@out, "before"))
+pex.close(@cat)
