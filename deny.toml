@@ -9,7 +9,7 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "deny"
 
 [licenses]
-# Allow common open-source licences used by the Rust ecosystem
+# Allow common open-source licenses used by the Rust ecosystem
 version = 2
 allow = [
     "MIT",
