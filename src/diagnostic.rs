@@ -14,16 +14,16 @@ use thiserror::Error;
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Error, Diagnostic)]
-#[error("{_message}")]
+#[error("{message}")]
 struct CorvoReport {
-    _message: String,
+    message: String,
     #[source_code]
-    _src: NamedSource,
-    #[label("{_label}")]
-    _span: Option<SourceSpan>,
-    _label: String,
+    src: NamedSource,
+    #[label("{label}")]
+    span: Option<SourceSpan>,
+    label: String,
     #[help]
-    _help: Option<String>,
+    help: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -50,11 +50,11 @@ pub fn print_error(error: &CorvoError, source: &str, filename: &str) {
     let miette_span = error.span().map(|s| span_to_miette(&s, source));
 
     let report = CorvoReport {
-        _message: message,
-        _src: NamedSource::new(filename, source.to_string()),
-        _span: miette_span,
-        _label: label,
-        _help: help,
+        message,
+        src: NamedSource::new(filename, source.to_string()),
+        span: miette_span,
+        label,
+        help,
     };
 
     let mut output = String::new();
@@ -65,8 +65,8 @@ pub fn print_error(error: &CorvoError, source: &str, filename: &str) {
         eprint!("{}", output);
     } else {
         // Fallback to plain text if rendering fails
-        eprintln!("error: {}", report._message);
-        if let Some(h) = &report._help {
+        eprintln!("error: {}", report.message);
+        if let Some(h) = &report.help {
             eprintln!("  help: {}", h);
         }
     }

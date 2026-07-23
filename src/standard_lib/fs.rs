@@ -703,7 +703,8 @@ pub fn read_link(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoR
 }
 
 pub fn mktemp(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
-    use rand::{distributions::Alphanumeric, Rng};
+    use rand::distr::Alphanumeric;
+    use rand::RngExt;
     let template = args
         .first()
         .and_then(|v| v.as_string())
@@ -721,7 +722,7 @@ pub fn mktemp(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResu
         .cloned()
         .unwrap_or_default();
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     // Replace XXXXXX in template
     let parts: Vec<&str> = template.split("XXXXXX").collect();

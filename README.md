@@ -31,6 +31,20 @@ Corvo requires the **Rust toolchain** to be installed on your system to compile 
     ```
 *   **Windows**: Download and run [rustup-init.exe](https://rustup.rs/) and follow the on-screen instructions. You may also need to install the [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
 
+### Dependency Vendoring (offline builds)
+
+All crates.io dependencies are committed under `vendor/` so the toolchain can
+build with zero registry access:
+
+```bash
+cargo build --offline --all-features
+# or
+make vendor-check
+```
+
+See [VENDORING.md](VENDORING.md) for how to refresh `vendor/`, license policy,
+and CI gates.
+
 ## 🚀 Quick Start
 
 ### Hello World

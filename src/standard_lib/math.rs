@@ -148,15 +148,13 @@ pub fn round(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResul
 }
 
 pub fn random(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResult<Value> {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
     if args.is_empty() {
-        Ok(Value::Number(rng.gen::<f64>()))
+        Ok(Value::Number(rand::random::<f64>()))
     } else if args.len() == 1 {
         let limit = args[0]
             .as_number()
             .ok_or_else(|| CorvoError::r#type("math.random(limit) requires a number"))?;
-        Ok(Value::Number(rng.gen_range(0.0..limit)))
+        Ok(Value::Number(rand::random_range(0.0..limit)))
     } else {
         let start = args[0]
             .as_number()
@@ -164,7 +162,7 @@ pub fn random(args: &[Value], _named_args: &HashMap<String, Value>) -> CorvoResu
         let end = args[1]
             .as_number()
             .ok_or_else(|| CorvoError::r#type("math.random(start, end) requires numbers"))?;
-        Ok(Value::Number(rng.gen_range(start..end)))
+        Ok(Value::Number(rand::random_range(start..end)))
     }
 }
 

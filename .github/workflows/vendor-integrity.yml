@@ -1,0 +1,122 @@
+name: Vendor Integrity
+
+# Prove vendored crates are complete and offline builds work.
+on:
+  push:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "vendor/**"
+      - ".cargo/config.toml"
+      - "deny.toml"
+      - ".github/workflows/vendor-integrity.yml"
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "vendor/**"
+      - ".cargo/config.toml"
+      - "deny.toml"
+      - ".github/workflows/vendor-integrity.yml"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  offline-build:
+    name: Offline build (vendored)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      # Only this job must stay offline.
+      CARGO_NET_OFFLINE: "true"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify vendor directory exists
+        run: |
+          set -euo pipefail
+          test -d vendor
+          test -f .cargo/config.toml
+          grep -q 'replace-with = "vendored-sources"' .cargo/config.toml
+          # Every registry package in Cargo.lock must exist under vendor/
+          python3 <<'PY'
+          from pathlib import Path
+          text = Path("Cargo.lock").read_text()
+          pkgs, cur = [], {}
+          for line in text.splitlines():
+              if line.startswith("[[package]]"):
+                  if cur.get("name") and cur.get("version") and cur.get("source") and "crates.io" in cur["source"]:
+                      pkgs.append(f'{cur["name"]}-{cur["version"]}')
+                  cur = {}
+              elif line.startswith("name = "):
+                  cur["name"] = line.split("=", 1)[1].strip().strip('"')
+              elif line.startswith("version = "):
+                  cur["version"] = line.split("=", 1)[1].strip().strip('"')
+              elif line.startswith("source = "):
+                  cur["source"] = line.split("=", 1)[1].strip().strip('"')
+          if cur.get("name") and cur.get("version") and cur.get("source") and "crates.io" in cur["source"]:
+              pkgs.append(f'{cur["name"]}-{cur["version"]}')
+          vendor = {p.name for p in Path("vendor").iterdir() if p.is_dir()}
+          missing = sorted(set(pkgs) - vendor)
+          print(f"lock registry packages: {len(pkgs)}")
+          print(f"vendor dirs: {len(vendor)}")
+          if missing:
+              print("MISSING:")
+              for m in missing:
+                  print(" ", m)
+              raise SystemExit(1)
+          print("All lockfile registry packages are present in vendor/")
+          PY
+
+      - name: Offline build (all features)
+        run: cargo build --offline --all-features
+
+      - name: Offline test compile (all features)
+        run: cargo test --offline --all-features --no-run
+
+  vendor-sync:
+    name: Vendor matches Cargo.lock
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Network is required to re-vendor into a temp dir for comparison.
+      - name: Re-vendor into scratch and diff
+        run: |
+          set -euo pipefail
+          unset CARGO_NET_OFFLINE || true
+          SCRATCH="$(mktemp -d)"
+          # Temporarily allow crates.io so cargo vendor can fetch for comparison.
+          mv .cargo/config.toml .cargo/config.toml.bak
+          cargo vendor --versioned-dirs "$SCRATCH/vendor"
+          mv .cargo/config.toml.bak .cargo/config.toml
+          # Compare tree contents (not mtimes). Fail if committed vendor drifted.
+          if ! diff -ru vendor "$SCRATCH/vendor"; then
+            echo "::error::Committed vendor/ does not match cargo vendor output from Cargo.lock"
+            exit 1
+          fi
+          echo "vendor/ matches a fresh cargo vendor from Cargo.lock"
+
+  deny:
+    name: cargo deny (licenses / bans / advisories)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories licenses bans
