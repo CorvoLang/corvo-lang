@@ -1,0 +1,13 @@
+# Resolve crates.io dependencies from the local vendor/ directory.
+# This enables fully offline builds: `cargo build --offline --all-features`
+#
+# Regenerate vendor/ after dependency changes with:
+#   cargo vendor --versioned-dirs vendor
+#
+# See VENDORING.md for the full workflow.
+
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "vendor"

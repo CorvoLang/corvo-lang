@@ -1,0 +1,41 @@
+[package]
+name = "async-global-executor-trait"
+version = "3.1.0"
+authors = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
+description =  "executor-trait implementation for async-global-executor"
+edition = "2024"
+license = "Apache-2.0 OR MIT"
+repository = "https://github.com/amqp-rs/executor-trait"
+homepage = "https://github.com/amqp-rs/executor-trait"
+documentation = "https://docs.rs/async-global-executor-trait"
+keywords = ["async", "await", "future", "executor"]
+categories = ["asynchronous", "concurrency"]
+readme = "README.md"
+rust-version = "1.85.0"
+
+[features]
+default = ["async-global-executor/default"]
+async-io = ["async-global-executor/async-io"]
+tokio = ["async-global-executor/tokio"]
+
+[dependencies]
+async-trait = "^0.1.42"
+
+[dependencies.async-global-executor]
+version = "^3.1"
+default-features = false
+
+[dependencies.async-global-executor-trait-2]
+package = "async-global-executor-trait"
+version = "^2.2"
+
+[dependencies.executor-trait]
+version = "^3.0"
+path = ".."
+
+[dependencies.executor-trait-2]
+package = "executor-trait"
+version = "^2.1"
+
+[badges]
+maintenance = { status = "passively-developed" } # use async-rs instead
