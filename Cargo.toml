@@ -32,11 +32,11 @@ regex = "1.10"
 chrono = "0.4"
 hostname = "0.4"
 directories = "5.0"
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.6", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 rand = "0.8"
-base64 = "0.21"
+base64 = "0.22"
 
 # Optional heavy dependencies (gated behind features)
 serde_yaml = { version = "0.9", optional = true }
